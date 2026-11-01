@@ -72,7 +72,7 @@ def open_extension(pid):
         methods["extension"] = press(pinned)
         return {"ok": True, "route": "pinned", "methods": methods}
 
-    menu = wait_for_control(pid, lambda kind, name: is_button(kind) and name == "Extensions")
+    menu = wait_for_control(pid, lambda kind, name: is_button(kind) and name.startswith("Extensions"))
     if menu is None:
         return {"ok": False, "error": 'The toolbar has no "Extensions" button.'}
     methods["menu"] = press(menu)

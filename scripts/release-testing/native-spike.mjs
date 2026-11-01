@@ -24,14 +24,19 @@ async function json(url, timeout = 15000) {
   throw new Error(`timeout ${url}`);
 }
 
-function evaluate(wsUrl, expression) {
+const evaluate = (wsUrl, expression) =>
+  command(wsUrl, 'Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+
+function command(wsUrl, method, params) {
   return new Promise((done, fail) => {
     const socket = new WebSocket(wsUrl);
     socket.onopen = () =>
-      socket.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } }));
+      socket.send(JSON.stringify({ id: 1, method, params }));
     socket.onmessage = (event) => {
+      const reply = JSON.parse(event.data);
+      if (reply.id !== 1) return;
       socket.close();
-      done(JSON.parse(event.data));
+      done(reply.result ?? reply);
     };
     socket.onerror = () => fail(new Error('socket error'));
   });
@@ -54,16 +59,24 @@ async function probe(label, executable, port, drive) {
     `--remote-debugging-port=${port}`,
     '--no-first-run',
     '--no-default-browser-check',
-    '--window-size=1280,800',
-    'http://127.0.0.1:3456/twenty-cards.html',
+    '--window-size=1000,680',
+    'about:blank',
   ], { stdio: 'ignore' });
   try {
     console.log('version', (await json(`http://127.0.0.1:${port}/json/version`)).Browser);
-    await sleep(4000);
+    await sleep(3000);
+    const first = (await json(`http://127.0.0.1:${port}/json/list`)).find((t) => t.type === 'page');
+    console.log('navigate', JSON.stringify(await command(first.webSocketDebuggerUrl, 'Page.navigate', { url: 'http://127.0.0.1:3456/twenty-cards.html' })));
+    await sleep(3000);
     const targets = await json(`http://127.0.0.1:${port}/json/list`);
     console.log('targets', targets.map((t) => `${t.type} ${t.url}`));
-    const worker = targets.find((t) => t.url.startsWith('chrome-extension://') && t.type === 'service_worker');
-    console.log('extension loaded', Boolean(worker));
+    let worker = null;
+    for (const t of targets.filter((x) => x.type === 'service_worker' && x.url.startsWith('chrome-extension://'))) {
+      const manifest = await evaluate(t.webSocketDebuggerUrl, 'chrome.runtime.getManifest().name');
+      console.log('worker', t.url, JSON.stringify(manifest.result?.value));
+      if (manifest.result?.value === 'PageHarvest') worker = t;
+    }
+    console.log('PageHarvest loaded', Boolean(worker));
     python(browser.pid, ['--tree', join(out, `${label}-tree-before.txt`), '--screenshot', join(out, `${label}-before.png`)]);
     if (!drive || !worker) return;
 
@@ -72,9 +85,10 @@ async function probe(label, executable, port, drive) {
     python(browser.pid, ['--open', '--tree', join(out, `${label}-tree-after.txt`)]);
     await sleep(4000);
     python(browser.pid, ['--screenshot', join(out, `${label}-after.png`)]);
-    console.log('panel after', JSON.stringify(await evaluate(worker.webSocketDebuggerUrl, contexts)));
     const after = await json(`http://127.0.0.1:${port}/json/list`);
     console.log('targets after', after.map((t) => `${t.type} ${t.url}`));
+    const live = after.find((t) => t.url === worker.url);
+    if (live) console.log('panel after', JSON.stringify(await evaluate(live.webSocketDebuggerUrl, contexts)));
   } catch (error) {
     console.log('probe error', error);
   } finally {
