@@ -171,7 +171,7 @@ test.describe('PageHarvest release workflows', () => {
     const startButton = sidePanelPage.getByRole('button', { name: /Start Extraction/ });
     await expect(startButton).toBeEnabled();
     await startButton.click();
-    await expect(sidePanelPage.getByRole('button', { name: 'Export' })).toBeVisible({ timeout: 30000 });
+    await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 30000 });
     await expect(sidePanelPage.getByText('20 records')).toBeVisible();
 
     const records = await readRecords(sidePanelPage);
@@ -185,10 +185,10 @@ test.describe('PageHarvest release workflows', () => {
     await sidePanelPage.getByRole('button', { name: 'Datasets' }).click();
     await expect(sidePanelPage.getByText('20 rows')).toBeVisible();
     await sidePanelPage.getByText(/20 Product Listing - PageHarvest Fixture/).last().click();
-    await expect(sidePanelPage.getByRole('button', { name: 'Export' })).toBeVisible();
+    await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible();
 
     const beforeCsv = new Set((await queryDownloads(sidePanelPage)).map((item) => item.id));
-    await sidePanelPage.getByRole('button', { name: 'Export' }).click();
+    await sidePanelPage.getByRole('button', { name: 'Export', exact: true }).click();
     await expect(sidePanelPage.getByText('Export Extracted Data')).toBeVisible();
     await sidePanelPage.getByRole('button', { name: 'Download File' }).click();
     const csvDownload = await waitForDownload(sidePanelPage, beforeCsv);
@@ -198,7 +198,7 @@ test.describe('PageHarvest release workflows', () => {
     expect(csvContent).toContain('Item 01 - Alpha Pro Headset');
 
     const beforeJson = new Set((await queryDownloads(sidePanelPage)).map((item) => item.id));
-    await sidePanelPage.getByRole('button', { name: 'Export' }).click();
+    await sidePanelPage.getByRole('button', { name: 'Export', exact: true }).click();
     await sidePanelPage.getByRole('button', { name: /^JSON/ }).click();
     await sidePanelPage.getByRole('button', { name: 'Download File' }).click();
     const jsonDownload = await waitForDownload(sidePanelPage, beforeJson);

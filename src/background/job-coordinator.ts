@@ -176,7 +176,36 @@ export class JobCoordinator {
   // Commands from the side panel
   // -------------------------------------------------------------------------
 
-  public async startJob(payload: StartJobPayload): Promise<JobCommandResult> {
+  /**
+   * Tabs whose page is being told to run a job. Until the page has been told, its answer
+   * that nothing is running says nothing about whether the job is alive.
+   */
+  private readonly handoffs = new Map<number, number>();
+
+  private async duringHandoff<T>(tabId: number | undefined, work: () => Promise<T>): Promise<T> {
+    if (tabId === undefined) return work();
+    this.handoffs.set(tabId, (this.handoffs.get(tabId) ?? 0) + 1);
+    try {
+      return await work();
+    } finally {
+      const remaining = (this.handoffs.get(tabId) ?? 1) - 1;
+      if (remaining > 0) {
+        this.handoffs.set(tabId, remaining);
+      } else {
+        this.handoffs.delete(tabId);
+      }
+    }
+  }
+
+  private isHandingOff(job: ExtractionJob): boolean {
+    return job.tabId !== undefined && this.handoffs.has(job.tabId);
+  }
+
+  public startJob(payload: StartJobPayload): Promise<JobCommandResult> {
+    return this.duringHandoff(payload.tabId, () => this.startJobInTab(payload));
+  }
+
+  private async startJobInTab(payload: StartJobPayload): Promise<JobCommandResult> {
     try {
       const permissions = await this.checkPermissions();
       if (!permissions.allGranted) {
@@ -360,9 +389,11 @@ export class JobCoordinator {
       const checkpoint = await this.jobs.getCheckpoint(job.id);
       if (checkpoint) {
         try {
-          await this.db.jobs.update(job.id, { updatedAt: this.now() });
-          await this.db.checkpoints.update(job.id, { awaitingNavigation: false });
-          await this.sendExtract(job, { ...checkpoint, awaitingNavigation: false });
+          await this.duringHandoff(job.tabId, async () => {
+            await this.db.jobs.update(job.id, { updatedAt: this.now() });
+            await this.db.checkpoints.update(job.id, { awaitingNavigation: false });
+            await this.sendExtract(job, { ...checkpoint, awaitingNavigation: false });
+          });
         } catch (error: unknown) {
           await this.interruptJob(job.id, `The page could not continue: ${toMessage(error)}`);
           return { ok: false, error: 'The page could not continue, so the job was saved for recovery.' };
@@ -766,17 +797,19 @@ export class JobCoordinator {
       navigationStartedAt: undefined,
       updatedAt: now,
     };
-    await this.jobs.saveCheckpoint(updatedCheckpoint);
+    await this.duringHandoff(job.tabId, async () => {
+      await this.jobs.saveCheckpoint(updatedCheckpoint);
 
-    // A paused job stays parked on the new page until the user resumes it.
-    if (job.status === 'PAUSED') return;
+      // A paused job stays parked on the new page until the user resumes it.
+      if (job.status === 'PAUSED') return;
 
-    try {
-      await this.db.jobs.update(job.id, { updatedAt: now });
-      await this.sendExtract(job, updatedCheckpoint);
-    } catch (error: unknown) {
-      await this.interruptJob(job.id, `The page could not continue: ${toMessage(error)}`);
-    }
+      try {
+        await this.db.jobs.update(job.id, { updatedAt: now });
+        await this.sendExtract(job, updatedCheckpoint);
+      } catch (error: unknown) {
+        await this.interruptJob(job.id, `The page could not continue: ${toMessage(error)}`);
+      }
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -846,7 +879,7 @@ export class JobCoordinator {
   }
 
   private async probeJob(job: ExtractionJob): Promise<void> {
-    if (job.status === 'PAUSED') return;
+    if (job.status === 'PAUSED' || this.isHandingOff(job)) return;
     const now = this.now();
     if (now - job.updatedAt < RECONCILE_QUIET_MS) return;
 
@@ -872,9 +905,19 @@ export class JobCoordinator {
       }
     }
 
-    if (!status?.active || status.jobId !== job.id) {
-      await this.interruptJob(job.id, 'The page stopped responding during extraction.');
+    if (status?.active && status.jobId === job.id) return;
+
+    // The answer only counts if the job is still as it was when the page was asked.
+    const latest = await this.jobs.getJob(job.id);
+    if (
+      !latest ||
+      latest.updatedAt !== job.updatedAt ||
+      latest.generation !== job.generation ||
+      this.isHandingOff(latest)
+    ) {
+      return;
     }
+    await this.interruptJob(job.id, 'The page stopped responding during extraction.');
   }
 
   private async expireAbandonedJobs(): Promise<void> {

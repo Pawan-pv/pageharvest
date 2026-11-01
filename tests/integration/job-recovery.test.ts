@@ -135,6 +135,53 @@ describe('Session recovery lifecycle', () => {
         expect((await harness.job(job.jobId))?.status).toBe('RUNNING');
       });
 
+      it('does not interrupt a job while its start is still reaching the page', async () => {
+        renderCards(['One', 'Two']);
+        harness.loadPage(TAB, `${BASE_URL}/list`);
+        const sendToTab = harness.transport.sendToTab;
+        let release: () => void = () => undefined;
+        const held = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        harness.transport.sendToTab = async (tabId, message) => {
+          if ((message as { type?: string }).type === 'EXTRACT_RECORDS') await held;
+          return sendToTab(tabId, message);
+        };
+
+        const starting = harness.start(TAB, makeRecipe(), `${BASE_URL}/list`);
+        await vi.waitFor(async () => expect(await harness.db.jobs.count()).toBe(1));
+        const [stalled] = await harness.db.jobs.toArray();
+        // A slow database makes a job look quiet before its page has heard about it.
+        await backdate(stalled.id);
+
+        await harness.coordinator.reconcile('panel');
+        expect((await harness.job(stalled.id))?.status).toBe('RUNNING');
+
+        release();
+        await starting;
+        await harness.settled(TAB);
+        expect((await harness.job(stalled.id))?.status).toBe('COMPLETED');
+        expect(await harness.titles(stalled.datasetId as string)).toEqual(['One', 'Two']);
+      });
+
+      it('does not interrupt a job that moved on while the page was being asked', async () => {
+        const job = await startPassive(harness);
+        await backdate(job.jobId);
+        const sendToTab = harness.transport.sendToTab;
+        harness.transport.sendToTab = async (tabId, message) => {
+          if ((message as { type?: string }).type === 'QUERY_JOB_RUN') {
+            // The page answers for the document it had, while a new one reports ready.
+            await harness.db.jobs.update(job.jobId, { updatedAt: Date.now() });
+            return { active: false };
+          }
+          return sendToTab(tabId, message);
+        };
+
+        await harness.coordinator.reconcile('panel');
+
+        expect((await harness.job(job.jobId))?.status).toBe('RUNNING');
+      });
+
       it('allows a page navigation time to finish before calling it interrupted', async () => {
         const job = await startPassive(harness);
         await backdate(job.jobId);
