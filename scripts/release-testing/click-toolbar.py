@@ -86,6 +86,13 @@ def open_extension(pid):
     return {"ok": True, "route": "extensions-menu", "methods": methods}
 
 
+def close_side_panel(pid):
+    button = wait_for_control(pid, lambda kind, name: is_button(kind) and name == "Close side panel")
+    if button is None:
+        return {"ok": False, "error": 'The toolbar has no "Close side panel" button.'}
+    return {"ok": True, "methods": {"close": press(button)}}
+
+
 def write_tree(pid, path):
     with open(path, "w", encoding="utf-8") as output:
         for window in browser_windows(pid):
@@ -111,11 +118,14 @@ def main():
     parser.add_argument("--tree")
     parser.add_argument("--screenshot")
     parser.add_argument("--open", action="store_true", help="Open the extension from the toolbar")
+    parser.add_argument("--close-panel", action="store_true", help="Close the open side panel")
     options = parser.parse_args()
 
     result = {"ok": True, "windows": [w.window_text() for w in browser_windows(options.pid)]}
     if options.open:
         result.update(open_extension(options.pid))
+    if options.close_panel:
+        result.update(close_side_panel(options.pid))
     if options.tree:
         write_tree(options.pid, options.tree)
     if options.screenshot:

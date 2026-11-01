@@ -20,6 +20,7 @@
     "test:release:unit": "node scripts/release-testing/run-release.mjs --scope=unit",
     "test:release:e2e": "node scripts/release-testing/run-release.mjs --scope=e2e",
     "test:release:chrome": "node scripts/release-testing/run-release.mjs --scope=chrome",
+    "test:release:automated": "node scripts/release-testing/run-release.mjs --scope=automated",
     "test:release:report": "node scripts/release-testing/run-release.mjs --scope=report",
     "serve:fixtures": "node tests/fixtures/serve.cjs"
   },

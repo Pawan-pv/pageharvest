@@ -1,39 +1,52 @@
+/* global WebSocket */
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { decideNativeStatus } from './release-report.mjs';
 
+/**
+ * Proves the part of the product no other test can reach: a person clicks the extension in
+ * the real browser toolbar and the real side panel opens and works.
+ *
+ * The panel is only ever opened by a mouse click on the toolbar (click-toolbar.py). Opening
+ * sidepanel.html in a tab or calling chrome.sidePanel.open() would prove nothing, so neither
+ * is used. DevTools is only used to observe the result and to press buttons inside the panel.
+ */
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, '../..');
+const toolbarAdapter = join(scriptDirectory, 'click-toolbar.py');
 
-export function findChromeExecutable() {
-  const candidates = [
-    process.env.PROGRAMFILES
-      ? join(process.env.PROGRAMFILES, 'Google', 'Chrome', 'Application', 'chrome.exe')
-      : null,
-    process.env['PROGRAMFILES(X86)']
-      ? join(process.env['PROGRAMFILES(X86)'], 'Google', 'Chrome', 'Application', 'chrome.exe')
-      : null,
-    process.env.LOCALAPPDATA
-      ? join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe')
-      : null,
-  ].filter((candidate) => candidate !== null);
+const FIXTURE_ORIGIN = 'http://127.0.0.1:3456';
+const FIXTURE_URL = `${FIXTURE_ORIGIN}/twenty-cards.html`;
+const EXPECTED_ROWS = 20;
+const EXTENSION_NAME = 'PageHarvest';
+const STEP_TIMEOUT_MS = 30000;
 
-  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+const sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+
+/**
+ * Branded Chrome 137 and later ignore --load-extension, so an unpacked extension can only be
+ * tested in Chrome for Testing, unless a path to another build is given.
+ */
+export async function findBrowser() {
+  const override = process.env.PAGEHARVEST_CHROME_PATH;
+  if (override) {
+    return existsSync(override) ? { name: 'Chrome (PAGEHARVEST_CHROME_PATH)', path: override } : null;
+  }
+  const { chromium } = await import('@playwright/test');
+  const path = chromium.executablePath();
+  return existsSync(path) ? { name: 'Chrome for Testing', path } : null;
 }
 
-export function getChromeVersion(chromePath) {
-  if (!chromePath) return null;
-  const escapedPath = chromePath.replaceAll("'", "''");
-  const result = spawnSync(
-    'powershell.exe',
-    ['-NoProfile', '-Command', `(Get-Item -LiteralPath '${escapedPath}').VersionInfo.ProductVersion`],
-    { encoding: 'utf8', windowsHide: true }
-  );
-  const output = `${result.stdout ?? ''} ${result.stderr ?? ''}`.trim();
-  return output.replace(/^Google Chrome\s*/i, '') || null;
+function automationBlockedReason() {
+  if (process.platform !== 'win32') {
+    return `The toolbar can only be driven on Windows; current platform is ${process.platform}.`;
+  }
+  const probe = spawnSync('python', ['-c', 'import pywinauto'], { encoding: 'utf8', windowsHide: true });
+  return probe.status === 0 ? null : 'Python with pywinauto is not installed, so the toolbar cannot be clicked.';
 }
 
 async function getFreePort() {
@@ -49,71 +62,234 @@ async function getFreePort() {
   return port;
 }
 
-async function waitForJson(url, timeoutMs = 10000) {
-  const startedAt = Date.now();
+async function waitFor(description, check, timeoutMs = STEP_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
   let lastError = null;
-  while (Date.now() - startedAt < timeoutMs) {
+  while (Date.now() < deadline) {
     try {
-      const response = await fetch(url);
-      if (response.ok) return await response.json();
+      const value = await check();
+      if (value) return value;
     } catch (error) {
       lastError = error;
     }
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 200));
+    await sleep(250);
   }
-  throw new Error(`Timed out waiting for ${url}${lastError ? `: ${lastError.message}` : ''}`);
+  throw new Error(`Timed out waiting for ${description}${lastError ? `: ${lastError.message}` : ''}`);
 }
 
-function detectUiAutomationBackends() {
-  const backends = [];
-  const pythonProbe = spawnSync('python', ['-c', 'import pywinauto'], {
-    encoding: 'utf8',
-    windowsHide: true,
-  });
-  if (pythonProbe.status === 0) backends.push('pywinauto');
-
-  const autoHotkeyProbe = spawnSync('where.exe', ['AutoHotkey.exe'], {
-    encoding: 'utf8',
-    windowsHide: true,
-  });
-  if (autoHotkeyProbe.status === 0) backends.push('AutoHotkey');
-  return backends;
+async function fetchJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url} returned ${response.status}`);
+  return response.json();
 }
 
-async function writeJson(filePath, value) {
-  await writeFile(filePath, JSON.stringify(value, null, 2), 'utf8');
+function devtoolsCommand(target, method, params = {}) {
+  return new Promise((resolvePromise, reject) => {
+    const socket = new WebSocket(target.webSocketDebuggerUrl);
+    const timer = setTimeout(() => {
+      socket.close();
+      reject(new Error(`DevTools ${method} timed out`));
+    }, STEP_TIMEOUT_MS);
+    socket.onopen = () => socket.send(JSON.stringify({ id: 1, method, params }));
+    socket.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error(`DevTools ${method} could not connect`));
+    };
+    socket.onmessage = (event) => {
+      const reply = JSON.parse(event.data);
+      if (reply.id !== 1) return;
+      clearTimeout(timer);
+      socket.close();
+      if (reply.error) reject(new Error(reply.error.message));
+      else resolvePromise(reply.result);
+    };
+  });
+}
+
+async function evaluate(target, expression) {
+  const result = await devtoolsCommand(target, 'Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (result.exceptionDetails) {
+    throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
+  }
+  return result.result.value;
+}
+
+function runToolbarAdapter(pid, args) {
+  const run = spawnSync('python', [toolbarAdapter, '--pid', String(pid), ...args], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 120000,
+  });
+  let output;
+  try {
+    output = JSON.parse((run.stdout ?? '').trim().split(/\r?\n/).pop() ?? '');
+  } catch {
+    output = { ok: false, error: (run.stderr ?? '').trim() || 'The toolbar adapter returned no result.' };
+  }
+  return { status: run.status, ...output };
+}
+
+/** Starts the fixture server unless one is already running. Returns how to stop it. */
+async function ensureFixtureServer() {
+  const isUp = () => fetch(FIXTURE_URL).then((response) => response.ok).catch(() => false);
+  if (await isUp()) return () => undefined;
+  const server = spawn(process.execPath, [join(repositoryRoot, 'tests/fixtures/serve.cjs')], { stdio: 'ignore' });
+  await waitFor('the fixture server', isUp);
+  return () => server.kill();
+}
+
+const clickPanelButton = (panel, label) =>
+  waitFor(`the "${label}" button`, () =>
+    evaluate(
+      panel,
+      `(() => {
+        const button = [...document.querySelectorAll('button')]
+          .find((item) => item.textContent.includes(${JSON.stringify(label)}) && !item.disabled);
+        if (!button) return false;
+        button.click();
+        return true;
+      })()`
+    )
+  );
+
+const readFromDatabase = (panel, table) =>
+  evaluate(
+    panel,
+    `new Promise((done, fail) => {
+      const open = indexedDB.open('PageHarvestDB');
+      open.onerror = () => fail(new Error(String(open.error)));
+      open.onsuccess = () => {
+        const db = open.result;
+        const request = db.transaction(${JSON.stringify(table)}).objectStore(${JSON.stringify(table)}).getAll();
+        request.onerror = () => fail(new Error(String(request.error)));
+        request.onsuccess = () => {
+          db.close();
+          done(request.result);
+        };
+      };
+    })`
+  );
+
+const SIDE_PANEL_CONTEXTS = `chrome.runtime.getContexts({ contextTypes: ['SIDE_PANEL'] })
+  .then((contexts) => contexts.map((context) => context.documentUrl))`;
+
+async function collectEvidence({ browser, port, evidence, artifactDirectory, notes }) {
+  const devtools = `http://127.0.0.1:${port}`;
+  const listTargets = () => fetchJson(`${devtools}/json/list`);
+
+  notes.version = (await waitFor('the browser', () => fetchJson(`${devtools}/json/version`))).Browser;
+
+  // A fresh profile can leave a page from the command line blank, so it loads after startup.
+  const page = await waitFor('the first tab', async () => (await listTargets()).find((target) => target.type === 'page'));
+  await devtoolsCommand(page, 'Page.navigate', { url: FIXTURE_URL });
+  await waitFor('the fixture page', async () => (await evaluate(page, 'document.readyState')) === 'complete');
+
+  // The browser has built-in extensions of its own, so a worker alone proves nothing.
+  const worker = await waitFor(`the ${EXTENSION_NAME} service worker`, async () => {
+    const workers = (await listTargets()).filter(
+      (target) => target.type === 'service_worker' && target.url.startsWith('chrome-extension://')
+    );
+    for (const candidate of workers) {
+      if ((await evaluate(candidate, 'chrome.runtime.getManifest().name')) === EXTENSION_NAME) return candidate;
+    }
+    return null;
+  }, 15000).catch(() => null);
+  evidence.extensionLoaded = worker !== null;
+  if (!worker) return;
+
+  notes.extensionId = worker.url.match(/^chrome-extension:\/\/([^/]+)/)?.[1] ?? null;
+  const panelUrl = `chrome-extension://${notes.extensionId}/sidepanel.html`;
+  notes.panelsBeforeClick = await evaluate(worker, SIDE_PANEL_CONTEXTS);
+  const findPanel = async () => (await listTargets()).find((target) => target.url === panelUrl);
+
+  const openFromToolbar = (treeName) => {
+    const result = runToolbarAdapter(browser.pid, ['--open', '--tree', join(artifactDirectory, treeName)]);
+    if (result.status === 3) {
+      evidence.automationAvailable = false;
+      evidence.blockedReason = result.error;
+    }
+    notes[treeName] = result;
+    return result.ok === true;
+  };
+
+  /** Only a context the browser itself reports as a side panel counts, not a tab. */
+  const waitForSidePanel = () =>
+    waitFor('the side panel', async () => {
+      const panel = await findPanel();
+      if (!panel) return null;
+      return (await evaluate(panel, SIDE_PANEL_CONTEXTS)).includes(panelUrl) ? panel : null;
+    }, 15000).catch(() => null);
+
+  evidence.toolbarClicked = openFromToolbar('native-toolbar-first-open.txt');
+  if (!evidence.toolbarClicked) return;
+
+  const panel = await waitForSidePanel();
+  evidence.panelOpened = panel !== null && notes.panelsBeforeClick.length === 0;
+  if (!evidence.panelOpened) return;
+
+  await clickPanelButton(panel, 'Auto-Detect Lists');
+  await clickPanelButton(panel, 'Next: Choose Fields');
+  await clickPanelButton(panel, 'Start Extraction');
+  await waitFor('the job to complete', async () =>
+    (await readFromDatabase(panel, 'jobs')).some((job) => job.status === 'COMPLETED')
+  );
+  evidence.rowsSaved = (await readFromDatabase(panel, 'records')).length;
+  notes.screenshot = runToolbarAdapter(browser.pid, [
+    '--screenshot',
+    join(artifactDirectory, 'native-side-panel.png'),
+  ]);
+
+  // Closing the panel must lose nothing, and the toolbar must open it again.
+  const closed = runToolbarAdapter(browser.pid, ['--close-panel']);
+  notes.closePanel = closed;
+  if (closed.ok !== true) {
+    evidence.panelReopened = false;
+    return;
+  }
+  await waitFor('the side panel to close', async () => !(await findPanel()));
+
+  const reopenedClick = openFromToolbar('native-toolbar-reopen.txt');
+  const reopened = reopenedClick ? await waitForSidePanel() : null;
+  evidence.panelReopened = reopened !== null;
+  if (reopened) {
+    evidence.rowsAfterReopen = (await readFromDatabase(reopened, 'records')).length;
+  }
 }
 
 export async function runNativeChromeCheck({
   buildLocation = resolve(repositoryRoot, '.output/chrome-mv3'),
   artifactDirectory = resolve(repositoryRoot, 'artifacts/release-testing/native-chrome'),
-  keepArtifacts = process.env.PAGEHARVEST_KEEP_RELEASE_ARTIFACTS === '1',
 } = {}) {
   const startedAt = Date.now();
   await mkdir(artifactDirectory, { recursive: true });
   const profileDirectory = join(artifactDirectory, `profile-${Date.now()}`);
-  const chromePath = findChromeExecutable();
-  const chromeVersion = getChromeVersion(chromePath);
-  const manifestPath = join(buildLocation, 'manifest.json');
   const diagnosticsPath = join(artifactDirectory, 'native-chrome-diagnostics.json');
-  let browserProcess = null;
-  let extensionId = null;
-  let status = 'BLOCKED';
-  let details = '';
-  let targets = [];
+  const evidence = { automationAvailable: true, expectedRows: EXPECTED_ROWS };
+  const notes = {};
+  let browserInfo = null;
+  let browser = null;
+  let stopServer = () => undefined;
 
   try {
-    if (process.platform !== 'win32') {
-      details = `Native Chrome UI automation is only configured for Windows; current platform is ${process.platform}.`;
-    } else if (!chromePath) {
-      details = 'Google Chrome was not found in the standard installation locations.';
-    } else if (!existsSync(manifestPath)) {
-      status = 'FAIL';
-      details = `Production extension build is missing: ${manifestPath}`;
+    const blockedReason = automationBlockedReason();
+    browserInfo = await findBrowser();
+    if (blockedReason) {
+      evidence.automationAvailable = false;
+      evidence.blockedReason = blockedReason;
+    } else if (!browserInfo) {
+      evidence.automationAvailable = false;
+      evidence.blockedReason = 'No browser that can load an unpacked extension was found. Run: pnpm exec playwright install chromium';
+    } else if (!existsSync(join(buildLocation, 'manifest.json'))) {
+      evidence.error = `The production build is missing: ${buildLocation}`;
     } else {
+      stopServer = await ensureFixtureServer();
       const port = await getFreePort();
       await mkdir(profileDirectory, { recursive: true });
-      browserProcess = spawn(chromePath, [
+      browser = spawn(browserInfo.path, [
         `--user-data-dir=${profileDirectory}`,
         `--disable-extensions-except=${buildLocation}`,
         `--load-extension=${buildLocation}`,
@@ -121,79 +297,28 @@ export async function runNativeChromeCheck({
         '--no-first-run',
         '--no-default-browser-check',
         '--disable-sync',
-        '--new-window',
-        'http://127.0.0.1:3456/release-products.html',
+        '--window-size=1000,680',
+        'about:blank',
       ], { stdio: 'ignore', windowsHide: false });
-
-      await waitForJson(`http://127.0.0.1:${port}/json/version`);
-      targets = await waitForJson(`http://127.0.0.1:${port}/json/list`);
-      const extensionTarget = targets.find((target) =>
-        target.type === 'service_worker' &&
-        typeof target.url === 'string' &&
-        target.url.startsWith('chrome-extension://')
-      ) ?? targets.find((target) =>
-        target.type === 'background_page' &&
-        typeof target.url === 'string' &&
-        target.url.startsWith('chrome-extension://')
-      );
-      extensionId = extensionTarget?.url.match(/^chrome-extension:\/\/([^/]+)/)?.[1] ?? null;
-
-      if (!extensionTarget) {
-        status = 'FAIL';
-        details = 'Chrome launched, but the unpacked PageHarvest extension did not appear in the DevTools target list.';
-      } else {
-        const backends = detectUiAutomationBackends();
-        if (backends.length === 0) {
-        details = [
-          `Chrome ${chromeVersion ?? 'unknown'} launched with an isolated profile.`,
-          `The unpacked extension loaded${extensionId ? ` as ${extensionId}` : ''}.`,
-          'BLOCKED: no supported desktop UI automation backend (pywinauto or AutoHotkey) is installed.',
-          'Direct sidepanel.html navigation and chrome.sidePanel.open() are intentionally not used as substitutes.',
-        ].join(' ');
-        } else {
-          details = `BLOCKED: detected ${backends.join(', ')} but no configured PageHarvest toolbar adapter exists for this environment.`;
-        }
-      }
+      await collectEvidence({ browser, port, evidence, artifactDirectory, notes });
     }
   } catch (error) {
-    status = 'FAIL';
-    details = error instanceof Error ? error.message : String(error);
+    evidence.error = error instanceof Error ? error.message : String(error);
   } finally {
-    const diagnostics = {
-      chromePath,
-      chromeVersion,
-      buildLocation,
-      extensionId,
-      targets: targets.map((target) => ({ type: target.type, url: target.url, title: target.title })),
-      profileDirectory,
-      status,
-      details,
-      capturedAt: new Date().toISOString(),
-    };
-    await writeJson(diagnosticsPath, diagnostics);
-    if (browserProcess) {
-      if (!browserProcess.killed) browserProcess.kill();
-      await new Promise((resolvePromise) => {
-        if (browserProcess.exitCode !== null) {
-          resolvePromise();
-          return;
-        }
-        const timeout = setTimeout(resolvePromise, 3000);
-        browserProcess.once('exit', () => {
-          clearTimeout(timeout);
-          resolvePromise();
-        });
-      });
+    if (browser) {
+      browser.kill();
+      await Promise.race([new Promise((done) => browser.once('exit', done)), sleep(3000)]);
     }
-    if (!keepArtifacts) {
-      try {
-        await rm(profileDirectory, { recursive: true, force: true });
-      } catch {
-        // A locked profile is retained as a diagnostic artifact instead of
-        // turning an otherwise valid BLOCKED result into a cleanup failure.
-      }
-    }
+    stopServer();
+    await rm(profileDirectory, { recursive: true, force: true }).catch(() => undefined);
   }
+
+  const { status, details } = decideNativeStatus(evidence);
+  await writeFile(
+    diagnosticsPath,
+    JSON.stringify({ status, details, evidence, notes, browser: browserInfo, capturedAt: new Date().toISOString() }, null, 2),
+    'utf8'
+  );
 
   const result = {
     name: 'native-chrome',
@@ -201,17 +326,19 @@ export async function runNativeChromeCheck({
     exitCode: status === 'PASS' ? 0 : status === 'BLOCKED' ? 3 : 1,
     durationMs: Date.now() - startedAt,
     details,
-    browser: { name: 'Google Chrome', version: chromeVersion ?? 'unknown' },
-    extensionId,
+    browser: {
+      name: browserInfo?.name ?? 'Not found',
+      version: notes.version?.replace(/^Chrome\//, '') ?? 'unknown',
+    },
+    extensionId: notes.extensionId ?? null,
     diagnosticsPath,
   };
-  await writeJson(join(artifactDirectory, 'native-chrome-result.json'), result);
+  await writeFile(join(artifactDirectory, 'native-chrome-result.json'), JSON.stringify(result, null, 2), 'utf8');
   return result;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const result = await runNativeChromeCheck({
-    buildLocation: resolve(repositoryRoot, '.output/chrome-mv3'),
     artifactDirectory: resolve(
       repositoryRoot,
       process.env.PAGEHARVEST_RELEASE_ARTIFACT_DIR ?? 'artifacts/release-testing/native-chrome'
