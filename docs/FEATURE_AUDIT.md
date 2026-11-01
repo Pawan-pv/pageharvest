@@ -1,6 +1,6 @@
 # PageHarvest Feature Audit
 
-Audit date: 2026-11-02. Baseline: `b0cf556` plus the uncommitted worktree. Full findings and evidence are in [CRITICAL_REMEDIATION_PLAN.md](CRITICAL_REMEDIATION_PLAN.md).
+Audit date: 2026-11-02. Baseline: `b0cf556`; remediation in `7f532cc` and `5888574`. Full findings and evidence are in [CRITICAL_REMEDIATION_PLAN.md](CRITICAL_REMEDIATION_PLAN.md).
 
 Assessment: **functional MVP**.
 
@@ -24,7 +24,7 @@ Assessment: **functional MVP**.
 | Production wiring | PASS | `production-wiring.test.ts` | Fails if a module is unreachable from an entry point |
 | Auto-detect on real page layouts | PASS | `detection-real-pages.test.ts`, trial on two scraping practice sites | Commercial sites not tried |
 | Native toolbar and real side panel | BLOCKED | | Manual procedure below has not been run |
-| Complete release gate as one run | NOT COMPLETED | | Stopped by the system for low memory; every layer passed separately |
+| Complete release gate as one run | PASS | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41360888220) | Native Chrome stays BLOCKED on CI; see below |
 
 ## Native Chrome Side Panel manual verification
 

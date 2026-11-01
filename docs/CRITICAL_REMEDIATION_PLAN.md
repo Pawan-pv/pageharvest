@@ -1,16 +1,14 @@
 # PageHarvest Critical Remediation Plan & Acceptance Report
 
-Date: 2026-11-02. Baseline commit: `b0cf556`, plus the uncommitted worktree. Nothing in this remediation has been committed.
+Date: 2026-11-02. Baseline commit: `b0cf556`. The remediation is in `7f532cc` and `5888574` on `main`.
 
 ## Release decision: FUNCTIONAL MVP
 
 Every P0, P1 and P2 finding below is fixed and tested on the production path, including in real Chromium. It is not called a release candidate yet, because these are still open:
 
 1. The native toolbar and real side panel have not been exercised (BLOCKED, see Remaining issues).
-2. The complete release gate has not finished as one run. It was stopped by the system for low memory, and each layer has since passed separately.
-3. Verification was done by the same author as the fixes, so it is not the independent verification the release bar asks for.
-4. The worktree is not committed.
-5. Real-website evidence covers two public scraping practice sites only, not commercial sites.
+2. Verification was done by the same author as the fixes, so it is not the independent verification the release bar asks for.
+3. Real-website evidence covers two public scraping practice sites only, not commercial sites.
 
 ## Findings
 
@@ -39,9 +37,10 @@ Priority: P0 data loss or cross-job corruption. P1 extraction correctness or bro
 | 17 | P2 | No icons in manifest | Reproduced | None existed | `public/icon/*`, `wxt.config.ts`, `scripts/generate-icons.mjs` | `manifest-assets.test.ts`; E2E "installs"; ZIP inspected | PASS |
 | 18 | P2 | Modules used only by tests | Read | See ADR-020 for the decision on each | See ADR-020 | `production-wiring.test.ts` | PASS |
 | 20 | P0 | Auto-detect extracts the navigation instead of the data | Reproduced on real sites: 0 of 60 books, 0 of 30 quotes, job still COMPLETED | Ranked by size alone; only scanned list-like class names; `ul > li` also matched the menu | `detection/detector.ts`, `detection/fields.ts` | `detection-real-pages.test.ts`; real-site trial | PASS |
+| 21 | P1 | A healthy job marked interrupted while starting | Reproduced on CI: 0 rows, "The page stopped responding" | The panel's check could ask the page before the page had been told to run the job, and a slow transaction made the job look quiet | `background/job-coordinator.ts` | `job-recovery.test.ts`; E2E I on CI | PASS |
 | 19 | P2 | Two message protocols | Read | `BrowserMessage` was documented, `ExtensionMessage` was used | `shared/contracts/message.ts`, `contracts/messages.ts` | `canonical-contracts.spec.ts`, `messages.test.ts` | PASS |
 
-Finding 20 was found by the real-site trial after every fixture test had passed. Findings 3, 4, 5, 14 and 20 were not in the requested list. They came from the earlier reproduction and are included because they lose or corrupt data.
+Finding 20 was found by the real-site trial after every fixture test had passed. Finding 21 was found by the first release gate run on GitHub Actions, and depends on database timing. Findings 3, 4, 5, 14, 20 and 21 were not in the requested list. They came from the earlier reproduction and are included because they lose or corrupt data.
 
 ## How the requirements were met
 
@@ -67,16 +66,15 @@ See [storage-schema.md](architecture/storage-schema.md), section 2.
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
-| Unit and integration | PASS | 668 tests in 64 files, run with 1 worker |
+| Unit and integration | PASS | 670 tests in 64 files |
 | TypeScript | PASS | `tsc --noEmit` on the final code |
 | ESLint | PASS | `eslint .` on the final code |
 | Production build | PASS | `wxt build` on the final code |
 | ZIP package | NOT RE-RUN | Last made before the detection fix (310.8 kB; manifest and four icons inspected). Run `pnpm zip` before uploading. |
-| Playwright in real Chromium | PASS | 33 of 33, twice in a row on the final code, including tests A to K |
+| Playwright in real Chromium | PASS | 33 of 33 on Windows and on Linux under `xvfb`, including tests A to K |
 | Public practice sites | PASS | See the trial below |
 | Actual installation | PASS | Unpacked load in Chromium with manifest and icon checks |
-| Complete release gate as one run | NOT COMPLETED | Stopped by the system for low memory during the unit test step. Not restarted, because free memory stayed below the level at which it was stopped (1.1 to 1.7 GB). |
-| `artifacts/release-test-report.*` | OUT OF DATE | Written before this work. It does not describe this code. |
+| Complete release gate as one run | PASS except the native check | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41360888220) on Linux, commit `5888574`: 5 checks passed, native Chrome BLOCKED |
 | Native toolbar side panel | BLOCKED | No desktop automation tool (pywinauto or AutoHotkey) is installed, and the manual procedure has not been run |
 
 ## Real-site trial
@@ -152,9 +150,7 @@ Also removed: `vitest.setup.ts`, which nothing referenced.
 **Blocking a release candidate**
 
 - The native toolbar and real side panel are untested. Follow `docs/TEST_RUNBOOK.md`, section 10.
-- The complete release gate needs one finished run. Close other heavy applications first: this machine has 8 GB, with about 2 GB free during this work.
 - Independent review, and a trial on real commercial websites.
-- Commit the work. Git refuses to run here because `.git` is owned by Administrators. To allow it: `git config --global --add safe.directory C:/myProject/extension`.
 
 **Known limitations**
 

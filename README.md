@@ -4,7 +4,7 @@ PageHarvest is a local-first Manifest V3 Chrome extension for selecting repeated
 
 ## Current validation
 
-Status: **functional MVP**. Extraction, pagination across real page loads, recovery and export are tested through the production path, including in real Chromium. It is not yet a release candidate: the native toolbar and side panel are unverified, the complete release gate has not finished as one run, and real-website testing covers only two scraping practice sites. See [CRITICAL_REMEDIATION_PLAN.md](docs/CRITICAL_REMEDIATION_PLAN.md) for evidence and open items.
+Status: **functional MVP**. Extraction, pagination across real page loads, recovery and export are tested through the production path, including in real Chromium. It is not yet a release candidate: the native toolbar and side panel are unverified, no independent review has happened, and real-website testing covers only two scraping practice sites. The release gate runs on GitHub Actions. See [CRITICAL_REMEDIATION_PLAN.md](docs/CRITICAL_REMEDIATION_PLAN.md) for evidence and open items.
 
 ## Development commands
 
