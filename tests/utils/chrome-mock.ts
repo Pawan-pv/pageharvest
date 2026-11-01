@@ -6,9 +6,9 @@ import { vi } from 'vitest';
  */
 
 type MessageListener = (
-  message: any,
+  message: unknown,
   sender: chrome.runtime.MessageSender,
-  sendResponse: (response?: any) => void
+  sendResponse: (response?: unknown) => void
 ) => boolean | void;
 
 type TabActivatedListener = (activeInfo: chrome.tabs.TabActiveInfo) => void;
@@ -23,7 +23,8 @@ export class ChromeMock {
   private tabListeners: Map<number, Set<MessageListener>> = new Map();
   private tabActivatedListeners: Set<TabActivatedListener> = new Set();
   private tabUpdatedListeners: Set<TabUpdatedListener> = new Set();
-  private localStorageData: Record<string, any> = {};
+  private tabRemovedListeners: Set<(tabId: number) => void> = new Set();
+  private localStorageData: Record<string, unknown> = {};
   public grantedPermissions: Set<string> = new Set(['activeTab', 'sidePanel', 'storage', 'scripting', 'downloads']);
 
   public activeTab: chrome.tabs.Tab = {
@@ -34,11 +35,16 @@ export class ChromeMock {
     active: true,
     pinned: false,
     incognito: false,
+    frozen: false,
+    selected: true,
+    discarded: false,
+    autoDiscardable: true,
+    groupId: -1,
     url: 'http://127.0.0.1:3456/simple-grid.html',
     title: 'Simple Product Grid'
-  };
+  } as chrome.tabs.Tab;
 
-  public runtime: any = {
+  public runtime = {
     id: 'pageharvest-mock-extension-id',
     lastError: undefined as chrome.runtime.LastError | undefined,
     onMessage: {
@@ -52,9 +58,9 @@ export class ChromeMock {
         return this.runtimeListeners.has(listener);
       }
     },
-    sendMessage: (message: any, responseCallback?: (response: any) => void) => {
+    sendMessage: (message: unknown, responseCallback?: (response: unknown) => void) => {
       let responded = false;
-      const sendResponse = (res: any) => {
+      const sendResponse = (res: unknown) => {
         responded = true;
         if (responseCallback) responseCallback(res);
       };
@@ -62,7 +68,8 @@ export class ChromeMock {
       for (const listener of this.runtimeListeners) {
         const willRespondAsync = listener(
           message,
-          { id: this.runtime.id, tab: this.activeTab },
+          // A side panel page: an extension URL, and no tab of its own.
+          { id: this.runtime.id, url: `chrome-extension://${this.runtime.id}/sidepanel.html` },
           sendResponse
         );
         if (willRespondAsync) {
@@ -76,9 +83,9 @@ export class ChromeMock {
     getURL: (path: string) => `chrome-extension://${this.runtime.id}/${path.replace(/^\//, '')}`
   };
 
-  public tabs: any = {
+  public tabs = {
     query: (
-      queryInfo: chrome.tabs.QueryInfo,
+      _queryInfo: chrome.tabs.QueryInfo,
       callback?: (result: chrome.tabs.Tab[]) => void
     ): Promise<chrome.tabs.Tab[]> => {
       const result = this.activeTab ? [this.activeTab] : [];
@@ -87,15 +94,13 @@ export class ChromeMock {
     },
     sendMessage: (
       tabId: number,
-      message: any,
-      responseCallback?: (response: any) => void
-    ): Promise<any> => {
-      let responded = false;
-      let finalResponse: any;
+      message: unknown,
+      responseCallback?: (response: unknown) => void
+    ): Promise<unknown> => {
+      let finalResponse: unknown;
 
       const listeners = this.tabListeners.get(tabId) || this.runtimeListeners;
-      const sendResponse = (res: any) => {
-        responded = true;
+      const sendResponse = (res: unknown) => {
         finalResponse = res;
         if (responseCallback) responseCallback(res);
       };
@@ -126,8 +131,46 @@ export class ChromeMock {
       removeListener: (listener: TabUpdatedListener) => {
         this.tabUpdatedListeners.delete(listener);
       }
+    },
+    onRemoved: {
+      addListener: (listener: (tabId: number) => void) => {
+        this.tabRemovedListeners.add(listener);
+      },
+      removeListener: (listener: (tabId: number) => void) => {
+        this.tabRemovedListeners.delete(listener);
+      }
     }
   };
+
+  public triggerTabRemoved(tabId: number) {
+    for (const listener of this.tabRemovedListeners) {
+      listener(tabId);
+    }
+  }
+
+  /** Delivers a runtime message as a content script in this tab would send it. */
+  public sendFromContentScript(tabId: number, message: unknown): Promise<unknown> {
+    return new Promise((resolve) => {
+      let answered = false;
+      for (const listener of this.runtimeListeners) {
+        const willRespondAsync = listener(
+          message,
+          { id: this.runtime.id, tab: { ...this.activeTab, id: tabId } },
+          (response) => {
+            answered = true;
+            resolve(response);
+          }
+        );
+        if (willRespondAsync) return;
+      }
+      if (!answered) resolve(undefined);
+    });
+  }
+
+  /** Routes tab messages for one tab to a listener, as a content script there would. */
+  public setTabListener(tabId: number, listener: MessageListener) {
+    this.tabListeners.set(tabId, new Set([listener]));
+  }
 
   public triggerTabActivated(activeInfo: chrome.tabs.TabActiveInfo) {
     for (const listener of this.tabActivatedListeners) {
@@ -144,10 +187,10 @@ export class ChromeMock {
   public storage = {
     local: {
       get: (
-        keys: string | string[] | Record<string, any> | null,
-        callback?: (items: { [key: string]: any }) => void
-      ): Promise<{ [key: string]: any }> => {
-        let result: Record<string, any> = {};
+        keys: string | string[] | Record<string, unknown> | null,
+        callback?: (items: { [key: string]: unknown }) => void
+      ): Promise<{ [key: string]: unknown }> => {
+        let result: Record<string, unknown> = {};
         if (keys === null) {
           result = { ...this.localStorageData };
         } else if (typeof keys === 'string') {
@@ -160,7 +203,7 @@ export class ChromeMock {
         if (callback) callback(result);
         return Promise.resolve(result);
       },
-      set: (items: Record<string, any>, callback?: () => void): Promise<void> => {
+      set: (items: Record<string, unknown>, callback?: () => void): Promise<void> => {
         Object.assign(this.localStorageData, items);
         if (callback) callback();
         return Promise.resolve();
@@ -186,7 +229,7 @@ export class ChromeMock {
   };
 
   public downloads = {
-    download: vi.fn().mockImplementation((options: chrome.downloads.DownloadOptions) => {
+    download: vi.fn().mockImplementation((_options: chrome.downloads.DownloadOptions) => {
       return Promise.resolve(12345);
     })
   };
@@ -218,6 +261,7 @@ export class ChromeMock {
     this.tabListeners.clear();
     this.tabActivatedListeners.clear();
     this.tabUpdatedListeners.clear();
+    this.tabRemovedListeners.clear();
     this.localStorageData = {};
     this.runtime.lastError = undefined;
     this.sidePanel.open.mockClear();

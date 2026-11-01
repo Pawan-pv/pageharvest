@@ -53,7 +53,10 @@ export function waitForDOMStability(
     timeoutMs = 5000,
     quietPeriodMs = 250,
     pollIntervalMs = 50,
+    minWaitMs = 0,
   } = options;
+
+  const initStartTime = Date.now();
 
   return new Promise((resolve) => {
     let lastMutationTime = Date.now();
@@ -94,8 +97,13 @@ export function waitForDOMStability(
     }
 
     timer = setInterval(() => {
-      const timeSinceLastMutation = Date.now() - lastMutationTime;
-      if (timeSinceLastMutation >= quietPeriodMs) {
+      const now = Date.now();
+      const totalElapsed = now - initStartTime;
+      if (totalElapsed < minWaitMs) {
+        return;
+      }
+      const timeSinceLastMutation = now - lastMutationTime;
+      if (timeSinceLastMutation >= quietPeriodMs && totalElapsed >= (minWaitMs + (lastMutationTime > initStartTime ? quietPeriodMs : 0))) {
         cleanup();
         resolve(true);
       }
@@ -128,12 +136,13 @@ export async function waitForNewElements(
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeoutMs) {
-    let currentCount = 0;
-    try {
-      currentCount = root.querySelectorAll(containerSelector).length;
-    } catch {
-      currentCount = 0;
-    }
+    const currentCount = (() => {
+      try {
+        return root.querySelectorAll(containerSelector).length;
+      } catch {
+        return 0;
+      }
+    })();
 
     const diff = currentCount - initialCount;
     if (diff >= minNewCount) {
@@ -148,12 +157,13 @@ export async function waitForNewElements(
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
 
-  let finalCount = 0;
-  try {
-    finalCount = root.querySelectorAll(containerSelector).length;
-  } catch {
-    finalCount = initialCount;
-  }
+  const finalCount = (() => {
+    try {
+      return root.querySelectorAll(containerSelector).length;
+    } catch {
+      return initialCount;
+    }
+  })();
 
   return {
     success: finalCount - initialCount >= minNewCount,
@@ -169,12 +179,15 @@ export async function waitForNewElements(
 export async function waitForUrlChange(
   initialUrl: string,
   timeoutMs: number = 5000,
-  pollIntervalMs: number = 50
+  pollIntervalMs: number = 50,
+  options: { signal?: AbortSignal; getCurrentUrl?: () => string } = {}
 ): Promise<boolean> {
   const startTime = Date.now();
+  const readUrl =
+    options.getCurrentUrl ?? (() => (typeof window !== 'undefined' ? window.location.href : ''));
 
-  while (Date.now() - startTime < timeoutMs) {
-    const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+  while (Date.now() - startTime < timeoutMs && !options.signal?.aborted) {
+    const currentUrl = readUrl();
     if (currentUrl && currentUrl !== initialUrl) {
       return true;
     }

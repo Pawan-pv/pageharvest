@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Edit3, Trash2, Check, X, Tag } from 'lucide-react';
+import { Edit3, Trash2, Check, X } from 'lucide-react';
 import { Badge } from '@/components/common/Badge';
 import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
@@ -25,6 +25,7 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
   const [editSelector, setEditSelector] = useState(field.selector);
   const [editExtractor, setEditExtractor] = useState<FieldExtractorType>(field.extractor);
   const [editAttr, setEditAttr] = useState(field.attributeName || '');
+  const [editRequired, setEditRequired] = useState(field.required === true);
 
   const extractorOptions: { value: FieldExtractorType; label: string }[] = [
     { value: 'text', label: 'Text content' },
@@ -42,6 +43,7 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
       selector: editSelector.trim() || field.selector,
       extractor: editExtractor,
       attributeName: editExtractor === 'attribute' ? editAttr.trim() : undefined,
+      required: editRequired,
     });
     setIsEditing(false);
   };
@@ -51,6 +53,7 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
     setEditSelector(field.selector);
     setEditExtractor(field.extractor);
     setEditAttr(field.attributeName || '');
+    setEditRequired(field.required === true);
     setIsEditing(false);
   };
 
@@ -90,9 +93,14 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
                 >
                   {field.name}
                 </label>
-                <Badge variant={badgeVariantForExtractor[field.extractor]} size="sm">
+                <Badge variant={badgeVariantForExtractor[(field.extractor as FieldExtractorType) || 'text'] || 'neutral'} size="sm">
                   {field.extractor}
                 </Badge>
+                {field.required && (
+                  <Badge variant="warning" size="sm">
+                    filters rows
+                  </Badge>
+                )}
               </div>
               <div className="text-[11px] text-slate-400 font-mono truncate mt-0.5" title={field.selector}>
                 {field.selector}
@@ -171,6 +179,21 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
               placeholder="e.g. data-asin or aria-label"
             />
           )}
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={editRequired}
+              onChange={(e) => setEditRequired(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+            />
+            <span className="text-xs text-slate-700">
+              Skip rows where this column is empty
+              <span className="block text-[11px] text-slate-500">
+                Off by default, so rows with a missing value are kept. Skipped rows are counted.
+              </span>
+            </span>
+          </label>
         </div>
       )}
     </div>

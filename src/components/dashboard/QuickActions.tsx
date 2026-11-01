@@ -1,6 +1,5 @@
 import React from 'react';
 import { MousePointer, Sparkles, Table, Link2 } from 'lucide-react';
-import { Card } from '@/components/common/Card';
 
 export interface QuickActionsProps {
   disabled?: boolean;

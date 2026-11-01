@@ -1,19 +1,38 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ElementPicker } from '@/content/picker/picker';
 import { PickerMessenger } from '@/content/picker/messenger';
-import { PickerOverlay } from '@/content/picker/overlay';
 import { assessTargetElementFrame, assessCurrentFrame } from '@/content/picker/frame-assessor';
 import { loadFixtureHtml } from '../utils/dom-helpers';
+
+/**
+ * The overlay's root is closed, so a page (and a test) cannot reach it through the host.
+ * To check what the overlay renders, this records each root as it is attached. This lives
+ * only in the test; production exposes nothing.
+ */
+const attachedRoots = new WeakMap<Element, ShadowRoot>();
+const originalAttachShadow = Element.prototype.attachShadow;
+
+function overlayRootOf(host: Element): ShadowRoot {
+  const root = attachedRoots.get(host);
+  if (!root) throw new Error('The overlay attached no shadow root.');
+  return root;
+}
 
 describe('Interactive Element Picker', () => {
   let picker: ElementPicker;
 
   beforeEach(() => {
+    Element.prototype.attachShadow = function attachAndRecord(this: Element, init: ShadowRootInit) {
+      const root = originalAttachShadow.call(this, init);
+      attachedRoots.set(this, root);
+      return root;
+    };
     document.body.innerHTML = '';
     document.head.innerHTML = '';
   });
 
   afterEach(() => {
+    Element.prototype.attachShadow = originalAttachShadow;
     if (picker) {
       picker.stop();
     }
@@ -56,7 +75,7 @@ describe('Interactive Element Picker', () => {
       // Verify overlay in Shadow DOM
       const host = document.getElementById('pageharvest-picker-overlay-host')!;
       expect(host).not.toBeNull();
-      const shadowRoot = host.shadowRoot!;
+      const shadowRoot = overlayRootOf(host);
       const hoverBox = shadowRoot.querySelector('.ph-hover-box')!;
       expect(hoverBox.classList.contains('ph-hidden')).toBe(false);
       expect(hoverBox.getAttribute('style')).toContain('top: 100px');
@@ -86,7 +105,7 @@ describe('Interactive Element Picker', () => {
       title.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
 
       const host = document.getElementById('pageharvest-picker-overlay-host')!;
-      const shadowRoot = host.shadowRoot!;
+      const shadowRoot = overlayRootOf(host);
       const hoverBox = shadowRoot.querySelector('.ph-hover-box')!;
       expect(hoverBox.getAttribute('style')).toContain('top: 120px');
 
@@ -118,7 +137,7 @@ describe('Interactive Element Picker', () => {
       document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
 
       const host = document.getElementById('pageharvest-picker-overlay-host')!;
-      const shadowRoot = host.shadowRoot!;
+      const shadowRoot = overlayRootOf(host);
       const hoverBox = shadowRoot.querySelector('.ph-hover-box')!;
       expect(hoverBox.classList.contains('ph-hidden')).toBe(true);
     });
@@ -159,7 +178,7 @@ describe('Interactive Element Picker', () => {
 
       // Check Shadow DOM selection box
       const host = document.getElementById('pageharvest-picker-overlay-host')!;
-      const shadowRoot = host.shadowRoot!;
+      const shadowRoot = overlayRootOf(host);
       const selectionBox = shadowRoot.querySelector('.ph-selection-box')!;
       expect(selectionBox.classList.contains('ph-hidden')).toBe(false);
       expect(selectionBox.getAttribute('style')).toContain('top: 200px');
@@ -186,7 +205,7 @@ describe('Interactive Element Picker', () => {
       firstTitle.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
       const host = document.getElementById('pageharvest-picker-overlay-host')!;
-      const shadowRoot = host.shadowRoot!;
+      const shadowRoot = overlayRootOf(host);
 
       // Check toolbar rendered
       const toolbar = shadowRoot.querySelector('.ph-toolbar')!;
@@ -227,7 +246,7 @@ describe('Interactive Element Picker', () => {
       title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
       const host = document.getElementById('pageharvest-picker-overlay-host')!;
-      const shadowRoot = host.shadowRoot!;
+      const shadowRoot = overlayRootOf(host);
 
       // Find breadcrumb items in Shadow DOM
       const breadcrumbs = shadowRoot.querySelectorAll<HTMLButtonElement>('.ph-breadcrumb-item');
@@ -337,7 +356,7 @@ describe('Interactive Element Picker', () => {
       card.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
       const host = document.getElementById('pageharvest-picker-overlay-host')!;
-      const shadowRoot = host.shadowRoot!;
+      const shadowRoot = overlayRootOf(host);
       const cancelBtn = shadowRoot.querySelector<HTMLButtonElement>('.ph-btn-cancel')!;
 
       cancelBtn.click();
@@ -357,7 +376,7 @@ describe('Interactive Element Picker', () => {
       card.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
       const host = document.getElementById('pageharvest-picker-overlay-host')!;
-      const shadowRoot = host.shadowRoot!;
+      const shadowRoot = overlayRootOf(host);
       const confirmBtn = shadowRoot.querySelector<HTMLButtonElement>('.ph-btn-confirm')!;
 
       confirmBtn.click();
@@ -424,7 +443,7 @@ describe('Interactive Element Picker', () => {
 
       const host = document.getElementById('pageharvest-picker-overlay-host')!;
       expect(host).not.toBeNull();
-      const shadowRoot = host.shadowRoot!;
+      const shadowRoot = overlayRootOf(host);
 
       // Verify shadow DOM isolation
       expect(shadowRoot).toBeDefined();

@@ -1,13 +1,28 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { messagingService, TabInfo } from '@/services/messaging';
-import { db } from '@/storage/db';
+import {
+  ExtractionJob,
+  JobProgressKind,
+  isActiveJobStatus,
+  isTerminalJobStatus,
+} from '@/shared/contracts/job';
+import { ExtractionProject } from '@/shared/contracts/project';
+import { ExtractionSchema } from '@/shared/contracts/schema';
+import {
+  DatasetRepository,
+  JobRepository,
+  ProjectRepository,
+  RecipeRepository,
+  RecordRepository,
+  SettingsRepository,
+} from '@/storage/repositories';
 import {
   FieldDefinition,
   ExtractionRecipe,
   ExtractedRecord,
   Dataset,
   ExtractionPaginationConfig,
-  ExtractionStatus
+  ExtractionStatus,
 } from '@/types';
 import { ExtensionMessage } from '@/contracts/messages';
 
@@ -35,16 +50,78 @@ export interface DetectedList {
 }
 
 export interface ExtractionStats {
-  currentPage: number;
-  totalTargetPages: number;
+  progressKind: JobProgressKind;
+  currentStep: number;
+  targetSteps: number;
   totalExtracted: number;
   duplicatesSkipped: number;
+  recordsDetected: number;
+  recordsWithMissingFields: number;
+  recordsFiltered: number;
+  recordsFailed: number;
   elapsedSeconds: number;
   status: ExtractionStatus;
   errorMessage?: string;
+  stopReason?: string;
 }
 
+const IDLE_STATS: ExtractionStats = {
+  progressKind: 'single',
+  currentStep: 0,
+  targetSteps: 1,
+  totalExtracted: 0,
+  duplicatesSkipped: 0,
+  recordsDetected: 0,
+  recordsWithMissingFields: 0,
+  recordsFiltered: 0,
+  recordsFailed: 0,
+  elapsedSeconds: 0,
+  status: 'IDLE',
+};
+
+const REFRESH_INTERVAL_MS = 1000;
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function statsFromJob(job: ExtractionJob, now: number = Date.now()): ExtractionStats {
+  const endedAt = job.finishedAt ?? job.pausedAt ?? now;
+  return {
+    progressKind: job.progressKind,
+    currentStep: job.progressKind === 'scrolls' ? job.scrollsCompleted : job.pagesVisited,
+    targetSteps: job.targetSteps ?? 1,
+    totalExtracted: job.totalExtracted,
+    duplicatesSkipped: job.duplicatesSkipped,
+    recordsDetected: job.recordsDetected,
+    recordsWithMissingFields: job.recordsWithMissingFields,
+    recordsFiltered: job.recordsFiltered,
+    recordsFailed: job.recordsFailed,
+    elapsedSeconds: Math.max(0, Math.floor((endedAt - job.startedAt - job.pausedMs) / 1000)),
+    status: job.status,
+    errorMessage: job.errorMessage,
+    stopReason: job.stopReason,
+  };
+}
+
+/**
+ * The side panel's workflow. For extraction it is a view of stored state: the background
+ * owns every job, this hook sends it commands and reads the results from IndexedDB, so
+ * closing and reopening the panel loses nothing and changes nothing.
+ */
 export function useExtractionWorkflow(tab: TabInfo) {
+  const repositories = useMemo(
+    () => ({
+      datasets: new DatasetRepository(),
+      jobs: new JobRepository(),
+      projects: new ProjectRepository(),
+      recipes: new RecipeRepository(),
+      records: new RecordRepository(),
+      settings: new SettingsRepository(),
+    }),
+    []
+  );
+
   const [view, setView] = useState<WorkflowView>('dashboard');
   const [inspectedElement, setInspectedElement] = useState<InspectedElement | null>(null);
   const [detectedList, setDetectedList] = useState<DetectedList | null>(null);
@@ -52,34 +129,155 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
   const [pagination, setPagination] = useState<ExtractionPaginationConfig>({
     type: 'none',
-    maxPages: 10,
+    maxPages: 20,
     delayMs: 1500,
-    scrollCount: 20,
-    scrollDelayMs: 1000,
+    scrollCount: 30,
+    scrollDelayMs: 1500,
+    startPage: 1,
+    pageIncrement: 1,
   });
-
   const [records, setRecords] = useState<ExtractedRecord[]>([]);
+  const [recordsRevision, setRecordsRevision] = useState(0);
   const [currentDataset, setCurrentDataset] = useState<Dataset | null>(null);
-  const [stats, setStats] = useState<ExtractionStats>({
-    currentPage: 1,
-    totalTargetPages: 1,
-    totalExtracted: 0,
-    duplicatesSkipped: 0,
-    elapsedSeconds: 0,
-    status: 'IDLE',
-  });
+  const [stats, setStats] = useState<ExtractionStats>(IDLE_STATS);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [recoverableJobs, setRecoverableJobs] = useState<ExtractionJob[]>([]);
+  const [activeJob, setActiveJob] = useState<ExtractionJob | null>(null);
+  const [projects, setProjects] = useState<ExtractionProject[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
+  const [activeRecipeId, setActiveRecipeId] = useState<string | undefined>(undefined);
+  const [runSummary, setRunSummary] = useState<ExtractionStats | null>(null);
+  const [recordWarningThreshold, setRecordWarningThreshold] = useState<number | undefined>(undefined);
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const abortControllerRef = useRef<boolean>(false);
+  // The job this panel is displaying. Commands and storage decide what it does; this
+  // only decides which job's state is on screen.
+  const followedJobIdRef = useRef<string | null>(null);
+  const pickerActiveRef = useRef(false);
 
-  // Clear timer on unmount
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+  const handleOperationError = useCallback((error: unknown, fallbackView: WorkflowView) => {
+    const message = errorText(error);
+    console.warn('PageHarvest operation failed:', message);
+    setOperationError(message);
+    setView(fallbackView);
   }, []);
 
-  // Listen to incoming messages from the content script
+  const refreshRecoverableJobs = useCallback(async () => {
+    setRecoverableJobs(await repositories.jobs.findRecoverableJobs());
+  }, [repositories]);
+
+  const loadDataset = useCallback(
+    async (datasetId: string) => {
+      const dataset = await repositories.datasets.getDataset(datasetId);
+      const rows = await repositories.datasets.getRecordsByDataset(datasetId);
+      const job = dataset?.jobId ? await repositories.jobs.getJob(dataset.jobId) : undefined;
+      setCurrentDataset(dataset ?? null);
+      if (dataset) {
+        setFields(dataset.fields);
+        setSelectedFieldIds(new Set(dataset.fields.map((f) => f.id)));
+      }
+      setRunSummary(job ? statsFromJob(job) : null);
+      setRecords(rows);
+      setRecordsRevision((revision) => revision + 1);
+    },
+    [repositories]
+  );
+
+  /** Re-reads the followed job from storage and moves the view to match it. */
+  const refreshFollowedJob = useCallback(async () => {
+    const jobId = followedJobIdRef.current;
+    if (!jobId) return;
+
+    const job = await repositories.jobs.getJob(jobId);
+    // The panel may have stopped following this job while the read was in progress.
+    if (!job || followedJobIdRef.current !== jobId) return;
+
+    setActiveJob(job);
+    setStats(statsFromJob(job));
+
+    if (job.status === 'RECOVERABLE' || job.status === 'INTERRUPTED') {
+      followedJobIdRef.current = null;
+      setActiveJob(null);
+      setView('dashboard');
+      await refreshRecoverableJobs();
+      return;
+    }
+
+    if (job.status === 'COMPLETED' && job.datasetId) {
+      followedJobIdRef.current = null;
+      setActiveJob(null);
+      await loadDataset(job.datasetId);
+      setView('results');
+    }
+  }, [loadDataset, refreshRecoverableJobs, repositories]);
+
+  const followJob = useCallback(
+    async (job: ExtractionJob) => {
+      followedJobIdRef.current = job.id;
+      setActiveJob(job);
+      setActiveRecipeId(job.recipeId);
+      setStats(statsFromJob(job));
+      if (job.datasetId) {
+        setCurrentDataset((await repositories.datasets.getDataset(job.datasetId)) ?? null);
+      }
+      setView('extracting');
+      await refreshFollowedJob();
+    },
+    [refreshFollowedJob, repositories]
+  );
+
+  // On open: apply saved preferences, then show whatever storage says is happening.
+  useEffect(() => {
+    let cancelled = false;
+
+    const initialize = async () => {
+      try {
+        const settings = await repositories.settings.getSettings();
+        if (cancelled) return;
+        setPagination((prev) => ({
+          ...prev,
+          maxPages: settings.defaultMaxPages,
+          delayMs: settings.defaultDelayMs,
+          scrollCount: settings.defaultMaxScrolls,
+          scrollDelayMs: settings.defaultScrollDelayMs,
+        }));
+        setRecordWarningThreshold(settings.maxRecordsWarningThreshold);
+      } catch (err) {
+        console.warn('Could not load settings:', err);
+      }
+
+      // A job can have outlived its page while no panel was open to notice.
+      await messagingService.reconcileJobs().catch(() => undefined);
+      if (cancelled) return;
+
+      try {
+        await refreshRecoverableJobs();
+        const active = await repositories.jobs.findActiveJobs();
+        if (!cancelled && active.length > 0 && !followedJobIdRef.current) {
+          await followJob(active[0]);
+        }
+      } catch (err) {
+        console.warn('Could not read job state:', err);
+      }
+    };
+
+    void initialize();
+    return () => {
+      cancelled = true;
+    };
+  }, [followJob, refreshRecoverableJobs, repositories]);
+
+  // Keep the display current while following a job. Broadcasts make it immediate; this
+  // covers a missed one, and is what moves the elapsed time.
+  const isFollowingActiveJob = activeJob !== null && isActiveJobStatus(activeJob.status);
+  useEffect(() => {
+    if (!isFollowingActiveJob) return undefined;
+    const timer = setInterval(() => {
+      void refreshFollowedJob();
+    }, REFRESH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [isFollowingActiveJob, refreshFollowedJob]);
+
+  // Listen to incoming messages
   useEffect(() => {
     const unsubscribe = messagingService.subscribe((message: ExtensionMessage) => {
       switch (message.type) {
@@ -88,17 +286,30 @@ export function useExtractionWorkflow(tab: TabInfo) {
           setInspectedElement({ selector, tagName, classList, textSnippet });
 
           // Auto-trigger list detection using this selected element
-          messagingService.detectRepeatedElements(selector).catch(console.error);
+          messagingService.detectRepeatedElements(selector).catch((err: unknown) => {
+            setOperationError(errorText(err));
+          });
+          break;
+        }
+
+        case 'SELECTION_CANCELLED': {
+          pickerActiveRef.current = false;
+          setInspectedElement(null);
+          setView((current) =>
+            current === 'inspecting' || current === 'review_list' ? 'dashboard' : current
+          );
+          break;
+        }
+
+        case 'SELECTION_CONFIRMED': {
+          pickerActiveRef.current = false;
           break;
         }
 
         case 'REPEATED_ELEMENTS_DETECTED': {
           const { containerSelector, matchCount, sampleSnippets } = message.payload;
-          setDetectedList({
-            containerSelector,
-            matchCount,
-            sampleSnippets,
-          });
+          setOperationError(null);
+          setDetectedList({ containerSelector, matchCount, sampleSnippets });
           setView('review_list');
           break;
         }
@@ -112,32 +323,22 @@ export function useExtractionWorkflow(tab: TabInfo) {
           break;
         }
 
-        case 'EXTRACTION_PROGRESS': {
-          const { page, records: newRecords, newRecordsCount, duplicatesCount, isComplete } =
-            message.payload;
-
-          setRecords((prev) => [...prev, ...newRecords]);
-          setStats((prev) => ({
-            ...prev,
-            currentPage: page,
-            totalExtracted: prev.totalExtracted + newRecordsCount,
-            duplicatesSkipped: prev.duplicatesSkipped + duplicatesCount,
-            status: isComplete ? 'COMPLETED' : 'EXTRACTING',
-          }));
-
-          if (isComplete) {
-            stopTimer();
-            setView('results');
+        case 'JOB_UPDATED': {
+          if (message.payload.jobId === followedJobIdRef.current) {
+            void refreshFollowedJob();
+          }
+          if (message.payload.status === 'RECOVERABLE' || isTerminalJobStatus(message.payload.status)) {
+            void refreshRecoverableJobs();
           }
           break;
         }
 
         case 'EXTRACTION_ERROR': {
-          setStats((prev) => ({
-            ...prev,
-            status: 'ERROR',
-            errorMessage: message.payload.message,
-          }));
+          setOperationError(message.payload.message);
+          // Detection failed with no picker open, so there is nothing left to wait for.
+          if (!pickerActiveRef.current) {
+            setView((current) => (current === 'inspecting' ? 'dashboard' : current));
+          }
           break;
         }
 
@@ -147,107 +348,92 @@ export function useExtractionWorkflow(tab: TabInfo) {
     });
 
     return () => unsubscribe();
-  }, []);
-
-  const startTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setStats((prev) => ({
-        ...prev,
-        elapsedSeconds: prev.elapsedSeconds + 1,
-      }));
-    }, 1000);
-  };
-
-  const stopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
+  }, [refreshFollowedJob, refreshRecoverableJobs]);
 
   /**
    * Visual Element Picker
    */
   const startVisualPicker = useCallback(async () => {
     try {
+      setOperationError(null);
       setInspectedElement(null);
+      setActiveRecipeId(undefined);
       setView('inspecting');
+      pickerActiveRef.current = true;
       await messagingService.startElementPicker();
     } catch (err) {
-      console.error('Failed to start element picker:', err);
-      // Fallback for tests or disconnected tabs: simulate element selection
-      setInspectedElement({
-        selector: '.product-card',
-        tagName: 'DIV',
-        classList: ['product-card'],
-        textSnippet: 'Wireless Headphones - $99.99',
-      });
-      setDetectedList({
-        containerSelector: '.product-card',
-        matchCount: 16,
-        sampleSnippets: [
-          'Wireless Headphones - $99.99',
-          'USB-C Fast Charger - $19.99',
-          'Mechanical Gaming Keyboard - $129.99',
-        ],
-      });
-      setView('review_list');
+      pickerActiveRef.current = false;
+      handleOperationError(err, 'dashboard');
     }
-  }, []);
+  }, [handleOperationError]);
 
-  const cancelVisualPicker = useCallback(async () => {
+  const stopPickerQuietly = useCallback(async () => {
+    if (!pickerActiveRef.current) return;
+    pickerActiveRef.current = false;
     try {
       await messagingService.stopElementPicker();
     } catch (err) {
       console.warn('Could not cleanly stop element picker:', err);
     }
-    setView('dashboard');
   }, []);
+
+  const cancelVisualPicker = useCallback(async () => {
+    await stopPickerQuietly();
+    setView('dashboard');
+  }, [stopPickerQuietly]);
 
   /**
    * Auto-Detect Lists
    */
   const autoDetectLists = useCallback(async () => {
     try {
+      setOperationError(null);
+      setActiveRecipeId(undefined);
       setView('inspecting');
       await messagingService.detectRepeatedElements();
     } catch (err) {
-      console.warn('Auto-detect list fallback:', err);
-      // Fallback preview
-      setDetectedList({
-        containerSelector: '.item-card, article',
-        matchCount: 12,
-        sampleSnippets: ['Sample item 1', 'Sample item 2', 'Sample item 3'],
-      });
-      setView('review_list');
+      handleOperationError(err, 'dashboard');
     }
-  }, []);
+  }, [handleOperationError]);
+
+  const startPresetDetection = useCallback(
+    async (targetSelector: string) => {
+      try {
+        setOperationError(null);
+        setActiveRecipeId(undefined);
+        setView('inspecting');
+        await messagingService.detectRepeatedElements(targetSelector);
+      } catch (err) {
+        handleOperationError(err, 'dashboard');
+      }
+    },
+    [handleOperationError]
+  );
+
+  const loadProjects = useCallback(async () => {
+    setProjects(await repositories.projects.getAllProjects());
+  }, [repositories]);
 
   /**
    * Confirm List Candidate and Request Fields
    */
   const confirmListCandidate = useCallback(
     async (candidate: DetectedList) => {
+      // A picker left open would swallow the clicks pagination makes on the page.
+      await stopPickerQuietly();
       setDetectedList(candidate);
       setView('config_fields');
+      void loadProjects();
 
       try {
         await messagingService.detectFields(candidate.containerSelector);
       } catch (err) {
-        console.warn('Auto field detection fallback:', err);
-        // Default initial fields
-        const defaultFields: FieldDefinition[] = [
-          { id: 'f_title', name: 'Title', selector: 'h2, h3, .title', extractor: 'text' },
-          { id: 'f_price', name: 'Price', selector: '.price, [class*="price"]', extractor: 'number' },
-          { id: 'f_link', name: 'Link', selector: 'a', extractor: 'href' },
-          { id: 'f_image', name: 'Image', selector: 'img', extractor: 'src' },
-        ];
-        setFields(defaultFields);
-        setSelectedFieldIds(new Set(defaultFields.map((f) => f.id)));
+        setFields([]);
+        setSelectedFieldIds(new Set());
+        handleOperationError(err, 'review_list');
       }
     },
-    []
+    [handleOperationError, loadProjects, stopPickerQuietly]
   );
 
   /**
@@ -266,9 +452,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
   }, []);
 
   const updateField = useCallback((id: string, updates: Partial<FieldDefinition>) => {
-    setFields((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
-    );
+    setFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...updates } : f)));
   }, []);
 
   const addField = useCallback((newField: FieldDefinition) => {
@@ -285,160 +469,297 @@ export function useExtractionWorkflow(tab: TabInfo) {
     });
   }, []);
 
+  const buildRecipe = useCallback(
+    (name: string): ExtractionRecipe | null => {
+      if (!detectedList) return null;
+      const now = Date.now();
+      return {
+        id: `recipe_${now}_${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        urlPattern: tab.url,
+        containerSelector: detectedList.containerSelector,
+        fields: fields.filter((f) => selectedFieldIds.has(f.id)),
+        pagination,
+        projectId: selectedProjectId,
+        createdAt: now,
+        updatedAt: now,
+      };
+    },
+    [detectedList, fields, pagination, selectedFieldIds, selectedProjectId, tab.url]
+  );
+
   /**
    * Start Extraction Workflow
    */
   const startExtraction = useCallback(async () => {
-    if (!detectedList) return;
+    const recipe = buildRecipe(`${tab.title || 'Extraction'} - ${new Date().toLocaleDateString()}`);
+    if (!recipe) return;
 
-    const activeFields = fields.filter((f) => selectedFieldIds.has(f.id));
-    if (activeFields.length === 0) {
-      alert('Please select at least one field to extract.');
+    if (recipe.fields.length === 0) {
+      setOperationError('Select at least one field to extract.');
+      return;
+    }
+    if (typeof tab.id !== 'number') {
+      setOperationError('There is no active tab to extract from.');
       return;
     }
 
-    const recipe: ExtractionRecipe = {
-      id: 'recipe_' + Date.now(),
-      name: `${tab.title || 'Extraction'} - ${new Date().toLocaleDateString()}`,
-      urlPattern: tab.url,
-      containerSelector: detectedList.containerSelector,
-      fields: activeFields,
-      pagination,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    const datasetId = 'dataset_' + Date.now();
-    const newDataset: Dataset = {
-      id: datasetId,
-      name: recipe.name,
-      url: tab.url,
-      recipeId: recipe.id,
-      recordsCount: 0,
-      fields: activeFields,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    await db.datasets.put(newDataset);
-    setCurrentDataset(newDataset);
+    setOperationError(null);
     setRecords([]);
     setStats({
-      currentPage: 1,
-      totalTargetPages: pagination.type === 'next_button' ? pagination.maxPages || 10 : 1,
-      totalExtracted: 0,
-      duplicatesSkipped: 0,
-      elapsedSeconds: 0,
-      status: 'EXTRACTING',
+      ...IDLE_STATS,
+      status: 'CREATED',
+      progressKind:
+        pagination.type === 'infinite_scroll'
+          ? 'scrolls'
+          : pagination.type === 'none'
+            ? 'single'
+            : 'pages',
     });
-    abortControllerRef.current = false;
-
     setView('extracting');
-    startTimer();
 
     try {
-      await messagingService.startExtraction(recipe, 1);
+      const identity = await messagingService.startJob({
+        recipe,
+        tabId: tab.id,
+        sourceUrl: tab.url,
+        pageTitle: tab.title,
+        projectId: selectedProjectId,
+        recipeId: activeRecipeId,
+      });
+      const job = await repositories.jobs.getJob(identity.jobId);
+      if (job) {
+        await followJob(job);
+      }
     } catch (err) {
-      console.warn('Extraction fallback for mock/tests:', err);
-      // Simulate realistic extracted records
-      const sampleRecords: ExtractedRecord[] = Array.from(
-        { length: Math.min(detectedList.matchCount, 8) },
-        (_, i) => {
-          const rec: ExtractedRecord = {
-            _id: `rec_${datasetId}_${i + 1}`,
-            _page: 1,
-            _extractedAt: Date.now(),
-          };
-          for (const field of activeFields) {
-            if (field.name.toLowerCase().includes('price')) {
-              rec[field.name] = (19.99 + i * 15.5).toFixed(2);
-            } else if (field.name.toLowerCase().includes('link')) {
-              rec[field.name] = `${tab.url}#item-${i + 1}`;
-            } else if (field.name.toLowerCase().includes('image')) {
-              rec[field.name] = `https://picsum.photos/200/200?random=${i + 1}`;
-            } else {
-              rec[field.name] = `${field.name} Item ${i + 1}`;
-            }
-          }
-          return rec;
-        }
-      );
-
-      setRecords(sampleRecords);
-      await db.saveExtractedBatch(datasetId, sampleRecords);
-
-      setStats((prev) => ({
-        ...prev,
-        totalExtracted: sampleRecords.length,
-        status: 'COMPLETED',
-      }));
-      stopTimer();
-      setView('results');
+      setStats(IDLE_STATS);
+      handleOperationError(err, 'config_fields');
     }
-  }, [detectedList, fields, selectedFieldIds, pagination, tab]);
+  }, [
+    activeRecipeId,
+    buildRecipe,
+    followJob,
+    handleOperationError,
+    pagination.type,
+    repositories,
+    selectedProjectId,
+    tab.id,
+    tab.title,
+    tab.url,
+  ]);
 
-  const pauseExtraction = useCallback(() => {
-    setStats((prev) => ({ ...prev, status: 'PAUSED' }));
-    stopTimer();
-  }, []);
+  const pauseExtraction = useCallback(async () => {
+    const jobId = followedJobIdRef.current;
+    if (!jobId) return;
+    try {
+      await messagingService.pauseJob(jobId);
+      await refreshFollowedJob();
+    } catch (err) {
+      setOperationError(errorText(err));
+    }
+  }, [refreshFollowedJob]);
 
-  const resumeExtraction = useCallback(() => {
-    setStats((prev) => ({ ...prev, status: 'EXTRACTING' }));
-    startTimer();
-  }, []);
+  const resumeExtraction = useCallback(async () => {
+    const jobId = followedJobIdRef.current;
+    if (!jobId) return;
+    try {
+      await messagingService.resumeJob(jobId);
+      await refreshFollowedJob();
+    } catch (err) {
+      setOperationError(errorText(err));
+    }
+  }, [refreshFollowedJob]);
 
+  /** "Finish & View Results": ends the job, keeping everything collected so far. */
   const stopExtraction = useCallback(async () => {
-    abortControllerRef.current = true;
-    stopTimer();
-    setStats((prev) => ({ ...prev, status: 'COMPLETED' }));
-
-    // Persist current records to DB
-    if (currentDataset && records.length > 0) {
-      await db.saveExtractedBatch(currentDataset.id, records);
+    const jobId = followedJobIdRef.current;
+    if (!jobId) return;
+    try {
+      const job = await repositories.jobs.getJob(jobId);
+      if (job && !isTerminalJobStatus(job.status)) {
+        await messagingService.finishJob(jobId);
+      }
+      followedJobIdRef.current = null;
+      setActiveJob(null);
+      if (job?.datasetId) {
+        await loadDataset(job.datasetId);
+      }
+      setView('results');
+    } catch (err) {
+      setOperationError(errorText(err));
     }
-    setView('results');
-  }, [currentDataset, records]);
+  }, [loadDataset, repositories]);
+
+  /** Cancels the job. Records already committed stay in the dataset. */
+  const cancelExtraction = useCallback(async () => {
+    const jobId = followedJobIdRef.current;
+    try {
+      if (jobId) {
+        const job = await repositories.jobs.getJob(jobId);
+        if (job && !isTerminalJobStatus(job.status)) {
+          await messagingService.cancelJob(jobId);
+        }
+      }
+      followedJobIdRef.current = null;
+      setActiveJob(null);
+      setStats(IDLE_STATS);
+      setInspectedElement(null);
+      setDetectedList(null);
+      setCurrentDataset(null);
+      setRecords([]);
+      setView('dashboard');
+    } catch (err) {
+      setOperationError(errorText(err));
+    }
+  }, [repositories]);
+
+  const recoverJob = useCallback(
+    async (jobId: string) => {
+      try {
+        setOperationError(null);
+        await messagingService.recoverJob(jobId);
+        await refreshRecoverableJobs();
+        const job = await repositories.jobs.getJob(jobId);
+        if (job) {
+          await followJob(job);
+        }
+      } catch (err) {
+        setOperationError(errorText(err));
+        await refreshRecoverableJobs();
+      }
+    },
+    [followJob, refreshRecoverableJobs, repositories]
+  );
+
+  const discardRecoverableJob = useCallback(
+    async (jobId: string) => {
+      try {
+        setOperationError(null);
+        await messagingService.discardJob(jobId);
+        await refreshRecoverableJobs();
+      } catch (err) {
+        setOperationError(errorText(err));
+      }
+    },
+    [refreshRecoverableJobs]
+  );
 
   /**
    * Navigation to Saved Datasets & Viewing in Grid
    */
   const viewDatasetInTable = useCallback(
     async (dataset: Dataset) => {
-      setCurrentDataset(dataset);
-      setFields(dataset.fields);
-      setSelectedFieldIds(new Set(dataset.fields.map((f) => f.id)));
-      const loadedRecords = await db.getDatasetRecords(dataset.id);
-      setRecords(loadedRecords);
-      setView('results');
+      try {
+        await loadDataset(dataset.id);
+        setView('results');
+      } catch (err) {
+        setOperationError(errorText(err));
+      }
     },
-    []
+    [loadDataset]
   );
 
   const resetToDashboard = useCallback(() => {
-    stopTimer();
+    followedJobIdRef.current = null;
+    setActiveJob(null);
+    setActiveRecipeId(undefined);
+    setOperationError(null);
+    setStats(IDLE_STATS);
     setView('dashboard');
     setInspectedElement(null);
     setDetectedList(null);
+    setCurrentDataset(null);
     setRecords([]);
   }, []);
 
   const updateRecordCell = useCallback(
     async (recordId: string, fieldName: string, value: string | number | null) => {
+      await repositories.records.updateCell(recordId, fieldName, value);
       setRecords((prev) =>
         prev.map((r) => (r._id === recordId ? { ...r, [fieldName]: value } : r))
       );
-      await db.updateRecordCell(recordId, fieldName, value);
     },
-    []
+    [repositories]
   );
 
   const deleteRecord = useCallback(
     async (recordId: string) => {
-      if (!currentDataset) return;
+      const datasetId = currentDataset?.id;
+      if (!datasetId) return;
+      await repositories.records.deleteRecord(recordId, datasetId);
       setRecords((prev) => prev.filter((r) => r._id !== recordId));
-      await db.deleteRecord(currentDataset.id, recordId);
     },
-    [currentDataset]
+    [currentDataset?.id, repositories]
+  );
+
+  /** Persists a grid edit as one transaction. Rejects if nothing was saved. */
+  const applyDatasetEdit = useCallback(
+    async (nextRecords: ExtractedRecord[], nextFields?: FieldDefinition[]) => {
+      const datasetId = currentDataset?.id;
+      if (!datasetId) return;
+      const nextColumns = nextFields ?? fields;
+      await repositories.datasets.applyEdit(datasetId, nextRecords, nextColumns);
+      setRecords(nextRecords);
+      setFields(nextColumns);
+    },
+    [currentDataset?.id, fields, repositories]
+  );
+
+  /** Saves the current configuration as a reusable recipe. Rejects if it was not saved. */
+  const saveCurrentAsRecipe = useCallback(
+    async (name: string) => {
+      const recipe = buildRecipe(name.trim());
+      if (!recipe) {
+        throw new Error('Choose a list before saving a recipe.');
+      }
+      if (recipe.fields.length === 0) {
+        throw new Error('Select at least one column before saving a recipe.');
+      }
+      await repositories.recipes.saveRecipe(recipe);
+      setActiveRecipeId(recipe.id);
+    },
+    [buildRecipe, repositories]
+  );
+
+  const applyConfiguration = useCallback(
+    (config: {
+      containerSelector: string;
+      fields: FieldDefinition[];
+      pagination?: ExtractionPaginationConfig;
+      projectId?: string;
+    }) => {
+      setOperationError(null);
+      setDetectedList({
+        containerSelector: config.containerSelector,
+        matchCount: 0,
+        sampleSnippets: [],
+      });
+      setFields(config.fields);
+      setSelectedFieldIds(new Set(config.fields.map((f) => f.id)));
+      if (config.pagination) {
+        setPagination(config.pagination);
+      }
+      setSelectedProjectId(config.projectId);
+      void loadProjects();
+      setView('config_fields');
+    },
+    [loadProjects]
+  );
+
+  const loadRecipe = useCallback(
+    (recipe: ExtractionRecipe) => {
+      applyConfiguration(recipe);
+      setActiveRecipeId(recipe.id);
+    },
+    [applyConfiguration]
+  );
+
+  const loadSchema = useCallback(
+    (schema: ExtractionSchema) => {
+      applyConfiguration(schema);
+      setActiveRecipeId(undefined);
+    },
+    [applyConfiguration]
   );
 
   return {
@@ -451,11 +772,21 @@ export function useExtractionWorkflow(tab: TabInfo) {
     pagination,
     setPagination,
     records,
+    recordsRevision,
     currentDataset,
     stats,
+    runSummary,
+    recordWarningThreshold,
+    operationError,
+    clearOperationError: useCallback(() => setOperationError(null), []),
+    recoverableJobs,
+    projects,
+    selectedProjectId,
+    setSelectedProjectId,
     startVisualPicker,
     cancelVisualPicker,
     autoDetectLists,
+    startPresetDetection,
     confirmListCandidate,
     toggleFieldSelection,
     updateField,
@@ -465,9 +796,16 @@ export function useExtractionWorkflow(tab: TabInfo) {
     pauseExtraction,
     resumeExtraction,
     stopExtraction,
+    cancelExtraction,
+    recoverJob,
+    discardRecoverableJob,
     viewDatasetInTable,
     resetToDashboard,
     updateRecordCell,
     deleteRecord,
+    applyDatasetEdit,
+    saveCurrentAsRecipe,
+    loadRecipe,
+    loadSchema,
   };
 }

@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
-  findNextPageButton,
-  executePaginationStep,
-  executeScrollStep,
-  isElementDisabled,
+  findNextPageControl,
+  isControlDisabled,
+  performScrollStep,
+  runMultiPageExtraction,
 } from '@/core/navigation/runner';
+import { FieldDefinition } from '@/types';
+
+const fields: FieldDefinition[] = [{ id: 't', name: 'Title', selector: '.title', extractor: 'text' }];
 
 describe('Navigation, Pagination & Infinite Scroll Runner', () => {
   beforeEach(() => {
@@ -14,18 +17,18 @@ describe('Navigation, Pagination & Infinite Scroll Runner', () => {
   it('detects disabled buttons and links accurately', () => {
     const disabledBtn = document.createElement('button');
     disabledBtn.disabled = true;
-    expect(isElementDisabled(disabledBtn)).toBe(true);
+    expect(isControlDisabled(disabledBtn)).toBe(true);
 
     const ariaDisabled = document.createElement('a');
     ariaDisabled.setAttribute('aria-disabled', 'true');
-    expect(isElementDisabled(ariaDisabled)).toBe(true);
+    expect(isControlDisabled(ariaDisabled)).toBe(true);
 
     const classDisabled = document.createElement('div');
     classDisabled.className = 'btn disabled';
-    expect(isElementDisabled(classDisabled)).toBe(true);
+    expect(isControlDisabled(classDisabled)).toBe(true);
 
     const normalBtn = document.createElement('button');
-    expect(isElementDisabled(normalBtn)).toBe(false);
+    expect(isControlDisabled(normalBtn)).toBe(false);
   });
 
   it('finds next button via rel="next"', () => {
@@ -36,7 +39,7 @@ describe('Navigation, Pagination & Infinite Scroll Runner', () => {
       </div>
     `;
 
-    const candidate = findNextPageButton();
+    const candidate = findNextPageControl(document);
     expect(candidate).not.toBeNull();
     expect(candidate?.isAnchor).toBe(true);
     expect(candidate?.href).toContain('/page/2');
@@ -51,7 +54,7 @@ describe('Navigation, Pagination & Infinite Scroll Runner', () => {
       </div>
     `;
 
-    const candidate = findNextPageButton();
+    const candidate = findNextPageControl(document);
     expect(candidate).not.toBeNull();
     expect(candidate?.element.className).toBe('btn-next');
     expect(candidate?.isAnchor).toBe(false);
@@ -64,45 +67,94 @@ describe('Navigation, Pagination & Infinite Scroll Runner', () => {
       </div>
     `;
 
-    const candidate = findNextPageButton('#custom-load-more');
+    const candidate = findNextPageControl(document, '#custom-load-more');
     expect(candidate).not.toBeNull();
     expect(candidate?.element.id).toBe('custom-load-more');
     expect(candidate?.href).toContain('/page/3');
   });
 
-  it('returns failure when next button is disabled', () => {
+  it('stops when the next button is disabled, without clicking it', async () => {
     document.body.innerHTML = `
-      <div>
-        <button class="next-btn" disabled>Next Page</button>
-      </div>
+      <div class="card"><h2 class="title">Only page</h2></div>
+      <button class="next-btn" disabled>Next Page</button>
     `;
+    const clickHandler = vi.fn();
+    document.querySelector('.next-btn')?.addEventListener('click', clickHandler);
 
-    const result = executePaginationStep('.next-btn');
-    expect(result.success).toBe(false);
-    expect(result.action).toBe('none');
-    expect(result.error).toContain('disabled');
+    const result = await runMultiPageExtraction({
+      strategy: 'next_link',
+      containerSelector: '.card',
+      fields,
+      controlSelector: '.next-btn',
+      delayMs: 1,
+      pageTimeoutMs: 100,
+    });
+
+    expect(result.stopReason).toBe('control_disabled_or_missing');
+    expect(result.totalRecords).toBe(1);
+    expect(clickHandler).not.toHaveBeenCalled();
   });
 
-  it('dispatches click on next button and reports success', () => {
-    document.body.innerHTML = `
-      <div>
-        <button id="next-page-btn">Next</button>
-      </div>
-    `;
-
-    const btn = document.getElementById('next-page-btn')!;
+  it('clicks the next button once per page', async () => {
+    let page = 1;
     const clickHandler = vi.fn();
-    btn.addEventListener('click', clickHandler);
+    const render = () => {
+      document.body.innerHTML = `
+        <div class="card"><h2 class="title">Page ${page}</h2></div>
+        <button id="next-page-btn" ${page === 2 ? 'disabled' : ''}>Next</button>
+      `;
+      document.getElementById('next-page-btn')?.addEventListener('click', () => {
+        clickHandler();
+        page += 1;
+        render();
+      });
+    };
+    render();
 
-    const result = executePaginationStep('#next-page-btn');
-    expect(result.success).toBe(true);
-    expect(result.action).toBe('clicked');
+    const result = await runMultiPageExtraction({
+      strategy: 'next_link',
+      containerSelector: '.card',
+      fields,
+      controlSelector: '#next-page-btn',
+      delayMs: 1,
+      pageTimeoutMs: 100,
+    });
+
     expect(clickHandler).toHaveBeenCalledTimes(1);
+    expect(result.totalRecords).toBe(2);
+  });
+
+  it('treats an in-page "#" link as a control, not as a repeated URL', async () => {
+    let page = 1;
+    const render = () => {
+      document.body.innerHTML = `
+        <div class="card"><h2 class="title">Page ${page}</h2></div>
+        ${page < 3 ? '<a id="next" href="#">Next</a>' : ''}
+      `;
+      document.getElementById('next')?.addEventListener('click', (event) => {
+        event.preventDefault();
+        page += 1;
+        render();
+      });
+    };
+    render();
+
+    const result = await runMultiPageExtraction({
+      strategy: 'next_link',
+      containerSelector: '.card',
+      fields,
+      controlSelector: '#next',
+      delayMs: 1,
+      pageTimeoutMs: 100,
+    });
+
+    expect(result.totalRecords).toBe(3);
+    expect(result.stopReason).toBe('control_disabled_or_missing');
   });
 
   it('executes scroll step calculation', () => {
     window.scrollBy = vi.fn();
-    const result = executeScrollStep(500);
+    const result = performScrollStep({ distancePx: 500 });
 
     expect(window.scrollBy).toHaveBeenCalledWith({ top: 500, behavior: 'smooth' });
     expect(typeof result.reachedBottom).toBe('boolean');

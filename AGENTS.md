@@ -45,15 +45,15 @@ Before modifying any file, agents must read the relevant architectural documenta
 
 5. **Agent 5: Extraction Engine & Data Normalization**
    - **Primary Owner**: `src/core/extraction/`.
-   - **Responsibilities**: Extracts structured records from detected containers using user-defined or auto-detected field definitions (text, attribute, href, src, innerHTML, regex, numbers). Handles text trimming, absolute URL resolution, data normalization, and SHA-256 duplicate row detection.
+   - **Responsibilities**: Extracts structured records from detected containers using user-defined or auto-detected field definitions (text, attribute, href, src, innerHTML, regex, numbers). Handles text trimming, absolute URL resolution, data normalization, and canonical record identity with SHA-256 fingerprints. A missing field never removes a record unless the user chose that filter.
 
 6. **Agent 6: Navigation, Pagination & Infinite Scroll Runner**
    - **Primary Owner**: `src/core/navigation/`.
    - **Responsibilities**: Automates multi-page harvesting: next-button clicking, URL pattern incrementing, and smooth infinite scroll loading with MutationObserver / network idle synchronization. Enforces delay throttles, stop conditions, and circuit breakers.
 
 7. **Agent 7: Side Panel UI & Tab Lifecycle Controller**
-   - **Primary Owner**: `entrypoints/sidepanel/` shell, `entrypoints/background.ts`, active tab synchronization, and extension runtime messaging.
-   - **Responsibilities**: Manages extension lifecycle, tab connection status, permission checks, and orchestrates the harvesting workflow.
+   - **Primary Owner**: `entrypoints/sidepanel/` shell, `entrypoints/background.ts`, `src/background/`, active tab synchronization, and extension runtime messaging.
+   - **Responsibilities**: Manages extension lifecycle, tab connection status, permission checks, and the `JobCoordinator`, which owns all job state.
 
 8. **Agent 8: Data Grid & Column Management UI**
    - **Primary Owner**: `src/components/grid/` and spreadsheet features powered by TanStack Table.
@@ -65,7 +65,7 @@ Before modifying any file, agents must read the relevant architectural documenta
 
 10. **Agent 10: Resilience, Error Recovery & Integration Testing**
     - **Primary Owner**: `src/core/resilience/` and integration test suites (`tests/integration/`).
-    - **Responsibilities**: Implements crash recovery, partial session persistence, error diagnostics, and end-to-end integration tests.
+    - **Responsibilities**: Implements crash recovery, partial session persistence, the job lifecycle state machine, error diagnostics, and end-to-end integration tests.
 
 ---
 
@@ -99,6 +99,12 @@ Before modifying any file, agents must read the relevant architectural documenta
     - No bypassing of website authentication, CAPTCHAs, or paywalls.
 12. **Document Decisions**:
     - Log architecture changes and design decisions in `docs/DECISIONS.md`.
+13. **One Production Path**:
+    - The background `JobCoordinator` is the only writer of extraction data. The side panel sends commands and reads storage.
+    - Never acknowledge a batch before its transaction has committed. Never report a save, export, delete or start as successful before it is confirmed.
+    - Every source module must be reachable from a real entry point. `tests/integration/production-wiring.test.ts` enforces this.
+    - A hash is never proof that two records are identical. Compare canonical records.
+    - A missing field never removes a record unless the user explicitly configured that filter.
 
 ---
 
@@ -111,6 +117,7 @@ Before modifying any file, agents must read the relevant architectural documenta
 │   ├── DECISIONS.md
 │   ├── FILE_OWNERSHIP.md
 │   ├── IMPLEMENTATION_STATUS.md
+│   ├── CRITICAL_REMEDIATION_PLAN.md
 │   ├── INTEGRATION_GUIDE.md
 │   ├── PRODUCT_REQUIREMENTS.md
 │   ├── TEST_MATRIX.md
@@ -124,18 +131,21 @@ Before modifying any file, agents must read the relevant architectural documenta
 │       ├── main.tsx
 │       └── App.tsx
 ├── src/
+│   ├── background/            # JobCoordinator: owns job state, only writer of records
 │   ├── components/            # Reusable React UI components
 │   │   ├── common/            # Buttons, modals, inputs, badges
 │   │   ├── grid/              # TanStack spreadsheet table
 │   │   ├── picker/            # Side panel controls for element picker
-│   │   └── history/           # Saved datasets & export history
+│   │   ├── history/           # Saved datasets & export history
+│   │   └── library/           # Projects, recipes, schemas, run history
 │   ├── contracts/             # Runtime schemas & backward compatibility aliases
 │   ├── core/
 │   │   ├── detection/         # Repeated list and field pattern detectors
 │   │   ├── extraction/        # DOM record extraction and normalization
 │   │   ├── navigation/        # Pagination, next-button, infinite scroll
 │   │   ├── export/            # CSV, JSON serializers
-│   │   └── resilience/        # Error boundaries, session recovery
+│   │   ├── state/             # Job lifecycle state machine
+│   │   └── resilience/        # Error reporting
 │   ├── shared/
 │   │   └── contracts/         # CANONICAL CONTRACTS & ZOD SCHEMAS (OWNER: Agent 1)
 │   │       ├── index.ts

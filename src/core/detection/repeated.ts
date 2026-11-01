@@ -1,5 +1,5 @@
 import { RepeatedPatternCandidate, CandidateSample } from '@/types';
-import { filterMeaningfulClasses, escapeCss, generateCssSelector } from '@/utils/selector';
+import { filterMeaningfulClasses, escapeCss, isDynamicId } from '@/utils/selector';
 import { normalizeText } from '@/utils/dom';
 
 /**
@@ -33,26 +33,29 @@ export function generateRepeatedSelector(parent: Element, sampleChild: Element):
   const childTag = sampleChild.tagName.toLowerCase();
   const meaningfulClasses = filterMeaningfulClasses(sampleChild.classList);
 
-  // If child has meaningful classes, try class selector
-  if (meaningfulClasses.length > 0) {
-    const classCandidate = `${childTag}.${meaningfulClasses.map(escapeCss).join('.')}`;
-    try {
-      const matches = parent.querySelectorAll(`:scope > ${classCandidate}`);
-      if (matches.length >= 2) {
-        // Can we use global selector?
-        const parentSelector = generateCssSelector(parent);
-        if (parentSelector) {
-          return `${parentSelector} > ${classCandidate}`;
-        }
-        return classCandidate;
-      }
-    } catch {
-      // Ignore
+  // Fast parent selector without full-document scan
+  let parentSelector = '';
+  if (parent.id && !isDynamicId(parent.id)) {
+    parentSelector = `#${escapeCss(parent.id)}`;
+  } else {
+    const parentClasses = filterMeaningfulClasses(parent.classList);
+    if (parentClasses.length > 0) {
+      parentSelector = `${parent.tagName.toLowerCase()}.${parentClasses.map(escapeCss).join('.')}`;
+    } else if (parent.tagName.toLowerCase() !== 'body' && parent.tagName.toLowerCase() !== 'html') {
+      parentSelector = parent.tagName.toLowerCase();
     }
   }
 
+  // If child has meaningful classes, try class selector
+  if (meaningfulClasses.length > 0) {
+    const classCandidate = `${childTag}.${meaningfulClasses.map(escapeCss).join('.')}`;
+    if (parentSelector) {
+      return `${parentSelector} > ${classCandidate}`;
+    }
+    return classCandidate;
+  }
+
   // Fallback to parent > childTag
-  const parentSelector = generateCssSelector(parent);
   if (parentSelector) {
     return `${parentSelector} > ${childTag}`;
   }

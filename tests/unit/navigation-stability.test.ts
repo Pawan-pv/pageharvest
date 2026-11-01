@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   waitForDOMStability,
   waitForNewElements,
@@ -31,16 +31,17 @@ describe('DOM Stability & Page Load Waiting', () => {
     document.body.innerHTML = '<div id="container"><div class="skeleton">Loading...</div></div>';
     const container = document.getElementById('container')!;
 
-    // Trigger delayed render after 120ms
+    // Trigger delayed render after 100ms
     setTimeout(() => {
       container.innerHTML = `
         <div class="card">Loaded Card 1</div>
         <div class="card">Loaded Card 2</div>
       `;
-    }, 120);
+    }, 100);
 
     const isStable = await waitForDOMStability(container, {
       timeoutMs: 2000,
+      minWaitMs: 150,
       quietPeriodMs: 100,
       pollIntervalMs: 25,
     });

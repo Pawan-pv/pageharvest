@@ -1,6 +1,24 @@
 # PageHarvest Implementation Status & Technical Roadmap
 
-This document serves as the master tracking status for all features, modules, and work packages across the PageHarvest project. It defines task dependencies, execution order, and whether tasks run sequentially or in parallel.
+> The roadmap below records the original work packages, and its "READY TO START/BLOCKED" labels are historical. Current status is in [CRITICAL_REMEDIATION_PLAN.md](CRITICAL_REMEDIATION_PLAN.md).
+
+This document serves as the master tracking status for all features, modules, and work packages across the PageHarvest project.
+
+## Current status: 2026-11-02
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| Unit and integration | PASS | `pnpm test`: 64 files, 668 tests |
+| TypeScript | PASS | `pnpm typecheck` |
+| ESLint | PASS | `pnpm lint` |
+| Production build | PASS | `pnpm build` on the final code |
+| ZIP package | NOT RE-RUN | Run `pnpm zip` before uploading |
+| Browser extension | PASS | `pnpm test:e2e`: 33 of 33, twice on the final code |
+| Public practice sites | PASS | Two sites, five scenarios; see the plan |
+| Complete release gate as one run | NOT COMPLETED | Stopped by the system for low memory; each layer passed separately |
+| Native toolbar and side panel | BLOCKED | No desktop automation tool; manual procedure not run |
+
+Assessment: **FUNCTIONAL MVP**. See the plan for what a release candidate still needs.
 
 ---
 

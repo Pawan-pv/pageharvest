@@ -1,3 +1,5 @@
+> The runtime protocol is `src/shared/contracts/message.ts`. Job, checkpoint and identity contracts are in `src/shared/contracts/job.ts`. The sections below describe the field and record shapes; for job messages see [ARCHITECTURE.md](../ARCHITECTURE.md), section 3.3.
+
 # Shared TypeScript Contracts & Message Protocol
 
 All inter-module communication, storage entities, and state machines are governed by strictly typed interfaces and Zod schemas in `src/types/` and `src/contracts/`.

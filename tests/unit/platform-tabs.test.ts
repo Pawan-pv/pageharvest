@@ -12,7 +12,7 @@ describe('Tab Lifecycle & Active Tab Detection', () => {
 
   beforeEach(() => {
     mockChrome = createChromeMock();
-    (globalThis as any).chrome = mockChrome;
+    Reflect.set(globalThis, 'chrome', mockChrome);
   });
 
   describe('isHarvestableUrl', () => {
@@ -53,6 +53,11 @@ describe('Tab Lifecycle & Active Tab Detection', () => {
         active: true,
         pinned: false,
         incognito: false,
+        frozen: false,
+        selected: true,
+        discarded: false,
+        autoDiscardable: true,
+        groupId: -1,
         url: 'https://news.ycombinator.com',
         title: 'Hacker News'
       };
@@ -80,6 +85,11 @@ describe('Tab Lifecycle & Active Tab Detection', () => {
         active: true,
         pinned: false,
         incognito: false,
+        frozen: false,
+        selected: true,
+        discarded: false,
+        autoDiscardable: true,
+        groupId: -1,
         status: 'complete',
         url: 'https://books.toscrape.com',
         title: 'Books to Scrape'
@@ -100,6 +110,11 @@ describe('Tab Lifecycle & Active Tab Detection', () => {
         active: true,
         pinned: false,
         incognito: false,
+        frozen: false,
+        selected: true,
+        discarded: false,
+        autoDiscardable: true,
+        groupId: -1,
         status: 'complete',
         url: 'chrome://history',
         title: 'History'
@@ -120,6 +135,11 @@ describe('Tab Lifecycle & Active Tab Detection', () => {
         active: true,
         pinned: false,
         incognito: false,
+        frozen: false,
+        selected: true,
+        discarded: false,
+        autoDiscardable: true,
+        groupId: -1,
         status: 'loading',
         url: 'https://example.com',
         title: 'Loading...'
@@ -145,6 +165,11 @@ describe('Tab Lifecycle & Active Tab Detection', () => {
         active: true,
         pinned: false,
         incognito: false,
+        frozen: false,
+        selected: true,
+        discarded: false,
+        autoDiscardable: true,
+        groupId: -1,
         status: 'complete',
         url: 'https://en.wikipedia.org',
         title: 'Wikipedia'
@@ -172,6 +197,11 @@ describe('Tab Lifecycle & Active Tab Detection', () => {
         active: true,
         pinned: false,
         incognito: false,
+        frozen: false,
+        selected: true,
+        discarded: false,
+        autoDiscardable: true,
+        groupId: -1,
         status: 'complete',
         url: 'https://example.com/done',
         title: 'Done'

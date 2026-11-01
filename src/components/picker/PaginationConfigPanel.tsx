@@ -1,16 +1,20 @@
 import React from 'react';
-import { ArrowRightCircle, MoveDown, Compass, Clock, Sliders } from 'lucide-react';
-import { Card, CardHeader } from '@/components/common/Card';
+import { ArrowRightCircle, Link2, MoveDown, Compass, Sliders } from 'lucide-react';
+import { Card } from '@/components/common/Card';
 import { Input } from '@/components/common/Input';
+import { previewTemplateUrls, validateUrlTemplate } from '@/core/navigation/url-paginator';
 import { ExtractionPaginationConfig, PaginationType } from '@/types';
 
 export interface PaginationConfigPanelProps {
   config: ExtractionPaginationConfig;
+  /** The page the job will start from. URL templates must stay on its website. */
+  sourceUrl?: string;
   onChange: (updated: Partial<ExtractionPaginationConfig>) => void;
 }
 
 export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
   config,
+  sourceUrl,
   onChange,
 }) => {
   const modes: { type: PaginationType; label: string; icon: React.ReactNode; desc: string }[] = [
@@ -32,7 +36,20 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
       icon: <MoveDown className="w-3.5 h-3.5" />,
       desc: 'Scroll down to load lazy/infinite content',
     },
+    {
+      type: 'url_template',
+      label: 'URL Template',
+      icon: <Link2 className="w-3.5 h-3.5" />,
+      desc: 'Visit numbered page URLs such as ?page=2',
+    },
   ];
+
+  const sequence = {
+    template: config.urlTemplate ?? '',
+    startPage: config.startPage ?? 1,
+    pageIncrement: config.pageIncrement ?? 1,
+  };
+  const templateCheck = validateUrlTemplate(sequence, sourceUrl);
 
   return (
     <Card variant="flat" className="text-left bg-slate-50/70 p-3.5 border-slate-200/80">
@@ -44,7 +61,7 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
       </div>
 
       {/* Mode selection buttons */}
-      <div className="grid grid-cols-3 gap-1.5 mb-3">
+      <div className="grid grid-cols-2 gap-1.5 mb-3">
         {modes.map((mode) => (
           <button
             key={mode.type}
@@ -74,10 +91,10 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
         <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200/60">
           <Input
             label="Next Button Selector"
-            placeholder="e.g. a.next, [rel='next'], button:has-text('Next')"
+            placeholder="e.g. a.next, [rel='next'], button.load-more"
             value={config.nextButtonSelector || ''}
             onChange={(e) => onChange({ nextButtonSelector: e.target.value })}
-            helperText="CSS selector identifying the pagination button"
+            helperText="CSS selector for the button. Leave empty to find it automatically."
           />
 
           <div className="grid grid-cols-2 gap-2">
@@ -85,17 +102,17 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
               type="number"
               label="Max Pages to Crawl"
               min={1}
-              max={100}
-              value={config.maxPages || 10}
+              max={500}
+              value={config.maxPages ?? 20}
               onChange={(e) => onChange({ maxPages: parseInt(e.target.value, 10) || 1 })}
             />
             <Input
               type="number"
               label="Delay Between Pages (ms)"
-              min={500}
-              max={10000}
+              min={200}
+              max={30000}
               step={250}
-              value={config.delayMs || 1500}
+              value={config.delayMs ?? 1500}
               onChange={(e) => onChange({ delayMs: parseInt(e.target.value, 10) || 1500 })}
             />
           </div>
@@ -109,18 +126,77 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
             label="Max Scrolls"
             min={1}
             max={200}
-            value={config.scrollCount || 20}
+            value={config.scrollCount ?? 30}
             onChange={(e) => onChange({ scrollCount: parseInt(e.target.value, 10) || 1 })}
           />
           <Input
             type="number"
             label="Scroll Delay (ms)"
-            min={500}
-            max={5000}
+            min={300}
+            max={10000}
             step={250}
-            value={config.scrollDelayMs || 1000}
-            onChange={(e) => onChange({ scrollDelayMs: parseInt(e.target.value, 10) || 1000 })}
+            value={config.scrollDelayMs ?? 1500}
+            onChange={(e) => onChange({ scrollDelayMs: parseInt(e.target.value, 10) || 1500 })}
           />
+        </div>
+      )}
+
+      {config.type === 'url_template' && (
+        <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200/60">
+          <Input
+            label="Page URL Template"
+            placeholder="https://example.com/items?page={page}"
+            value={config.urlTemplate || ''}
+            onChange={(e) => onChange({ urlTemplate: e.target.value })}
+            helperText="{page} becomes the page number. {offset} starts at 0, for sites that count items."
+          />
+
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              type="number"
+              label="Starting Page"
+              min={1}
+              value={config.startPage ?? 1}
+              onChange={(e) => onChange({ startPage: parseInt(e.target.value, 10) || 1 })}
+            />
+            <Input
+              type="number"
+              label="Page Increment"
+              min={1}
+              value={config.pageIncrement ?? 1}
+              onChange={(e) => onChange({ pageIncrement: parseInt(e.target.value, 10) || 1 })}
+            />
+            <Input
+              type="number"
+              label="Maximum Pages"
+              min={1}
+              max={500}
+              value={config.maxPages ?? 20}
+              onChange={(e) => onChange({ maxPages: parseInt(e.target.value, 10) || 1 })}
+            />
+            <Input
+              type="number"
+              label="Delay Between Pages (ms)"
+              min={200}
+              max={30000}
+              step={250}
+              value={config.delayMs ?? 1500}
+              onChange={(e) => onChange({ delayMs: parseInt(e.target.value, 10) || 1500 })}
+            />
+          </div>
+
+          {templateCheck.valid ? (
+            <div className="rounded-lg bg-white border border-slate-200 p-2">
+              <p className="text-[11px] font-semibold text-slate-600 mb-1">Pages it will visit</p>
+              <ol className="text-[11px] font-mono text-slate-600 flex flex-col gap-0.5" aria-label="Generated page URLs">
+                {previewTemplateUrls(sequence, 3).map((url) => (
+                  <li key={url} className="truncate" title={url}>{url}</li>
+                ))}
+              </ol>
+            </div>
+          ) : (
+            <p role="alert" className="text-[11px] text-rose-600">{templateCheck.error}</p>
+          )}
         </div>
       )}
     </Card>

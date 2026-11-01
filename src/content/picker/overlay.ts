@@ -64,18 +64,17 @@ export class PickerOverlay {
       this.onCancelClick = callbacks.onCancel;
     }
 
-    // 1. Create or retrieve host element
-    let host = document.getElementById(OVERLAY_HOST_ID);
-    if (!host) {
-      host = document.createElement('div');
-      host.id = OVERLAY_HOST_ID;
-      host.setAttribute('data-pageharvest-ignore', 'true');
-      (document.body || document.documentElement).appendChild(host);
-    }
+    // 1. Always start from a fresh host. A leftover one cannot be reused, because an
+    //    element only ever accepts one shadow root.
+    document.getElementById(OVERLAY_HOST_ID)?.remove();
+    const host = document.createElement('div');
+    host.id = OVERLAY_HOST_ID;
+    host.setAttribute('data-pageharvest-ignore', 'true');
+    (document.body || document.documentElement).appendChild(host);
     this.hostElement = host;
 
-    // 2. Attach Shadow DOM
-    this.shadowRoot = host.attachShadow({ mode: 'open' });
+    // 2. Attach a closed Shadow DOM. The only reference to the root is this private field.
+    this.shadowRoot = host.attachShadow({ mode: 'closed' });
 
     // 3. Inject reset and isolated styles
     const styleEl = document.createElement('style');
@@ -259,7 +258,9 @@ export class PickerOverlay {
 
     const title = document.createElement('span');
     title.className = 'ph-toolbar-title';
-    title.innerHTML = `<strong>PageHarvest</strong> Element Selected`;
+    const brand = document.createElement('strong');
+    brand.textContent = 'PageHarvest';
+    title.append(brand, document.createTextNode(' Element Selected'));
     header.appendChild(title);
 
     if (info.crossFrame?.warning) {

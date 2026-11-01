@@ -22,28 +22,33 @@ export function getElementFingerprint(el: Element): ElementFingerprint {
 
   const tag = el.tagName.toLowerCase();
   const classes = sanitizeClassList(el.classList).sort();
-  const childTagSequence = Array.from(el.children)
+
+  // Bounded child inspection: examine at most 10 children
+  const childCount = el.children.length;
+  const childSlice = childCount > 10 ? Array.from(el.children).slice(0, 10) : Array.from(el.children);
+  const childTagSequence = childSlice
     .filter((c) => c.nodeType === Node.ELEMENT_NODE && c.tagName !== 'SCRIPT' && c.tagName !== 'STYLE')
     .map((c) => c.tagName.toLowerCase());
 
   let depth = 0;
   let p = el.parentElement;
-  while (p && p !== document.body) {
+  while (p && p !== document.body && depth < 10) {
     depth++;
     p = p.parentElement;
   }
 
-  const textSnippet = normalizeText(el.textContent).slice(0, 100);
-  const hasLink = el.tagName === 'A' || el.querySelector('a[href]') !== null;
-  const hasImage = el.tagName === 'IMG' || el.querySelector('img, [style*="background-image"]') !== null;
-  const hasPriceOrNumber = /[$€£¥₹]|\b(USD|EUR|GBP|INR)\b/i.test(textSnippet);
+  // Bounded text snippet: never serialize textContent on giant containers with > 50 children
+  const textSnippet = childCount > 50 ? '' : normalizeText(el.textContent).slice(0, 100);
+  const hasLink = el.tagName === 'A' || (childCount <= 50 && el.querySelector('a[href]') !== null);
+  const hasImage = el.tagName === 'IMG' || (childCount <= 50 && el.querySelector('img, [style*="background-image"]') !== null);
+  const hasPriceOrNumber = childCount <= 50 && /[$€£¥₹]|\b(USD|EUR|GBP|INR)\b/i.test(textSnippet);
 
   const fp: ElementFingerprint = {
     tag,
     classes,
     childTagSequence,
     depth,
-    childCount: childTagSequence.length,
+    childCount,
     textSnippet,
     hasLink,
     hasImage,
@@ -126,17 +131,43 @@ export function clusterSiblings(
   sampleTarget?: Element,
   similarityThreshold: number = 0.65
 ): Element[][] {
-  const children = Array.from(parent.children).filter(
-    (c) =>
-      c.nodeType === Node.ELEMENT_NODE &&
-      c.tagName !== 'SCRIPT' &&
-      c.tagName !== 'STYLE' &&
-      c.tagName !== 'TEMPLATE' &&
-      c.tagName !== 'NOSCRIPT'
-  );
+  const childCollection = parent.children;
+  const count = childCollection.length;
+  if (count < 2) return count === 1 ? [[childCollection[0]]] : [];
 
-  if (children.length < 2) {
-    return children.length === 1 ? [[children[0]]] : [];
+  // Ultra-Fast Path for large containers:
+  // Iterate directly using firstElementChild/nextElementSibling to avoid O(N^2) JSDOM collection indexing
+  if (sampleTarget && count > 30) {
+    const targetTag = sampleTarget.tagName;
+    const primaryClass = sanitizeClassList(sampleTarget.classList)[0];
+    if (primaryClass) {
+      const fastMatches: Element[] = [];
+      let c = parent.firstElementChild;
+      while (c) {
+        if (c.tagName === targetTag && c.classList.contains(primaryClass)) {
+          fastMatches.push(c);
+        }
+        c = c.nextElementSibling;
+      }
+      if (fastMatches.length >= 2) {
+        return [fastMatches];
+      }
+    }
+  }
+
+  const children: Element[] = [];
+  let curr = parent.firstElementChild;
+  while (curr) {
+    if (
+      curr.nodeType === Node.ELEMENT_NODE &&
+      curr.tagName !== 'SCRIPT' &&
+      curr.tagName !== 'STYLE' &&
+      curr.tagName !== 'TEMPLATE' &&
+      curr.tagName !== 'NOSCRIPT'
+    ) {
+      children.push(curr);
+    }
+    curr = curr.nextElementSibling;
   }
 
   // Fast-Path: Bucket by Tag + Primary Classes

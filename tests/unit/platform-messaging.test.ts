@@ -11,14 +11,14 @@ describe('Browser Messaging Infrastructure', () => {
 
   beforeEach(() => {
     mockChrome = createChromeMock();
-    (globalThis as any).chrome = mockChrome;
+    Reflect.set(globalThis, 'chrome', mockChrome);
     router = new MessageRouter();
     client = new MessagingClient();
   });
 
   describe('Message Routing', () => {
     it('routes a valid message to its registered handler and returns the response', async () => {
-      router.on('PING', (msg) => {
+      router.on('PING', () => {
         return {
           id: 'pong_1',
           type: 'PONG',
@@ -49,7 +49,7 @@ describe('Browser Messaging Infrastructure', () => {
     });
 
     it('handles asynchronous handlers returning Promises', async () => {
-      router.on('DETECT_FIELDS', async (msg) => {
+      router.on('DETECT_FIELDS', async () => {
         await new Promise((r) => setTimeout(r, 10));
         return {
           id: 'resp_df',
@@ -90,24 +90,27 @@ describe('Browser Messaging Infrastructure', () => {
         timestamp: 'invalid_timestamp'
       };
 
-      await expect(client.sendToBackground(malformedMessage as any)).rejects.toThrow(
+      await expect(client.sendToBackground(malformedMessage as unknown as ExtensionMessage)).rejects.toThrow(
         /invalid message/i
       );
     });
 
     it('router responds with error response when received message violates schema', async () => {
-      let responseReceived: any;
+      let responseReceived: { ok?: boolean; error?: string } | undefined;
       router.listen();
 
       // Trigger directly on Chrome runtime onMessage listener
       mockChrome.runtime.sendMessage(
         { id: '', type: 'PING' }, // empty ID is invalid
-        (res: any) => {
-          responseReceived = res;
+        (res: unknown) => {
+          if (typeof res === 'object' && res !== null) {
+            responseReceived = res as { ok?: boolean; error?: string };
+          }
         }
       );
 
       expect(responseReceived).toBeDefined();
+      if (!responseReceived) throw new Error('Expected a router error response.');
       expect(responseReceived.ok).toBe(false);
       expect(responseReceived.error).toContain('INVALID_MESSAGE');
     });
@@ -148,7 +151,7 @@ describe('Browser Messaging Infrastructure', () => {
   describe('Disconnected Receivers and Reconnection', () => {
     it('handles disconnected receiver error and attempts retry when configured', async () => {
       let callCount = 0;
-      mockChrome.tabs.sendMessage = vi.fn().mockImplementation((tabId, msg, cb) => {
+      mockChrome.tabs.sendMessage = vi.fn().mockImplementation((_tabId, _msg, cb) => {
         callCount++;
         if (callCount === 1) {
           mockChrome.runtime.lastError = { message: 'Could not establish connection. Receiving end does not exist.' };
@@ -178,7 +181,7 @@ describe('Browser Messaging Infrastructure', () => {
     });
 
     it('throws DISCONNECTED_RECEIVER if all retries fail', async () => {
-      mockChrome.tabs.sendMessage = vi.fn().mockImplementation((tabId, msg, cb) => {
+      mockChrome.tabs.sendMessage = vi.fn().mockImplementation((_tabId, _msg, cb) => {
         mockChrome.runtime.lastError = { message: 'Could not establish connection. Receiving end does not exist.' };
         if (cb) cb(undefined);
         return Promise.resolve(undefined);
@@ -255,7 +258,7 @@ describe('Browser Messaging Infrastructure', () => {
 
   describe('Unexpected Runtime Errors', () => {
     it('catches exceptions thrown in router handler and returns structured EXTRACTION_ERROR', async () => {
-      router.on('EXTRACT_RECORDS', () => {
+      router.on('DETECT_FIELDS', () => {
         throw new Error('Unexpected DOM corruption during harvest');
       });
       router.listen();
@@ -263,25 +266,16 @@ describe('Browser Messaging Infrastructure', () => {
       mockChrome.runtime.sendMessage(
         {
           id: 'ext_err_1',
-          type: 'EXTRACT_RECORDS',
+          type: 'DETECT_FIELDS',
           timestamp: Date.now(),
-          payload: {
-            recipe: {
-              id: 'r1',
-              name: 'Recipe',
-              urlPattern: '.*',
-              containerSelector: '.card',
-              fields: [{ id: 'f1', name: 'title', selector: 'h1', extractor: 'text' }],
-              createdAt: Date.now(),
-              updatedAt: Date.now()
-            },
-            pageNumber: 1
-          }
+          payload: { containerSelector: '.card' },
         },
-        (res: any) => {
+        (res: unknown) => {
           expect(res).toBeDefined();
-          expect(res.type).toBe('EXTRACTION_ERROR');
-          expect(res.payload.message).toContain('Unexpected DOM corruption');
+          expect(res).toEqual(expect.objectContaining({
+            type: 'EXTRACTION_ERROR',
+            payload: expect.objectContaining({ message: expect.stringContaining('Unexpected DOM corruption') }),
+          }));
         }
       );
     });

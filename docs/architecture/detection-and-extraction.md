@@ -24,14 +24,44 @@ For any selected container item, automatically propose field definitions by anal
 5. **Description / Text**: Search for `p, [class*="desc"], [class*="detail"]`. Extract text.
 6. **Badge / Category / Tag**: Search for `span, [class*="badge"], [class*="category"], [class*="tag"]`.
 
-## 3. Data Extraction & Normalization
-1. **Relative Traversal**: For each container matching `containerSelector`, query relative selectors: `container.querySelector(field.selector)`.
-2. **Extraction Types**:
-   - `text`: Read `textContent` or `innerText`, strip redundant whitespace (`\s+` -> ` `), trim.
-   - `attribute`: Read `getAttribute(field.attributeName)`.
-   - `href` / `src`: Resolve relative paths into absolute URLs using `new URL(attr, window.location.href).href`.
-   - `number`: Strip non-numeric characters (retaining negative sign and decimal point) and parse as float.
-   - `regex`: Apply regex pattern to text content and extract matching group.
-3. **Duplicate Detection**:
-   - Compute hash of normalized field values.
-   - If hash exists in the current session's seen set, increment duplicate counter and skip or flag the record.
+## 3. Data Extraction & Normalization Engine
+
+The core extraction engine (`src/core/extraction/`) is completely deterministic and runs local-first without LLM reliance.
+
+### 3.1 Supported Data Types
+1. **Text**: Extracted from `textContent` or `innerText`, whitespace and linebreaks collapsed, HTML entities decoded (named, decimal `&#...;`, hex `&#x...;`), non-breaking and zero-width spaces normalized.
+2. **Links**: Anchor tags and custom link attributes resolved to absolute URLs against `baseUrl`. Filters out `javascript:` pseudo-protocols.
+3. **Images**: Resolves `src`, `data-src`, `data-lazy-src`, `data-original`, `srcset` candidates, and CSS `background-image: url(...)` to absolute URLs.
+4. **Attributes**: Extracts any custom attribute (e.g., `data-sku`, `title`, `aria-label`).
+5. **Prices**: Parses multi-locale formats (`$129.00`, `129,00 €`, `€ 1.299,99`, `1 299,50 €`, `£49.99`, `¥1500`), discounts (`-15%`), negative values, and free items (`"FREE"` $\to$ `0`). Returns formatted strings or numbers.
+6. **Dates**: Parses ISO-8601, `YYYY-MM-DD`, `MM/DD/YYYY`, `DD/MM/YYYY`, standard month strings (`October 15, 2026`), and relative dates (`today`, `yesterday`, `X days ago`).
+7. **Numeric Values**: Extracts integers, floating points, percentages, and ratings (e.g. `"4.8 out of 5 stars"` $\to$ `4.8`).
+8. **Boolean Values**: Evaluates DOM state (`input.checked`, `button.disabled`, `aria-checked`, semantic classes `.in-stock`, `.active`) and string booleans (`true`/`false`, `in stock`/`out of stock`).
+9. **Metadata**: Injects record provenance (`_id`, `_page`, `_extractedAt`, `_sourceUrl`, `_hash`) and execution context.
+10. **HTML**: Raw sanitized innerHTML strings.
+11. **Regex**: Regex capture groups extracted safely with pattern verification.
+
+### 3.2 Input Contract (`ExtractionInput`)
+- `schema?: ExtractionRecipe | ExtractionSchema`
+- `root?: Document | Element` (DOM context, defaults to `document`)
+- `rootSelector?: string` (Optional sub-tree container)
+- `repeatedItemSelector?: string` (CSS selector for repeated items)
+- `fieldSelectors?: Record<string, string>` (Shorthand mapping of name $\to$ selector)
+- `fieldTypes?: Record<string, ExtendedFieldExtractorType>` (Shorthand mapping of name $\to$ type)
+- `fields?: ExtractionFieldConfig[]` (Explicit field definitions)
+- `baseUrl?: string` (Context URL for relative links)
+- `pageNumber?: number` (Pagination index)
+- `deduplication?: { enabled?: boolean; fields?: string[]; seenHashes?: Set<string> }`
+
+### 3.3 Output Contract (`ExtractionOutput`)
+- `records: ExtractedRecord[]` (Normalized, validated, deduplicated records)
+- `metadata: ExtractionMetadata` (Execution ID, timestamp, page, container selector, field count)
+- `errors: ExtractionJobError[]` (Diagnostic error log with severity, field, containerIndex, selector)
+- `statistics: ExtractionStatistics` (Total parsed, valid count, duplicate count, failed count, durationMs, fieldCoverage map)
+
+### 3.4 Reliability Guarantees
+- **Non-Fatal Element Missing**: Missing optional fields receive `defaultValue` or `null` without crashing the job.
+- **Record Isolation**: If an individual record fails required field validation, it is collected into `errors` and skipped without corrupting remaining records.
+- **Malformed Selector Safety**: Invalid CSS selectors in fields or root trigger `INVALID_SELECTOR` diagnostic errors rather than uncaught DOMExceptions.
+- **Large Dataset Scalability**: Fast 32-bit FNV-1a hashing guarantees sub-second deduplication across 1,000+ item batches.
+- **Zero LLM Dependency**: Deterministic DOM parsing and regular expression heuristics ensure high throughput and zero token costs.

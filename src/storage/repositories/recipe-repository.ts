@@ -17,6 +17,13 @@ export class RecipeRepository {
     return this.db.recipes.orderBy('createdAt').reverse().toArray();
   }
 
+  public async updateRecipe(id: string, updates: Partial<ExtractionRecipe>): Promise<void> {
+    const changed = await this.db.recipes.update(id, { ...updates, updatedAt: Date.now() });
+    if (changed === 0) {
+      throw new Error(`Recipe ${id} no longer exists.`);
+    }
+  }
+
   public async deleteRecipe(id: string): Promise<void> {
     await this.db.recipes.delete(id);
   }

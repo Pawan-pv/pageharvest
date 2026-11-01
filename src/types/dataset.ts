@@ -1,9 +1,12 @@
+import { JobStatus } from '@/shared/contracts/job';
 import { FieldDefinition } from './field';
 
 export interface DatasetEntity {
   id: string;
   name: string;
   url: string;
+  projectId?: string;
+  jobId?: string;
   recipeId?: string;
   recordsCount: number;
   fields: FieldDefinition[];
@@ -13,22 +16,26 @@ export interface DatasetEntity {
 
 export type Dataset = DatasetEntity;
 
-export type ExtractionStatus =
-  | 'IDLE'
-  | 'INSPECTING'
-  | 'EXTRACTING'
-  | 'PAGINATING'
-  | 'PAUSED'
-  | 'COMPLETED'
-  | 'ERROR';
+export type ExtractionStatus = 'IDLE' | JobStatus;
 
 export interface ExtractionRunHistory {
   id: string;
+  jobId?: string;
+  projectId?: string;
   datasetId: string;
   recipeId?: string;
-  status: ExtractionStatus;
+  name?: string;
+  url?: string;
+  status: JobStatus;
   totalExtracted: number;
   duplicatesSkipped: number;
+  pagesVisited?: number;
+  scrollsCompleted?: number;
+  recordsDetected?: number;
+  recordsWithMissingFields?: number;
+  recordsFiltered?: number;
+  recordsFailed?: number;
+  stopReason?: string;
   startedAt: number;
   finishedAt?: number;
   errorMessage?: string;

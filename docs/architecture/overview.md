@@ -1,3 +1,5 @@
+> Current as of the critical remediation. [ARCHITECTURE.md](../ARCHITECTURE.md) is the authoritative description: the background `JobCoordinator` owns all job state and writes all extraction data, and the side panel is a view of stored state.
+
 # System Architecture Overview
 
 ## 1. High-Level Architecture

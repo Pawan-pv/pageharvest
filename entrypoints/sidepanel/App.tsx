@@ -1,256 +1,336 @@
-import React, { useEffect, useState } from 'react';
-import { getActiveTab, getTabStatus, TabStatus, TabManager } from '@/platform/tab-manager';
-import { recoverJobState, clearJobState, JobStateSnapshot } from '@/platform/job-recovery';
-import { MessagingClient } from '@/platform/messaging-client';
-import { ExtensionMessage } from '@/contracts/messages';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
+import {
+  Wheat,
+  Settings as SettingsIcon,
+  AlertTriangle,
+} from 'lucide-react';
+import { useActiveTab } from '@/hooks/useActiveTab';
+import { useDatasets } from '@/hooks/useDatasets';
+import { useExtractionWorkflow } from '@/hooks/useExtractionWorkflow';
+import { MainDashboard } from '@/components/dashboard/MainDashboard';
+import { ElementSelectionBanner } from '@/components/picker/ElementSelectionBanner';
+import { DetectedListPreview } from '@/components/picker/DetectedListPreview';
+import { FieldSelectionPanel } from '@/components/picker/FieldSelectionPanel';
+import { ExtractionProgressView } from '@/components/dashboard/ExtractionProgressView';
+import { Alert } from '@/components/common/Alert';
+import { ExtractionJob } from '@/shared/contracts/job';
+
+const DataTable = lazy(() =>
+  import('@/components/grid/DataTable').then((module) => ({ default: module.DataTable }))
+);
+const LibraryView = lazy(() =>
+  import('@/components/library/LibraryView').then((module) => ({
+    default: module.LibraryView,
+  }))
+);
+const SettingsView = lazy(() =>
+  import('@/components/settings/SettingsView').then((module) => ({ default: module.SettingsView }))
+);
+
+function describeRecoverableProgress(job: ExtractionJob): string {
+  const steps =
+    job.progressKind === 'scrolls'
+      ? `${job.scrollsCompleted} scrolls`
+      : `${job.pagesVisited} pages`;
+  return `${steps} / ${job.totalExtracted} rows`;
+}
 
 export const App: React.FC = () => {
-  const [tabStatus, setTabStatus] = useState<TabStatus | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'unsupported' | 'idle'>('idle');
-  const [recoveredJob, setRecoveredJob] = useState<JobStateSnapshot | null>(null);
-  const [isPicking, setIsPicking] = useState<boolean>(false);
-  const [isDetecting, setIsDetecting] = useState<boolean>(false);
-  const [statusMessage, setStatusMessage] = useState<string>('');
+  const { tab, isLoading: isTabLoading, refreshTab } = useActiveTab();
+  const {
+    datasets,
+    isLoading: isDatasetsLoading,
+    error: datasetsError,
+    refreshDatasets,
+    deleteDataset,
+    getDatasetRecords,
+  } = useDatasets();
 
-  const messagingClient = new MessagingClient();
+  const workflow = useExtractionWorkflow(tab);
 
+  // Top navigation tabs: 'harvest' | 'datasets' | 'settings'
+  const [activeTabNav, setActiveTabNav] = useState<'harvest' | 'datasets' | 'settings'>('harvest');
+
+  // Jobs write datasets from the background, so the list is re-read when the view changes.
   useEffect(() => {
-    // 1. Initial tab inspection
-    const fetchTab = async () => {
-      const tab = await getActiveTab();
-      if (tab) {
-        const status = getTabStatus(tab);
-        setTabStatus(status);
-        if (!status.isHarvestable) {
-          setConnectionStatus('unsupported');
-        } else {
-          setConnectionStatus('connected');
-        }
-      } else {
-        setConnectionStatus('unsupported');
+    if (workflow.view === 'dashboard' || workflow.view === 'results') {
+      void refreshDatasets();
+    }
+  }, [workflow.view, refreshDatasets]);
+
+  const handleNavChange = (tabName: 'harvest' | 'datasets' | 'settings') => {
+    setActiveTabNav(tabName);
+    if (tabName === 'datasets') {
+      workflow.setView('history');
+      refreshDatasets();
+    } else if (tabName === 'settings') {
+      workflow.setView('settings');
+    } else {
+      if (workflow.view === 'history' || workflow.view === 'settings') {
+        workflow.setView('dashboard');
       }
-    };
-    fetchTab();
-
-    // 2. Check for suspended or recoverable jobs from previous service worker session
-    const checkRecovery = async () => {
-      const recovery = await recoverJobState();
-      if (recovery.recovered && recovery.job) {
-        setRecoveredJob(recovery.job);
-      }
-    };
-    checkRecovery();
-
-    // 3. Tab lifecycle observer
-    const tabManager = new TabManager();
-    const unsubscribe = tabManager.subscribe((status) => {
-      setTabStatus(status);
-      if (!status.isHarvestable) {
-        setConnectionStatus('unsupported');
-      } else {
-        setConnectionStatus('connected');
-      }
-    });
-
-    return () => {
-      unsubscribe();
-      tabManager.destroy();
-    };
-  }, []);
-
-  const handleStartPicker = async () => {
-    if (!tabStatus?.isHarvestable) return;
-
-    setIsPicking(true);
-    setStatusMessage('Element picker activated. Hover and click elements on the page.');
-
-    try {
-      const msg: ExtensionMessage = {
-        id: `pick_${Date.now()}`,
-        type: 'START_PICKER',
-        timestamp: Date.now(),
-        payload: {
-          highlightColor: '#2563eb'
-        }
-      };
-      await messagingClient.sendToActiveTab(msg);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setStatusMessage(`Failed to start element picker: ${msg}`);
-      setIsPicking(false);
     }
   };
 
-  const handleStopPicker = async () => {
-    setIsPicking(false);
-    setStatusMessage('Element picker stopped.');
-
-    try {
-      const msg: ExtensionMessage = {
-        id: `stop_pick_${Date.now()}`,
-        type: 'STOP_PICKER',
-        timestamp: Date.now()
-      };
-      await messagingClient.sendToActiveTab(msg);
-    } catch (err: unknown) {
-      console.error('Failed to stop picker:', err);
-    }
+  const handleViewDataset = (dataset: (typeof datasets)[0]) => {
+    setActiveTabNav('harvest');
+    workflow.viewDatasetInTable(dataset);
   };
 
-  const handleAutoDetect = async () => {
-    if (!tabStatus?.isHarvestable) return;
-
-    setIsDetecting(true);
-    setStatusMessage('Scanning DOM for repeating card/list patterns...');
-
-    try {
-      const msg: ExtensionMessage = {
-        id: `detect_${Date.now()}`,
-        type: 'DETECT_REPEATED_ELEMENTS',
-        timestamp: Date.now()
-      };
-      const response = await messagingClient.sendToActiveTab<any>(msg);
-      if (response && response.type === 'REPEATED_ELEMENTS_DETECTED') {
-        setStatusMessage(`Found ${response.payload.matchCount} matching items (${response.payload.containerSelector})`);
-      } else {
-        setStatusMessage('Detection completed. Review suggested items.');
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setStatusMessage(`Auto-detect failed: ${msg}`);
-    } finally {
-      setIsDetecting(false);
-    }
+  const handleNewExtraction = () => {
+    setActiveTabNav('harvest');
+    workflow.resetToDashboard();
+    refreshDatasets();
   };
 
-  const handleDiscardRecoveredJob = async () => {
-    await clearJobState();
-    setRecoveredJob(null);
-    setStatusMessage('Interrupted job discarded.');
+  const handleCancelExtraction = async () => {
+    await workflow.cancelExtraction();
+    refreshDatasets();
+  };
+
+  const handleDiscardRecoverable = async (jobId: string) => {
+    await workflow.discardRecoverableJob(jobId);
+    refreshDatasets();
   };
 
   return (
-    <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-900 font-sans p-4 select-none">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+    <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900 select-none">
+      {/* Top Header */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-xs border-b border-slate-200 px-4 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-            PH
+          <div className="w-6 h-6 rounded-md bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+            <Wheat className="w-3.5 h-3.5" />
           </div>
-          <div>
-            <h1 className="text-base font-bold text-slate-800 leading-tight">PageHarvest</h1>
-            <p className="text-xs text-slate-500">Local-First Web Harvester</p>
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-sm font-bold tracking-tight text-slate-900">
+              PageHarvest
+            </h1>
+            <span className="text-[10px] font-medium text-slate-400 bg-slate-100 rounded px-1.5 py-0.2">
+              v1.0
+            </span>
           </div>
         </div>
 
-        {/* Status Badge */}
-        <div>
-          {connectionStatus === 'connected' && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Connected
-            </span>
-          )}
-          {connectionStatus === 'unsupported' && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-800">
-              Restricted Page
-            </span>
-          )}
-          {connectionStatus === 'idle' && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-200 text-slate-700">
-              Connecting...
-            </span>
-          )}
-        </div>
+        {/* Navigation pill switcher */}
+        <nav className="flex items-center p-0.5 rounded-lg bg-slate-100 border border-slate-200/80 text-xs">
+          <button
+            onClick={() => handleNavChange('harvest')}
+            className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+              activeTabNav === 'harvest' && workflow.view !== 'history' && workflow.view !== 'settings'
+                ? 'bg-white text-emerald-800 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Harvest
+          </button>
+          <button
+            onClick={() => handleNavChange('datasets')}
+            className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+              activeTabNav === 'datasets' || workflow.view === 'history'
+                ? 'bg-white text-emerald-800 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Datasets
+          </button>
+          <button
+            onClick={() => handleNavChange('settings')}
+            className={`px-2 py-1 rounded-md font-medium transition-all ${
+              activeTabNav === 'settings' || workflow.view === 'settings'
+                ? 'bg-white text-emerald-800 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+            aria-label="Settings"
+          >
+            <SettingsIcon className="w-3.5 h-3.5" />
+          </button>
+        </nav>
       </header>
 
-      {/* Recovered Job Notification Banner */}
-      {recoveredJob && (
-        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs shadow-sm">
-          <div className="flex items-center justify-between mb-1 font-semibold">
-            <span>Interrupted Job Recovered</span>
-            <span className="text-amber-700">{recoveredJob.pagesVisited} pages / {recoveredJob.totalExtracted} rows</span>
+      {/* Sessions that can really be resumed: a stored job in RECOVERABLE with a checkpoint */}
+      {workflow.recoverableJobs.map((job) => (
+        <div
+          key={job.id}
+          className="m-3 mb-0 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs text-left shadow-xs flex flex-col gap-2"
+        >
+          <div className="flex items-center justify-between font-semibold">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <span>Interrupted Session Detected</span>
+            </div>
+            <span className="text-amber-700 font-mono text-[11px]">
+              {describeRecoverableProgress(job)}
+            </span>
           </div>
-          <p className="text-amber-800 mb-2">
-            A background service worker suspension interrupted extraction at {recoveredJob.url}.
+          <p className="text-slate-600 leading-snug">
+            The extraction at <span className="font-mono text-slate-800">{job.targetUrl}</span> stopped.{' '}
+            {job.interruptedReason} All saved rows are safe.
           </p>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2 pt-1">
             <button
-              onClick={handleDiscardRecoveredJob}
-              className="px-2.5 py-1 text-xs rounded bg-white border border-amber-300 hover:bg-amber-100 font-medium text-amber-900 transition"
+              onClick={() => void workflow.recoverJob(job.id)}
+              className="px-2.5 py-1 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 font-medium text-white transition"
             >
-              Discard Job
+              Resume Session
+            </button>
+            <button
+              onClick={() => void handleDiscardRecoverable(job.id)}
+              className="px-2.5 py-1 text-xs rounded-lg bg-white border border-slate-300 hover:bg-slate-100 font-medium text-slate-700 transition"
+            >
+              Discard Session
             </button>
           </div>
         </div>
+      ))}
+
+      {workflow.operationError && workflow.view !== 'extracting' && (
+        <Alert
+          variant="error"
+          title="PageHarvest operation failed"
+          className="m-3 mb-0"
+          onDismiss={workflow.clearOperationError}
+        >
+          {workflow.operationError}
+        </Alert>
       )}
 
-      {/* Active Tab Card */}
-      <section className="bg-white rounded-lg border border-slate-200 p-3 shadow-sm mb-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-          Active Browser Tab
-        </h2>
-        {tabStatus ? (
-          <div>
-            <div className="text-sm font-medium text-slate-800 truncate" title={tabStatus.title}>
-              {tabStatus.title || 'Untitled Page'}
-            </div>
-            <div className="text-xs text-slate-500 font-mono truncate" title={tabStatus.url}>
-              {tabStatus.url || 'No URL'}
-            </div>
-            {!tabStatus.isHarvestable && (
-              <div className="mt-2 text-xs text-rose-600 bg-rose-50 p-2 rounded border border-rose-100">
-                {tabStatus.reason || 'PageHarvest cannot run on browser internal or extension store pages.'}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-xs text-slate-400 italic">No active tab detected</div>
+      {datasetsError && (
+        <Alert variant="error" className="m-3 mb-0">
+          {datasetsError}
+        </Alert>
+      )}
+
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto flex flex-col">
+        {/* 1. Main Dashboard */}
+        {workflow.view === 'dashboard' && (
+          <MainDashboard
+            tab={tab}
+            isTabLoading={isTabLoading}
+            onRefreshTab={refreshTab}
+            datasets={datasets}
+            isDatasetsLoading={isDatasetsLoading}
+            onSelectElements={workflow.startVisualPicker}
+            onAutoDetectLists={workflow.autoDetectLists}
+            onExtractTable={() => workflow.startPresetDetection('table tr, table tbody tr')}
+            onExtractLinks={() => workflow.startPresetDetection('a[href]')}
+            onViewDataset={handleViewDataset}
+            onViewAllHistory={() => handleNavChange('datasets')}
+          />
         )}
-      </section>
 
-      {/* Primary Actions */}
-      <section className="flex flex-col gap-2 mb-4">
-        <div className="grid grid-cols-2 gap-2">
-          {!isPicking ? (
-            <button
-              onClick={handleStartPicker}
-              disabled={!tabStatus?.isHarvestable}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium text-xs shadow transition active:scale-95"
-            >
-              Start Picker
-            </button>
-          ) : (
-            <button
-              onClick={handleStopPicker}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs shadow transition active:scale-95"
-            >
-              Stop Picker
-            </button>
-          )}
+        {/* 2. Visual Element Picking State */}
+        {workflow.view === 'inspecting' && (
+          <ElementSelectionBanner
+            inspectedElement={workflow.inspectedElement}
+            onConfirm={() => {
+              if (workflow.detectedList) {
+                workflow.setView('review_list');
+              } else {
+                workflow.autoDetectLists();
+              }
+            }}
+            onCancel={workflow.cancelVisualPicker}
+          />
+        )}
 
-          <button
-            onClick={handleAutoDetect}
-            disabled={!tabStatus?.isHarvestable || isDetecting}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-slate-700 font-medium text-xs shadow-sm transition active:scale-95"
-          >
-            {isDetecting ? 'Detecting...' : 'Auto-Detect'}
-          </button>
-        </div>
-      </section>
+        {/* 3. Detected List Preview */}
+        {workflow.view === 'review_list' && workflow.detectedList && (
+          <DetectedListPreview
+            detectedList={workflow.detectedList}
+            onConfirm={() => workflow.confirmListCandidate(workflow.detectedList!)}
+            onPickAgain={workflow.startVisualPicker}
+            onCancel={workflow.resetToDashboard}
+          />
+        )}
 
-      {/* Status Output */}
-      {statusMessage && (
-        <section className="mb-4 p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-700 font-mono">
-          {statusMessage}
-        </section>
-      )}
+        {/* 4. Field Selection & Pagination Config */}
+        {workflow.view === 'config_fields' && workflow.detectedList && (
+          <FieldSelectionPanel
+            detectedList={workflow.detectedList}
+            fields={workflow.fields}
+            selectedFieldIds={workflow.selectedFieldIds}
+            pagination={workflow.pagination}
+            sourceUrl={tab.url}
+            projects={workflow.projects}
+            selectedProjectId={workflow.selectedProjectId}
+            onSelectProject={workflow.setSelectedProjectId}
+            onSaveRecipe={workflow.saveCurrentAsRecipe}
+            onToggleField={workflow.toggleFieldSelection}
+            onUpdateField={workflow.updateField}
+            onAddField={workflow.addField}
+            onRemoveField={workflow.removeField}
+            onPaginationChange={(updates) =>
+              workflow.setPagination((prev) => ({ ...prev, ...updates }))
+            }
+            onBack={() => workflow.setView('review_list')}
+            onStartHarvest={workflow.startExtraction}
+          />
+        )}
 
-      {/* Footer Info */}
-      <footer className="mt-auto pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-400">
-        <span>Manifest V3 Local Engine</span>
-        <span>v1.0.0</span>
-      </footer>
+        {/* 5. Extraction Progress */}
+        {workflow.view === 'extracting' && (
+          <ExtractionProgressView
+            stats={workflow.stats}
+            recordWarningThreshold={workflow.recordWarningThreshold}
+            onPause={workflow.pauseExtraction}
+            onResume={workflow.resumeExtraction}
+            onStop={workflow.stopExtraction}
+            onCancel={() => void handleCancelExtraction()}
+          />
+        )}
+
+        {/* 6. Results Data Table */}
+        {workflow.view === 'results' && (
+          <Suspense fallback={<div className="p-4 text-sm text-slate-500">Loading dataset…</div>}>
+            <DataTable
+              dataset={workflow.currentDataset}
+              records={workflow.records}
+              fields={workflow.fields}
+              dataRevision={workflow.recordsRevision}
+              runSummary={workflow.runSummary}
+              onUpdateCell={workflow.updateRecordCell}
+              onDeleteRecord={workflow.deleteRecord}
+              onRecordsChange={workflow.applyDatasetEdit}
+              onNewExtraction={handleNewExtraction}
+            />
+          </Suspense>
+        )}
+
+        {/* 7. Saved Data Library */}
+        {workflow.view === 'history' && (
+          <Suspense fallback={<div className="p-4 text-sm text-slate-500">Loading history…</div>}>
+            <LibraryView
+              datasets={datasets}
+              isLoading={isDatasetsLoading}
+              onViewDataset={handleViewDataset}
+              onDeleteDataset={deleteDataset}
+              onGetDatasetRecords={getDatasetRecords}
+              onNewExtraction={handleNewExtraction}
+              onRunRecipe={(recipe) => {
+                setActiveTabNav('harvest');
+                workflow.loadRecipe(recipe);
+              }}
+              onUseSchema={(schema) => {
+                setActiveTabNav('harvest');
+                workflow.loadSchema(schema);
+              }}
+            />
+          </Suspense>
+        )}
+
+        {/* 8. Settings */}
+        {workflow.view === 'settings' && (
+          <Suspense fallback={<div className="p-4 text-sm text-slate-500">Loading settings…</div>}>
+            <SettingsView
+              onBackToDashboard={() => {
+                setActiveTabNav('harvest');
+                workflow.setView('dashboard');
+              }}
+            />
+          </Suspense>
+        )}
+      </main>
     </div>
   );
 };

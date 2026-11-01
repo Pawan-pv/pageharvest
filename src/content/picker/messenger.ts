@@ -3,6 +3,7 @@
  * Connects the interactive picker to the extension runtime (Side Panel & Background).
  */
 
+import { extensionMessageSchema } from '@/contracts/messages';
 import { ElementPicker } from './picker';
 import { SelectedElementInfo, HoverElementInfo } from './types';
 
@@ -156,12 +157,21 @@ export class PickerMessenger {
     });
   }
 
+  /**
+   * Sends only messages that satisfy the runtime protocol. A missing receiver and an
+   * invalidated extension context are both normal here and need no handling.
+   */
   private safeSendMessage(msg: unknown): void {
+    const validated = extensionMessageSchema.safeParse(msg);
+    if (!validated.success) {
+      console.warn('[PageHarvest] Picker message failed validation:', validated.error.message);
+      return;
+    }
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       try {
-        chrome.runtime.sendMessage(msg);
+        void Promise.resolve(chrome.runtime.sendMessage(validated.data)).catch(() => undefined);
       } catch {
-        // Context may be invalidated or receiver absent
+        // Context may be invalidated
       }
     }
   }

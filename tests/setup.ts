@@ -4,7 +4,6 @@ import { beforeEach, afterEach } from 'vitest';
 import { createChromeMock, ChromeMock } from './utils/chrome-mock';
 
 declare global {
-  // eslint-disable-next-line no-var
   var chromeMock: ChromeMock;
 }
 

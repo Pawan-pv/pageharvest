@@ -11,7 +11,7 @@ describe('Downloads Platform Integration', () => {
 
   beforeEach(() => {
     mockChrome = createChromeMock();
-    (globalThis as any).chrome = mockChrome;
+    Reflect.set(globalThis, 'chrome', mockChrome);
   });
 
   describe('sanitizeFilename', () => {

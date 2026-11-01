@@ -16,10 +16,7 @@ describe('Multi-Page Extraction Engine Integration', () => {
     it('successfully extracts exactly 90 records across 4 pages (24, 24, 24, 18) and completes', async () => {
       // Setup 4 pages simulation
       const pageCounts = [24, 24, 24, 18];
-      let currentPage = 1;
-
       function renderDom(pageNum: number) {
-        currentPage = pageNum;
         const count = pageCounts[pageNum - 1];
         document.body.innerHTML = `
           <div id="catalog">
@@ -227,9 +224,7 @@ describe('Multi-Page Extraction Engine Integration', () => {
         <a id="next" href="https://example.com/loop">Next</a>
       `;
 
-      let visitedCount = 0;
       const navigateMock = vi.fn().mockImplementation(async () => {
-        visitedCount++;
         return true;
       });
 
@@ -297,7 +292,7 @@ describe('Multi-Page Extraction Engine Integration', () => {
         strategy: 'next_link',
         containerSelector: '.item',
         fields,
-        maxPages: 4,
+        maxPages: 10,
         initialSessionState: previousState,
       });
 

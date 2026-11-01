@@ -95,7 +95,7 @@ export function createMockHistoryRun(
 
 export function createMockMessage<T extends ExtensionMessage['type']>(
   type: T,
-  payload: any
+  payload: unknown
 ): Extract<ExtensionMessage, { type: T }> {
   return {
     id: `msg_${Math.random().toString(36).substring(2, 9)}`,

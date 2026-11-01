@@ -25,7 +25,9 @@ This document defines the strict, non-negotiable **file ownership and responsibi
 | `src/core/extraction/**` | **Agent 5 (Extraction & Normalization)** | Agent 8 (Data Grid) | Record extraction engine, relative selectors, attribute/href/regex extractors, text cleaning, URL resolution, SHA-256 deduplication. |
 | `src/core/navigation/**` | **Agent 6 (Navigation & Pagination)** | Agent 10 (Resilience) | Next-button runner, infinite scroll controller, MutationObserver triggers, delay throttling, circuit breakers. |
 | `entrypoints/sidepanel/**`, `src/components/picker/**` | **Agent 7 (Side Panel UI & Tab Lifecycle)** | Agent 8 (Data Grid) | Side panel React shell, tab status monitoring, active tab messaging, job workflow coordination. |
-| `entrypoints/background.ts` | **Agent 7 (Side Panel UI & Tab Lifecycle)** | Agent 1 (Chief Architect) | Service worker lifecycle, side panel toggle on extension click, tab activation listeners. |
+| `entrypoints/background.ts`, `src/background/**` | **Agent 7 (Side Panel UI & Tab Lifecycle)** | Agent 10 (Resilience) | Service worker lifecycle, side panel behavior, tab events, and the `JobCoordinator`, which owns all job state and is the only writer of extraction data. |
+| `src/core/state/**` | **Agent 10 (Resilience & Integration)** | Agent 1 (Chief Architect) | The job lifecycle state machine. |
+| `src/components/library/**` | **Agent 7 (Side Panel UI & Tab Lifecycle)** | Agent 2 (Storage) | Projects, recipes, schemas and run history views. |
 | `entrypoints/content.ts` | **Agent 3 (DOM Inspector & Picker)** | Agent 5 (Extraction) | Content script bootstrap, message dispatcher, coordinator between picker, detection, and extraction engines. |
 | `src/components/grid/**` | **Agent 8 (Data Grid & Table UI)** | Agent 7 (Side Panel UI) | TanStack Table spreadsheet, column reordering/resizing, sorting, filtering, inline cell editing, row deletion. |
 | `src/core/export/**` | **Agent 9 (Export & Data Pipeline)** | Agent 8 (Data Grid) | RFC 4180 CSV serializer, JSON / NDJSON formatters, chunked streaming, Chrome Downloads API broker. |

@@ -44,8 +44,8 @@ export function calculateConfidence(input: ConfidenceInput): {
   }
 
   // 1. Structural Consistency (w = 0.30)
-  // Compute average pairwise similarity on a bounded sample (up to 8 elements)
-  const sampled = sampleElements(items, 8);
+  // Compute average pairwise similarity on a bounded sample (up to 5 elements)
+  const sampled = sampleElements(items, 5);
   let totalSim = 0;
   let comparisons = 0;
   for (let i = 0; i < sampled.length - 1; i++) {
@@ -57,44 +57,58 @@ export function calculateConfidence(input: ConfidenceInput): {
   const S_struct = comparisons > 0 ? totalSim / comparisons : 0.85;
 
   // 2. Frequency Repetition Score (w = 0.20)
-  // Base of 0.60 for any 2+ repeated elements, scaling up to 1.0 for >= 16 elements
-  const S_freq = Math.min(1.0, 0.60 + 0.40 * (Math.log2(count) / 4));
+  // For count >= 3 repetition is solid; for >= 5 it is full confidence
+  const S_freq = count >= 5 ? 1.0 : count >= 3 ? 0.90 : 0.75;
 
   // 3. Semantic Element & ARIA Score (w = 0.20)
-  let semanticScore = 0.30; // base semantic score for repeated sibling items
+  let semanticScore = 0.35; // base semantic score for repeated sibling items
   const repItem = items[0];
   const itemTag = repItem.tagName.toLowerCase();
   const parentTag = parent.tagName.toLowerCase();
 
-  if (itemTag === 'li' && (parentTag === 'ul' || parentTag === 'ol')) semanticScore += 0.45;
-  if (itemTag === 'tr' && (parentTag === 'tbody' || parentTag === 'table')) semanticScore += 0.55;
-  if (itemTag === 'article') semanticScore += 0.40;
+  if (itemTag === 'tr' && (parentTag === 'tbody' || parentTag === 'table')) {
+    semanticScore = 1.0;
+  } else if (itemTag === 'li' && (parentTag === 'ul' || parentTag === 'ol')) {
+    semanticScore = 0.95;
+  } else if (itemTag === 'article') {
+    semanticScore += 0.40;
+  }
+
   if (repItem.getAttribute('role') === 'listitem' || repItem.getAttribute('role') === 'article' || repItem.getAttribute('role') === 'row') {
-    semanticScore += 0.35;
+    semanticScore = Math.max(semanticScore, 0.90);
   }
   if (parent.getAttribute('role') === 'feed' || parent.getAttribute('role') === 'list' || parent.getAttribute('role') === 'grid' || parent.getAttribute('role') === 'table') {
-    semanticScore += 0.35;
+    semanticScore = Math.max(semanticScore, 0.90);
   }
 
   const parentClass = (parent.className || '').toLowerCase();
   const itemClass = (repItem.className || '').toLowerCase();
-  if (/list|grid|cards|feed|results|directory|items|catalog|table|wrapper/i.test(parentClass)) semanticScore += 0.30;
-  if (/card|item|row|entry|product|job|post|listing|cell|bundle/i.test(itemClass)) semanticScore += 0.30;
+  const hasContainerClass = /grid|list|cards|feed|results|directory|items|catalog|table|wrapper/i.test(parentClass);
+  const hasItemClass = /card|item|row|entry|product|job|post|listing|cell|bundle/i.test(itemClass);
+
+  if (hasContainerClass && hasItemClass) {
+    semanticScore = Math.max(semanticScore, 0.95);
+  } else if (hasContainerClass || hasItemClass) {
+    semanticScore += 0.30;
+  }
 
   const S_semantic = Math.min(1.0, semanticScore);
 
   // 4. Field Pattern Richness & Coverage (w = 0.20)
-  let fieldVariety = 0.30;
+  let fieldVariety = 0.40;
   const typesPresent = new Set(discoveredFields.map((f) => f.type));
   if (typesPresent.has('text')) fieldVariety += 0.25;
   if (typesPresent.has('link')) fieldVariety += 0.20;
-  if (typesPresent.has('image')) fieldVariety += 0.15;
-  if (typesPresent.has('price') || typesPresent.has('date')) fieldVariety += 0.20;
-  if (typesPresent.has('rating') || typesPresent.has('button')) fieldVariety += 0.10;
+  if (typesPresent.has('image')) fieldVariety += 0.20;
+  if (typesPresent.has('price') || typesPresent.has('date')) fieldVariety += 0.25;
+  if (typesPresent.has('rating') || typesPresent.has('button')) fieldVariety += 0.15;
 
-  // Table rows might have multiple text columns instead of images
+  // Table rows with multiple columns
   if (itemTag === 'tr' && discoveredFields.length >= 2) {
-    fieldVariety = Math.max(fieldVariety, 0.90);
+    fieldVariety = 1.0;
+  }
+  if (typesPresent.has('price') && (typesPresent.has('text') || typesPresent.has('link'))) {
+    fieldVariety = Math.max(fieldVariety, 0.95);
   }
 
   const avgCoverage =

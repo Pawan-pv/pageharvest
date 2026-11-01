@@ -1,12 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   detectListFromSelection,
-  autoDetectLists,
   updateFieldMapping,
-  calculateConfidence,
-  discoverFieldsInCluster,
 } from '@/core/detection';
-import { DetectionOptions, DiscoveredField } from '@/types/detection';
+import { DetectionOptions } from '@/types/detection';
 
 describe('Repeated List Detection & Field Discovery Engine', () => {
   beforeEach(() => {

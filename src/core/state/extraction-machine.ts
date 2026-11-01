@@ -1,17 +1,75 @@
-import {
-  ExtractionJobState,
-  ExtractionJobEvent,
-  ExtractionJobContext
-} from '@/types';
+import { ExtractionJob, JobStatus } from '@/shared/contracts/job';
+import { ExtractionJobContext, ExtractionJobEvent } from '@/types';
 
+/**
+ * The single authority on job lifecycle transitions.
+ *
+ * The background job coordinator rebuilds a machine from the persisted job for
+ * every event, applies the event, and writes the resulting state back in the same
+ * IndexedDB transaction. An event a state does not allow throws, so an illegal or
+ * late transition can never reach storage.
+ */
 export class InvalidStateTransitionError extends Error {
   constructor(
-    public readonly currentState: ExtractionJobState,
+    public readonly currentState: JobStatus,
     public readonly eventType: string
   ) {
     super(`Cannot transition from state '${currentState}' via event '${eventType}'`);
     this.name = 'InvalidStateTransitionError';
   }
+}
+
+/** Consecutive batches with no new records before a job is ended automatically. */
+export const EMPTY_STEP_CIRCUIT_BREAKER = 3;
+
+type EventType = ExtractionJobEvent['type'];
+
+const TRANSITIONS: Record<JobStatus, Partial<Record<EventType, JobStatus>>> = {
+  CREATED: {
+    START_EXTRACTION: 'RUNNING',
+    CANCEL: 'CANCELLED',
+    FAIL: 'FAILED',
+  },
+  RUNNING: {
+    RECORDS_EXTRACTED: 'RUNNING',
+    START_PAGINATION: 'RUNNING',
+    PAGINATION_COMPLETE: 'RUNNING',
+    PAUSE: 'PAUSED',
+    FINISH: 'COMPLETED',
+    CANCEL: 'CANCELLED',
+    FAIL: 'FAILED',
+    INTERRUPT: 'INTERRUPTED',
+  },
+  PAUSED: {
+    // A batch already in flight when the user paused is still committed.
+    RECORDS_EXTRACTED: 'PAUSED',
+    START_PAGINATION: 'PAUSED',
+    PAGINATION_COMPLETE: 'PAUSED',
+    RESUME: 'RUNNING',
+    FINISH: 'COMPLETED',
+    CANCEL: 'CANCELLED',
+    FAIL: 'FAILED',
+    INTERRUPT: 'INTERRUPTED',
+  },
+  INTERRUPTED: {
+    MARK_RECOVERABLE: 'RECOVERABLE',
+    CANCEL: 'CANCELLED',
+    FAIL: 'FAILED',
+  },
+  RECOVERABLE: {
+    RECOVER: 'RUNNING',
+    CANCEL: 'CANCELLED',
+    FAIL: 'FAILED',
+    EXPIRE: 'EXPIRED',
+  },
+  COMPLETED: {},
+  CANCELLED: {},
+  FAILED: {},
+  EXPIRED: {},
+};
+
+export function canTransition(state: JobStatus, eventType: EventType): boolean {
+  return TRANSITIONS[state][eventType] !== undefined;
 }
 
 export class ExtractionStateMachine {
@@ -20,21 +78,39 @@ export class ExtractionStateMachine {
 
   constructor(initialContext?: Partial<ExtractionJobContext>) {
     this.context = {
-      state: 'IDLE',
+      state: 'CREATED',
       currentPage: 1,
       totalExtracted: 0,
       totalDuplicates: 0,
       targetMaxPages: 10,
       consecutiveEmptySteps: 0,
-      ...initialContext
+      awaitingNavigation: false,
+      tripped: false,
+      ...initialContext,
     };
+  }
+
+  /** Rebuilds the machine from a persisted job. */
+  public static fromJob(job: ExtractionJob): ExtractionStateMachine {
+    return new ExtractionStateMachine({
+      state: job.status,
+      currentPage: Math.max(1, job.pagesVisited),
+      totalExtracted: job.totalExtracted,
+      totalDuplicates: job.duplicatesSkipped,
+      targetMaxPages: job.targetSteps ?? 1,
+      consecutiveEmptySteps: job.consecutiveEmptySteps,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      error: job.errorMessage,
+      interruptedReason: job.interruptedReason,
+    });
   }
 
   public getContext(): Readonly<ExtractionJobContext> {
     return { ...this.context };
   }
 
-  public getState(): ExtractionJobState {
+  public getState(): JobStatus {
     return this.context.state;
   }
 
@@ -43,147 +119,81 @@ export class ExtractionStateMachine {
     return () => this.listeners.delete(listener);
   }
 
-  private notify(): void {
-    const ctx = this.getContext();
-    this.listeners.forEach((l) => l(ctx));
-  }
-
   public transition(event: ExtractionJobEvent): ExtractionJobContext {
-    const current = this.context.state;
+    const next = TRANSITIONS[this.context.state][event.type];
+    if (next === undefined) {
+      throw new InvalidStateTransitionError(this.context.state, event.type);
+    }
 
-    switch (current) {
-      case 'IDLE':
-        if (event.type === 'START_INSPECTION') {
-          this.context.state = 'INSPECTING';
-        } else if (event.type === 'START_EXTRACTION') {
-          this.context.state = 'EXTRACTING';
-          this.context.currentPage = 1;
-          this.context.totalExtracted = 0;
-          this.context.totalDuplicates = 0;
-          this.context.consecutiveEmptySteps = 0;
-          this.context.startedAt = Date.now();
-          if (event.totalTargetPages) {
-            this.context.targetMaxPages = event.totalTargetPages;
-          }
-        } else {
-          throw new InvalidStateTransitionError(current, event.type);
+    this.context.state = next;
+
+    switch (event.type) {
+      case 'START_EXTRACTION':
+        this.context.currentPage = 1;
+        this.context.totalExtracted = 0;
+        this.context.totalDuplicates = 0;
+        this.context.consecutiveEmptySteps = 0;
+        this.context.startedAt = Date.now();
+        if (event.totalTargetPages) {
+          this.context.targetMaxPages = event.totalTargetPages;
         }
         break;
-
-      case 'INSPECTING':
-        if (event.type === 'CANCEL_INSPECTION') {
-          this.context.state = 'IDLE';
-        } else if (event.type === 'START_EXTRACTION') {
-          this.context.state = 'EXTRACTING';
-          this.context.currentPage = 1;
-          this.context.totalExtracted = 0;
-          this.context.totalDuplicates = 0;
-          this.context.consecutiveEmptySteps = 0;
-          this.context.startedAt = Date.now();
-          if (event.totalTargetPages) {
-            this.context.targetMaxPages = event.totalTargetPages;
-          }
-        } else {
-          throw new InvalidStateTransitionError(current, event.type);
-        }
+      case 'RECORDS_EXTRACTED':
+        this.applyRecords(event.count, event.duplicates, event.ignoreEmpty === true);
         break;
-
-      case 'EXTRACTING':
-        if (event.type === 'RECORDS_EXTRACTED') {
-          this.context.totalExtracted += event.count;
-          this.context.totalDuplicates += event.duplicates;
-
-          if (event.count === 0) {
-            this.context.consecutiveEmptySteps++;
-            // Circuit breaker: 3 consecutive empty extraction steps
-            if (this.context.consecutiveEmptySteps >= 3) {
-              this.context.state = 'COMPLETED';
-              this.context.finishedAt = Date.now();
-              this.notify();
-              return this.getContext();
-            }
-          } else {
-            this.context.consecutiveEmptySteps = 0;
-          }
-        } else if (event.type === 'START_PAGINATION') {
-          this.context.state = 'PAGINATING';
-          this.context.currentPage = event.page;
-        } else if (event.type === 'PAUSE') {
-          this.context.state = 'PAUSED';
-        } else if (event.type === 'FINISH') {
-          this.context.state = 'COMPLETED';
-          this.context.finishedAt = Date.now();
-        } else if (event.type === 'ABORT') {
-          this.context.state = 'COMPLETED';
-          this.context.finishedAt = Date.now();
-        } else if (event.type === 'FAIL') {
-          this.context.state = 'ERROR';
-          this.context.error = event.error;
-          this.context.finishedAt = Date.now();
-        } else {
-          throw new InvalidStateTransitionError(current, event.type);
-        }
+      case 'START_PAGINATION':
+        this.context.currentPage = event.page;
+        this.context.awaitingNavigation = true;
         break;
-
-      case 'PAGINATING':
-        if (event.type === 'PAGINATION_COMPLETE') {
-          this.context.state = 'EXTRACTING';
-        } else if (event.type === 'PAUSE') {
-          this.context.state = 'PAUSED';
-        } else if (event.type === 'FINISH' || event.type === 'ABORT') {
-          this.context.state = 'COMPLETED';
-          this.context.finishedAt = Date.now();
-        } else if (event.type === 'FAIL') {
-          this.context.state = 'ERROR';
-          this.context.error = event.error;
-          this.context.finishedAt = Date.now();
-        } else {
-          throw new InvalidStateTransitionError(current, event.type);
-        }
+      case 'PAGINATION_COMPLETE':
+        this.context.awaitingNavigation = false;
         break;
-
-      case 'PAUSED':
-        if (event.type === 'RESUME') {
-          this.context.state = 'EXTRACTING';
-        } else if (event.type === 'ABORT' || event.type === 'FINISH') {
-          this.context.state = 'COMPLETED';
-          this.context.finishedAt = Date.now();
-        } else if (event.type === 'FAIL') {
-          this.context.state = 'ERROR';
-          this.context.error = event.error;
-          this.context.finishedAt = Date.now();
-        } else {
-          throw new InvalidStateTransitionError(current, event.type);
-        }
+      case 'FINISH':
+      case 'CANCEL':
+      case 'EXPIRE':
+        this.context.finishedAt = Date.now();
         break;
-
-      case 'COMPLETED':
-      case 'ERROR':
-        if (event.type === 'START_EXTRACTION') {
-          this.context.state = 'EXTRACTING';
-          this.context.currentPage = 1;
-          this.context.totalExtracted = 0;
-          this.context.totalDuplicates = 0;
-          this.context.consecutiveEmptySteps = 0;
-          this.context.error = undefined;
-          this.context.startedAt = Date.now();
-          this.context.finishedAt = undefined;
-          if (event.totalTargetPages) {
-            this.context.targetMaxPages = event.totalTargetPages;
-          }
-        } else if (event.type === 'START_INSPECTION') {
-          this.context.state = 'INSPECTING';
-          this.context.error = undefined;
-        } else {
-          throw new InvalidStateTransitionError(current, event.type);
-        }
+      case 'FAIL':
+        this.context.error = event.error;
+        this.context.finishedAt = Date.now();
         break;
-
+      case 'INTERRUPT':
+        this.context.interruptedReason = event.reason;
+        break;
+      case 'RECOVER':
+        this.context.consecutiveEmptySteps = 0;
+        this.context.interruptedReason = undefined;
+        break;
       default:
-        throw new Error(`Unhandled state: ${current}`);
+        break;
     }
 
     this.notify();
     return this.getContext();
+  }
+
+  private applyRecords(count: number, duplicates: number, ignoreEmpty: boolean): void {
+    this.context.totalExtracted += count;
+    this.context.totalDuplicates += duplicates;
+
+    if (count > 0) {
+      this.context.consecutiveEmptySteps = 0;
+      return;
+    }
+    if (ignoreEmpty) {
+      return;
+    }
+
+    this.context.consecutiveEmptySteps += 1;
+    if (this.context.consecutiveEmptySteps >= EMPTY_STEP_CIRCUIT_BREAKER) {
+      this.context.state = 'COMPLETED';
+      this.context.tripped = true;
+      this.context.finishedAt = Date.now();
+    }
+  }
+
+  private notify(): void {
+    const snapshot = this.getContext();
+    this.listeners.forEach((listener) => listener(snapshot));
   }
 }

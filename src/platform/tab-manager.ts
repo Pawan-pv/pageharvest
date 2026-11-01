@@ -9,6 +9,13 @@ export interface TabStatus {
 
 export type TabChangeListener = (status: TabStatus) => void;
 
+type TabActivatedHandler = (activeInfo: chrome.tabs.TabActiveInfo) => void;
+type TabUpdatedHandler = (
+  tabId: number,
+  changeInfo: chrome.tabs.TabChangeInfo,
+  tab: chrome.tabs.Tab
+) => void;
+
 /**
  * Checks if a given URL is eligible for content script extraction.
  * Enforces least-privilege security by refusing internal browser and store URLs.
@@ -107,17 +114,36 @@ export function getTabStatus(tab: chrome.tabs.Tab): TabStatus {
  */
 export class TabManager {
   private listeners: Set<TabChangeListener> = new Set();
-  private onActivatedHandler: any = null;
-  private onUpdatedHandler: any = null;
+  private closedListeners: Set<(tabId: number) => void> = new Set();
+  private loadedListeners: Set<(tabId: number) => void> = new Set();
+  private onActivatedHandler: TabActivatedHandler | null = null;
+  private onUpdatedHandler: TabUpdatedHandler | null = null;
+  private onRemovedHandler: ((tabId: number) => void) | null = null;
 
   constructor() {
     this.setupListeners();
   }
 
+  /** Any tab was closed, active or not. */
+  public onTabClosed(listener: (tabId: number) => void): () => void {
+    this.closedListeners.add(listener);
+    return () => {
+      this.closedListeners.delete(listener);
+    };
+  }
+
+  /** Any tab finished loading, active or not. */
+  public onTabLoaded(listener: (tabId: number) => void): () => void {
+    this.loadedListeners.add(listener);
+    return () => {
+      this.loadedListeners.delete(listener);
+    };
+  }
+
   private setupListeners(): void {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
 
-    this.onActivatedHandler = async (activeInfo: chrome.tabs.TabActiveInfo) => {
+    this.onActivatedHandler = async (_activeInfo: chrome.tabs.TabActiveInfo) => {
       const tab = await getActiveTab();
       if (tab) {
         this.notify(getTabStatus(tab));
@@ -129,10 +155,17 @@ export class TabManager {
       changeInfo: chrome.tabs.TabChangeInfo,
       tab: chrome.tabs.Tab
     ) => {
+      if (changeInfo?.status === 'complete') {
+        this.loadedListeners.forEach((listener) => listener(tabId));
+      }
       // Check if update is for the active tab
       if (tab.active) {
         this.notify(getTabStatus(tab));
       }
+    };
+
+    this.onRemovedHandler = (tabId: number) => {
+      this.closedListeners.forEach((listener) => listener(tabId));
     };
 
     if (chrome.tabs.onActivated?.addListener) {
@@ -140,6 +173,9 @@ export class TabManager {
     }
     if (chrome.tabs.onUpdated?.addListener) {
       chrome.tabs.onUpdated.addListener(this.onUpdatedHandler);
+    }
+    if (chrome.tabs.onRemoved?.addListener) {
+      chrome.tabs.onRemoved.addListener(this.onRemovedHandler);
     }
   }
 
@@ -168,7 +204,12 @@ export class TabManager {
       if (chrome.tabs.onUpdated?.removeListener && this.onUpdatedHandler) {
         chrome.tabs.onUpdated.removeListener(this.onUpdatedHandler);
       }
+      if (chrome.tabs.onRemoved?.removeListener && this.onRemovedHandler) {
+        chrome.tabs.onRemoved.removeListener(this.onRemovedHandler);
+      }
     }
     this.listeners.clear();
+    this.closedListeners.clear();
+    this.loadedListeners.clear();
   }
 }

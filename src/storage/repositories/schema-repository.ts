@@ -24,8 +24,20 @@ export class SchemaRepository {
     });
   }
 
+  /**
+   * Deletes a schema unless a saved recipe still uses it. Jobs and datasets keep their
+   * own snapshot of the fields, so their history stays intact either way.
+   */
   public async deleteSchema(id: string): Promise<void> {
-    await this.db.schemas.delete(id);
+    await this.db.transaction('rw', this.db.schemas, this.db.recipes, async () => {
+      const usedBy = await this.db.recipes.where('schemaId').equals(id).count();
+      if (usedBy > 0) {
+        throw new Error(
+          `This schema is used by ${usedBy} saved recipe${usedBy === 1 ? '' : 's'}. Delete the recipe first.`
+        );
+      }
+      await this.db.schemas.delete(id);
+    });
   }
 
   public async findMatchingSchema(url: string): Promise<ExtractionSchema | undefined> {

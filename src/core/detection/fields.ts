@@ -5,9 +5,13 @@ import {
   FieldDefinition,
   FieldHeuristicConfig,
 } from '@/types';
-import { generateRelativeSelector } from '@/utils/selector';
+import { filterMeaningfulClasses, generateRelativeSelector } from '@/utils/selector';
 import { normalizeText, resolveAbsoluteUrl, parseNumberValue } from '@/utils/dom';
 import { sampleElements } from './cache';
+
+const TRUNCATED_TEXT_REGEX = /(?:\.{3}|…)$/;
+const MAX_PLAIN_TEXT_FIELDS = 4;
+const NOT_PLAIN_TEXT_TAGS = new Set(['A', 'BUTTON', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'SVG']);
 
 // Currency regex supporting $, €, £, ¥, ₹, C$, A$, USD, EUR, GBP, INR, etc.
 const DEFAULT_PRICE_REGEX = /(?:[$€£¥₹]|C\$|A\$)\s*[-+]?\d+(?:[.,]\d+)?|\b\d+(?:[.,]\d+)?\s*(?:[$€£¥₹]|USD|EUR|GBP|INR)\b/i;
@@ -79,14 +83,27 @@ export function extractCandidatesFromElement(
     const text = normalizeText(titleEl.textContent);
     if (text) {
       visitedElements.add(titleEl);
-      candidates.push({
-        name: 'Title',
-        type: 'text',
-        selector: generateRelativeSelector(container, titleEl),
-        extractor: 'text',
-        sampleValue: text.slice(0, 80),
-        element: titleEl,
-      });
+      const fullTitle = findFullTitle(titleEl, text);
+      candidates.push(
+        fullTitle
+          ? {
+              name: 'Title',
+              type: 'text',
+              selector: generateRelativeSelector(container, fullTitle.element),
+              extractor: 'attribute',
+              attributeName: 'title',
+              sampleValue: fullTitle.value.slice(0, 80),
+              element: fullTitle.element,
+            }
+          : {
+              name: 'Title',
+              type: 'text',
+              selector: generateRelativeSelector(container, titleEl),
+              extractor: 'text',
+              sampleValue: text.slice(0, 80),
+              element: titleEl,
+            }
+      );
     }
   }
 
@@ -255,6 +272,74 @@ export function extractCandidatesFromElement(
     }
   }
 
+  // 10. Plain text, for items with no heading or description to recognize
+  if (!candidates.some((candidate) => candidate.type === 'text' && candidate.name !== 'Category')) {
+    candidates.push(...plainTextCandidates(container, visitedElements));
+  }
+
+  return candidates;
+}
+
+/**
+ * Sites often shorten long titles on screen and keep the full one in a title attribute.
+ * Fields are chosen from the first row, whose title may happen to fit, so an attribute
+ * that repeats the visible text is used as well as a longer one.
+ */
+function findFullTitle(titleEl: Element, text: string): { element: Element; value: string } | null {
+  const visiblePart = text.replace(TRUNCATED_TEXT_REGEX, '').trim().toLowerCase();
+  const holders = [titleEl, ...Array.from(titleEl.querySelectorAll('[title]'))];
+  for (const element of holders) {
+    const value = normalizeText(element.getAttribute('title'));
+    if (value && value.toLowerCase().startsWith(visiblePart)) {
+      return { element, value };
+    }
+  }
+  return null;
+}
+
+function ownText(element: Element): string {
+  const text = Array.from(element.childNodes)
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent ?? '')
+    .join(' ');
+  return normalizeText(text);
+}
+
+function plainTextFieldName(element: Element, used: Set<string>): string {
+  const label = filterMeaningfulClasses(element.classList)[0]
+    ?.replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+  let number = 1;
+  let name = label ?? `Text ${number}`;
+  while (used.has(name)) {
+    number += 1;
+    name = `${label ?? 'Text'} ${number}`;
+  }
+  used.add(name);
+  return name;
+}
+
+function plainTextCandidates(container: Element, visited: Set<Element>): InternalFieldCandidate[] {
+  const candidates: InternalFieldCandidate[] = [];
+  const used = new Set<string>();
+  const elements = Array.from(container.querySelectorAll('*'));
+
+  for (const element of elements) {
+    if (candidates.length >= MAX_PLAIN_TEXT_FIELDS) break;
+    if (visited.has(element) || NOT_PLAIN_TEXT_TAGS.has(element.tagName)) continue;
+    const text = ownText(element);
+    // Short connecting words and labels such as "by" or "Tags:" are not values.
+    if ((text.length < 3 && !/[0-9]/.test(text)) || text.endsWith(':')) continue;
+    visited.add(element);
+    candidates.push({
+      name: plainTextFieldName(element, used),
+      type: 'text',
+      selector: generateRelativeSelector(container, element),
+      extractor: 'text',
+      sampleValue: text.slice(0, 100),
+      element,
+    });
+  }
   return candidates;
 }
 
@@ -271,8 +356,8 @@ export function discoverFieldsInCluster(
   const repItem = cluster[0];
   const repCandidates = extractCandidatesFromElement(repItem, heuristics);
 
-  // Bounded sampling: test field coverage on up to 20 elements
-  const testSample = cluster.length <= 50 ? cluster : sampleElements(cluster, 20);
+  // Bounded sampling: test field coverage on up to 8 elements for maximum responsiveness
+  const testSample = cluster.length <= 16 ? cluster : sampleElements(cluster, 8);
   const discovered: DiscoveredField[] = [];
 
   for (let idx = 0; idx < repCandidates.length; idx++) {
@@ -304,7 +389,9 @@ export function discoverFieldsInCluster(
         confidence: Math.round(coverage * 100) / 100,
         occurrences: estimatedTotalOccurrences,
         coverage,
-        required: idx === 0,
+        // Discovering a field never makes it required. Requiring a value is an
+        // explicit filtering choice the user makes when configuring the field.
+        required: false,
       });
     }
   }
@@ -339,6 +426,6 @@ export function suggestionsToFieldDefinitions(
     selector: s.selector,
     extractor: s.extractor,
     attributeName: s.attributeName,
-    required: index === 0,
+    required: false,
   }));
 }

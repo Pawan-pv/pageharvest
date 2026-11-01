@@ -17,32 +17,14 @@ import {
   DetectedItemSampleSchema,
   BoundingBoxSchema,
 } from '../shared/contracts/detected-list';
-import { ExtractionJobSchema, JobStatusSchema } from '../shared/contracts/job';
+import { ExtractionJobSchema, JobCheckpointSchema, JobStatusSchema } from '../shared/contracts/job';
 import { ExtractionProgressSchema } from '../shared/contracts/progress';
-import { ExtractionErrorSchema, ExtractionErrorCodeSchema } from '../shared/contracts/error';
 import {
-  BrowserMessageSchema,
-  PingMessageSchema,
-  PongMessageSchema,
-  StartInspectorMessageSchema,
-  StopInspectorMessageSchema,
-  ElementHoveredMessageSchema,
-  ElementSelectedMessageSchema,
-  DetectListsRequestSchema,
-  DetectListsResponseSchema,
-  DetectFieldsRequestSchema,
-  DetectFieldsResponseSchema,
-  ExtractPageRequestSchema,
-  ExtractPageResponseSchema,
-  PaginationStepRequestSchema,
-  PaginationStepResponseSchema,
-  ScrollStepRequestSchema,
-  ScrollStepResponseSchema,
-  JobProgressMessageSchema,
-  JobCompletedMessageSchema,
-  JobFailedMessageSchema,
-  StopJobMessageSchema,
-} from '../shared/contracts/message';
+  ExtractionErrorSchema,
+  ExtractionErrorCodeSchema,
+  HarvestErrorSchema,
+} from '../shared/contracts/error';
+import { BrowserMessageSchema } from '../shared/contracts/message';
 import {
   ExportConfigSchema,
   ExportFormatSchema,
@@ -67,31 +49,12 @@ export {
   DetectedItemSampleSchema,
   BoundingBoxSchema,
   ExtractionJobSchema,
+  JobCheckpointSchema,
   JobStatusSchema,
   ExtractionProgressSchema,
   ExtractionErrorSchema,
   ExtractionErrorCodeSchema,
   BrowserMessageSchema,
-  PingMessageSchema,
-  PongMessageSchema,
-  StartInspectorMessageSchema,
-  StopInspectorMessageSchema,
-  ElementHoveredMessageSchema,
-  ElementSelectedMessageSchema,
-  DetectListsRequestSchema,
-  DetectListsResponseSchema,
-  DetectFieldsRequestSchema,
-  DetectFieldsResponseSchema,
-  ExtractPageRequestSchema,
-  ExtractPageResponseSchema,
-  PaginationStepRequestSchema,
-  PaginationStepResponseSchema,
-  ScrollStepRequestSchema,
-  ScrollStepResponseSchema,
-  JobProgressMessageSchema,
-  JobCompletedMessageSchema,
-  JobFailedMessageSchema,
-  StopJobMessageSchema,
   ExportConfigSchema,
   ExportFormatSchema,
   CsvDelimiterSchema,
@@ -107,6 +70,8 @@ export const DatasetSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   url: z.string(),
+  projectId: z.string().optional(),
+  jobId: z.string().optional(),
   recipeId: z.string().optional(),
   recordsCount: z.number().int().min(0).default(0),
   fields: z.array(ExtractionFieldSchema),
@@ -114,15 +79,7 @@ export const DatasetSchema = z.object({
   updatedAt: z.number().int().default(() => Date.now()),
 });
 
-export const ExtensionMessageSchema = z.union([
-  BrowserMessageSchema,
-  z.object({
-    type: z.literal('EXTRACT_RECORDS'),
-    containerSelector: z.string(),
-    fields: z.array(ExtractionFieldSchema),
-    pageNumber: z.number().int().default(1),
-  }),
-]);
+export const ExtensionMessageSchema = BrowserMessageSchema;
 
 // CamelCase aliases for backward compatibility
 export const fieldExtractorTypeSchema = FieldExtractorTypeSchema;
@@ -131,21 +88,4 @@ export const extractionPaginationConfigSchema = PaginationConfigSchema;
 export const extractionRecipeSchema = ExtractionSchemaSchema;
 export const extractedRecordSchema = ExtractionRecordSchema;
 export const datasetEntitySchema = DatasetSchema;
-export const harvestErrorSchema = z.object({
-  id: z.string().min(1),
-  category: z.enum([
-    'DOM_PARSING',
-    'SELECTOR_NOT_FOUND',
-    'PAGINATION_FAILED',
-    'STORAGE_FAILED',
-    'RUNTIME_MESSAGING',
-    'VALIDATION_FAILED',
-    'CIRCUIT_BREAKER_TRIGGERED',
-    'UNKNOWN',
-  ]),
-  severity: z.enum(['WARN', 'ERROR', 'FATAL']),
-  message: z.string().min(1),
-  timestamp: z.number(),
-  context: z.record(z.unknown()).optional(),
-  stack: z.string().optional(),
-});
+export const harvestErrorSchema = HarvestErrorSchema;

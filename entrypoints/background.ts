@@ -1,9 +1,12 @@
 import { defineBackground } from 'wxt/sandbox';
-import { MessageRouter } from '@/platform/message-router';
-import { recoverJobState } from '@/platform/job-recovery';
-import { TabManager } from '@/platform/tab-manager';
-import { triggerDownload } from '@/platform/downloads';
+import { createChromeJobTransport } from '@/background/chrome-job-transport';
+import { JobCoordinator } from '@/background/job-coordinator';
+import { registerJobHandlers } from '@/background/register-job-handlers';
 import { ExtensionMessage } from '@/contracts/messages';
+import { MessageRouter } from '@/platform/message-router';
+import { MessagingClient } from '@/platform/messaging-client';
+import { TabManager } from '@/platform/tab-manager';
+import { db } from '@/storage/db';
 
 export default defineBackground(() => {
   // 1. Configure Chrome Side Panel behavior
@@ -11,30 +14,21 @@ export default defineBackground(() => {
     chrome.sidePanel
       .setPanelBehavior({ openPanelOnActionClick: true })
       .catch((err) => {
-        console.warn('Could not set side panel panel behavior:', err);
+        console.warn('Could not set side panel behavior:', err);
       });
   }
 
-  // 2. Service Worker recovery check upon activation/startup
-  recoverJobState()
-    .then((result) => {
-      if (result.recovered && result.job) {
-        console.info(
-          `[PageHarvest ServiceWorker] Recovered suspended extraction job ${result.job.jobId} (${result.job.totalExtracted} records)`
-        );
-      }
-    })
-    .catch((err) => {
-      console.error('[PageHarvest ServiceWorker] Recovery check failed:', err);
-    });
+  // 2. The coordinator keeps all job state in IndexedDB, so a worker restarted between
+  //    any two events picks up exactly where the previous one stopped.
+  const coordinator = new JobCoordinator({
+    db,
+    transport: createChromeJobTransport(new MessagingClient()),
+  });
 
-  // 3. Tab manager instance for tracking active tab lifecycle
-  const tabManager = new TabManager();
-
-  // 4. Message router for background worker
+  // 3. Message router for background worker
   const router = new MessageRouter();
 
-  router.on('PING', (msg) => {
+  router.on('PING', () => {
     const pongResponse: ExtensionMessage = {
       id: `pong_${Date.now()}`,
       type: 'PONG',
@@ -48,9 +42,34 @@ export default defineBackground(() => {
     return pongResponse;
   });
 
+  registerJobHandlers(router, coordinator);
   router.listen();
 
-  // 5. Cleanup on suspend/shutdown if supported
+  // 4. Tab lifecycle feeds job interruption detection
+  const tabManager = new TabManager();
+  tabManager.onTabClosed((tabId) => {
+    void coordinator.handleTabClosed(tabId);
+  });
+  tabManager.onTabLoaded((tabId) => {
+    void coordinator.handleTabLoaded(tabId);
+  });
+
+  // 5. Content scripts and tabs do not survive these events, so running jobs are
+  //    interrupted and offered for recovery.
+  chrome.runtime.onStartup?.addListener(() => {
+    void coordinator.reconcile('startup');
+  });
+  chrome.runtime.onInstalled?.addListener(() => {
+    void coordinator.reconcile('installed');
+  });
+
+  // 6. On every wake: expire abandoned sessions. Running jobs are left alone here,
+  //    because a worker restart does not stop the page that is extracting.
+  void coordinator.reconcile('wake').catch((err: unknown) => {
+    console.error('[PageHarvest ServiceWorker] Reconciliation failed:', err);
+  });
+
+  // 7. Cleanup on suspend/shutdown if supported
   if (typeof chrome !== 'undefined' && chrome.runtime?.onSuspend) {
     chrome.runtime.onSuspend.addListener(() => {
       tabManager.destroy();

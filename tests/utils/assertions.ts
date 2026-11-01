@@ -7,7 +7,7 @@ export function assertValidRecord(record: unknown): asserts record is ExtractedR
   expect(typeof record).toBe('object');
   const r = record as Record<string, unknown>;
   expect(typeof r._id).toBe('string');
-  expect(r._id.length).toBeGreaterThan(0);
+  expect(typeof r._id === 'string' && r._id.length > 0).toBe(true);
   expect(typeof r._page).toBe('number');
   expect(typeof r._extractedAt).toBe('number');
 }

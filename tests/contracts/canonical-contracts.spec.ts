@@ -175,31 +175,28 @@ describe('PageHarvest Canonical Shared Contracts', () => {
         containerSelector: '.item',
         fields: [{ id: 'f1', name: 'Name', selector: 'span', extractor: 'text' as const }],
       },
-      status: 'running' as const,
+      status: 'RUNNING' as const,
       totalExtracted: 150,
       duplicatesSkipped: 12,
       pagesVisited: 5,
     };
     const parsed = ExtractionJobSchema.parse(job);
-    expect(parsed.status).toBe('running');
+    expect(parsed.status).toBe('RUNNING');
     expect(parsed.totalExtracted).toBe(150);
   });
 
   it('validates ExtractionProgressSchema', () => {
     const progress = {
       jobId: 'job-run-101',
-      status: 'running' as const,
-      currentPage: 3,
-      totalPagesTarget: 10,
+      status: 'RUNNING' as const,
+      progressKind: 'pages' as const,
+      currentStep: 3,
+      targetSteps: 10,
       recordsExtracted: 90,
-      recordsInCurrentPage: 30,
       duplicatesCount: 2,
-      percentComplete: 30,
-      currentUrl: 'https://example.com/shop?page=3',
-      elapsedMs: 4500,
     };
     const parsed = ExtractionProgressSchema.parse(progress);
-    expect(parsed.currentPage).toBe(3);
+    expect(parsed.currentStep).toBe(3);
     expect(parsed.recordsExtracted).toBe(90);
   });
 
@@ -218,26 +215,63 @@ describe('PageHarvest Canonical Shared Contracts', () => {
   });
 
   it('validates discriminated BrowserMessageSchema across command variants', () => {
-    const ping = { type: 'PING' as const };
-    const parsedPing = BrowserMessageSchema.parse(ping);
-    expect(parsedPing.type).toBe('PING');
-
-    const extractReq = {
-      type: 'EXTRACT_PAGE_REQUEST' as const,
-      containerSelector: '.row',
-      fields: [{ id: 'f1', name: 'Col1', selector: '.c1', extractor: 'text' as const }],
-      pageNumber: 1,
+    const envelope = { id: 'm1', timestamp: 1 };
+    const identity = {
+      jobId: 'j1',
+      projectId: 'p1',
+      datasetId: 'd1',
+      runId: 'r1',
+      generation: 'g1',
     };
-    const parsedReq = BrowserMessageSchema.parse(extractReq);
-    expect(parsedReq.type).toBe('EXTRACT_PAGE_REQUEST');
 
-    const paginationStep = {
-      type: 'PAGINATION_STEP_REQUEST' as const,
-      nextButtonSelector: 'a.next',
-      timeoutMs: 3000,
-    };
-    const parsedPagination = BrowserMessageSchema.parse(paginationStep);
-    expect(parsedPagination.type).toBe('PAGINATION_STEP_REQUEST');
+    expect(BrowserMessageSchema.parse({ ...envelope, type: 'PING' }).type).toBe('PING');
+
+    const batch = BrowserMessageSchema.parse({
+      ...envelope,
+      type: 'RECORD_BATCH',
+      payload: {
+        identity,
+        sequence: 1,
+        page: 1,
+        records: [{ _id: 'x', _page: 1, _extractedAt: 1, title: 'A' }],
+        stats: { detected: 1, missingFields: 0, filtered: 0, failed: 0, duplicates: 0 },
+        navigation: {
+          nextPage: 2,
+          scrollsCompleted: 0,
+          awaitingNavigation: false,
+          visitedUrls: [],
+          url: 'https://example.com/',
+        },
+      },
+    });
+    expect(batch.type).toBe('RECORD_BATCH');
+
+    const cancel = BrowserMessageSchema.parse({
+      ...envelope,
+      type: 'CANCEL_JOB',
+      payload: { jobId: 'j1' },
+    });
+    expect(cancel.type).toBe('CANCEL_JOB');
+  });
+
+  it('requires full identity on every extraction message', () => {
+    const envelope = { id: 'm1', timestamp: 1 };
+    for (const missing of ['jobId', 'projectId', 'datasetId', 'runId', 'generation']) {
+      const identity: Record<string, string> = {
+        jobId: 'j1',
+        projectId: 'p1',
+        datasetId: 'd1',
+        runId: 'r1',
+        generation: 'g1',
+      };
+      delete identity[missing];
+      const result = BrowserMessageSchema.safeParse({
+        ...envelope,
+        type: 'JOB_FINISHED',
+        payload: { identity, lastSequence: 0, stopReason: 'completed' },
+      });
+      expect(result.success).toBe(false);
+    }
   });
 
   it('validates ExportConfigSchema with format options and CSV defaults', () => {

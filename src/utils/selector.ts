@@ -8,7 +8,7 @@
 export function isDynamicId(id: string): boolean {
   if (!id) return true;
   if (/^[0-9]/.test(id)) return true;
-  if (/[:\/\\]/.test(id)) return true;
+  if (id.includes('/') || /[:\\]/.test(id)) return true;
   if (/^(sc|css|jss)-[a-zA-Z0-9]+$/i.test(id)) return true;
   if (/react-select-.*input/i.test(id)) return true;
   if (/uid-[0-9a-zA-Z]+/i.test(id)) return true;
@@ -48,7 +48,7 @@ export function escapeCss(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
     return CSS.escape(value);
   }
-  return value.replace(/([!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+  return value.replace(/([^\w-])/g, '\\$1');
 }
 
 /**

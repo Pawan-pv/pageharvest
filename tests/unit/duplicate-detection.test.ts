@@ -1,19 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
-  computeRecordHash,
   generateRecordSignature,
   DuplicateDetector
 } from '@/core/extraction/duplicate-detector';
 
-describe('Duplicate Detection & Content Hashing', () => {
-  it('generates consistent hashes for identical content', () => {
+describe('Duplicate Detection & Record Signatures', () => {
+  it('generates consistent signatures for identical content', () => {
     const recordA = { title: 'Gaming Laptop', price: 1200 };
     const recordB = { title: 'Gaming Laptop', price: 1200 };
 
-    expect(computeRecordHash(recordA)).toBe(computeRecordHash(recordB));
+    expect(generateRecordSignature(recordA)).toBe(generateRecordSignature(recordB));
   });
 
-  it('ignores metadata fields (_id, _page, _extractedAt) during hash computation', () => {
+  it('ignores metadata fields (_id, _page, _extractedAt) during signature computation', () => {
     const record1 = {
       _id: 'rec_aaa',
       _page: 1,
@@ -30,21 +29,28 @@ describe('Duplicate Detection & Content Hashing', () => {
       price: 1200
     };
 
-    expect(computeRecordHash(record1)).toBe(computeRecordHash(record2));
+    expect(generateRecordSignature(record1)).toBe(generateRecordSignature(record2));
   });
 
-  it('detects case and whitespace normalization variations', () => {
+  it('treats whitespace variations as the same value', () => {
     const record1 = { title: 'Gaming Laptop  ', price: 1200 };
-    const record2 = { title: '  gaming laptop', price: 1200 };
+    const record2 = { title: '  Gaming   Laptop', price: 1200 };
 
-    expect(computeRecordHash(record1)).toBe(computeRecordHash(record2));
+    expect(generateRecordSignature(record1)).toBe(generateRecordSignature(record2));
   });
 
-  it('produces different hashes for different content', () => {
+  it('keeps letter case, so distinct codes and variants are not merged', () => {
+    const record1 = { sku: 'aB3' };
+    const record2 = { sku: 'Ab3' };
+
+    expect(generateRecordSignature(record1)).not.toBe(generateRecordSignature(record2));
+  });
+
+  it('produces different signatures for different content', () => {
     const recordA = { title: 'Gaming Laptop', price: 1200 };
     const recordB = { title: 'Office Laptop', price: 800 };
 
-    expect(computeRecordHash(recordA)).not.toBe(computeRecordHash(recordB));
+    expect(generateRecordSignature(recordA)).not.toBe(generateRecordSignature(recordB));
   });
 
   describe('DuplicateDetector instance tracking', () => {
@@ -73,6 +79,13 @@ describe('Duplicate Detection & Content Hashing', () => {
       expect(stats.totalProcessed).toBe(3);
       expect(stats.uniqueCount).toBe(2);
       expect(stats.duplicateCount).toBe(1);
+    });
+
+    it('shares what it has seen through the set it was given', () => {
+      const seen = new Set<string>();
+      new DuplicateDetector(seen).process({ title: 'Mouse' });
+
+      expect(new DuplicateDetector(seen).process({ title: 'Mouse' }).isDuplicate).toBe(true);
     });
 
     it('clears state on reset', () => {

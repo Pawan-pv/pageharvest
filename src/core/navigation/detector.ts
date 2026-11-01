@@ -71,15 +71,22 @@ export function isArbitraryNonPaginationButton(el: Element): boolean {
   const ariaLabel = normalizeText(el.getAttribute('aria-label') || el.getAttribute('title'));
   const fullText = `${text} ${ariaLabel}`.trim();
 
+  // If it clearly indicates pagination, it is not arbitrary non-pagination
+  if (
+    isNextButtonText(text) ||
+    isNextButtonText(ariaLabel) ||
+    isLoadMoreText(text) ||
+    isLoadMoreText(ariaLabel) ||
+    ariaLabel.toLowerCase().includes('next') ||
+    ariaLabel.toLowerCase().includes('load more')
+  ) {
+    return false;
+  }
+
   for (const pattern of NON_PAGINATION_PATTERNS) {
     if (pattern.test(fullText)) {
       return true;
     }
-  }
-
-  // Type submit or reset in a form is non-pagination
-  if ((el as HTMLButtonElement).type === 'submit' || (el as HTMLButtonElement).type === 'reset') {
-    return true;
   }
 
   return false;
@@ -387,23 +394,17 @@ export function detectPagination(
   const urlPattern = detectUrlPagination(activeUrl) || undefined;
 
   // 4. Determine recommended strategy
-  let recommendedStrategy: NavigationStrategy = 'next_link';
-
-  if (loadMore && (!nextBtn || loadMore.confidence >= nextBtn.confidence)) {
-    recommendedStrategy = 'load_more';
-  } else if (nextBtn) {
-    recommendedStrategy = 'next_link';
-  } else if (urlPattern) {
-    recommendedStrategy = 'url_pagination';
-  } else {
-    // Check if page might be infinite scrolling (e.g. scroll sentinel exists)
-    const sentinel = root.querySelector('#scroll-sentinel, [class*="sentinel"], [class*="infinite-scroll"]');
-    if (sentinel) {
-      recommendedStrategy = 'infinite_scroll';
-    } else {
-      recommendedStrategy = 'manual';
-    }
-  }
+  const sentinel = root.querySelector('#scroll-sentinel, [class*="sentinel"], [class*="infinite-scroll"]');
+  const recommendedStrategy: NavigationStrategy = loadMore &&
+    (!nextBtn || loadMore.confidence >= nextBtn.confidence)
+    ? 'load_more'
+    : nextBtn
+      ? 'next_link'
+      : urlPattern
+        ? 'url_pagination'
+        : sentinel
+          ? 'infinite_scroll'
+          : 'manual';
 
   return {
     recommendedStrategy,

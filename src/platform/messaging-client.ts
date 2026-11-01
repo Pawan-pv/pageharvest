@@ -8,8 +8,22 @@ export interface SendOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Chrome reports through the callback when one is passed. Some environments return a
+ * promise instead, and a rejected promise must not go unobserved.
+ */
+function settleFromChrome<T>(
+  returned: unknown,
+  resolve: (value: T) => void,
+  reject: (reason: unknown) => void
+): void {
+  if (returned && typeof (returned as PromiseLike<T>).then === 'function') {
+    (returned as PromiseLike<T>).then(resolve, reject);
+  }
+}
+
 export class MessagingClient {
-  private inFlightRequests: Map<string, Promise<any>> = new Map();
+  private inFlightRequests: Map<string, Promise<unknown>> = new Map();
 
   /**
    * Validate outbound message before transmission
@@ -45,12 +59,16 @@ export class MessagingClient {
             return reject(new Error('Chrome extension runtime is not available'));
           }
 
-          chrome.runtime.sendMessage(validated, (response) => {
-            if (chrome.runtime.lastError) {
-              return reject(new Error(chrome.runtime.lastError.message));
-            }
-            resolve(response);
-          });
+          settleFromChrome<T>(
+            chrome.runtime.sendMessage(validated, (response) => {
+              if (chrome.runtime.lastError) {
+                return reject(new Error(chrome.runtime.lastError.message));
+              }
+              resolve(response);
+            }) as unknown,
+            resolve,
+            reject
+          );
         }),
       options
     ).finally(() => {
@@ -82,12 +100,16 @@ export class MessagingClient {
             return reject(new Error('Chrome extension tabs API is not available'));
           }
 
-          chrome.tabs.sendMessage(tabId, validated, (response) => {
-            if (chrome.runtime.lastError) {
-              return reject(new Error(chrome.runtime.lastError.message));
-            }
-            resolve(response);
-          });
+          settleFromChrome<T>(
+            chrome.tabs.sendMessage(tabId, validated, (response) => {
+              if (chrome.runtime.lastError) {
+                return reject(new Error(chrome.runtime.lastError.message));
+              }
+              resolve(response);
+            }) as unknown,
+            resolve,
+            reject
+          );
         }),
       options
     ).finally(() => {
@@ -150,7 +172,7 @@ export class MessagingClient {
 
         // If aborted, do not retry
         if (signal?.aborted || errorMessage.includes('aborted') || errorMessage.includes('cancelled')) {
-          throw new Error('Operation cancelled / aborted');
+          throw new Error('Operation cancelled / aborted', { cause: err });
         }
 
         if (attempts >= maxAttempts) {
@@ -171,7 +193,7 @@ export class MessagingClient {
     signal?: AbortSignal
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      let timer: any = null;
+      let timer: ReturnType<typeof setTimeout> | null = null;
 
       const abortHandler = () => {
         if (timer) clearTimeout(timer);

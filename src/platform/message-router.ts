@@ -1,21 +1,26 @@
 import { extensionMessageSchema, ExtensionMessage } from '@/contracts/messages';
-import { HarvestError } from '@/types/error';
 
 export type MessageHandler<T extends ExtensionMessage = ExtensionMessage> = (
   message: T,
   sender: chrome.runtime.MessageSender
-) => Promise<any> | any;
+) => Promise<unknown> | unknown;
 
 export class MessageRouter {
-  private handlers: Map<string, MessageHandler<any>> = new Map();
+  private handlers: Map<string, MessageHandler> = new Map();
   private isListening: boolean = false;
-  private boundListener: any = null;
+  private boundListener:
+    | ((
+        rawMessage: unknown,
+        sender: chrome.runtime.MessageSender,
+        sendResponse: (response?: unknown) => void
+      ) => boolean)
+    | null = null;
 
-  public on<T extends ExtensionMessage>(
-    type: T['type'],
-    handler: MessageHandler<Extract<ExtensionMessage, { type: T['type'] }>>
+  public on<T extends ExtensionMessage['type']>(
+    type: T,
+    handler: MessageHandler<Extract<ExtensionMessage, { type: T }>>
   ): this {
-    this.handlers.set(type, handler);
+    this.handlers.set(type, handler as MessageHandler);
     return this;
   }
 
@@ -30,8 +35,19 @@ export class MessageRouter {
     this.boundListener = (
       rawMessage: unknown,
       sender: chrome.runtime.MessageSender,
-      sendResponse: (response?: any) => void
+      sendResponse: (response?: unknown) => void
     ): boolean => {
+      // Only this extension's own contexts are ever answered.
+      if (
+        typeof chrome !== 'undefined' &&
+        chrome.runtime?.id &&
+        sender?.id &&
+        sender.id !== chrome.runtime.id
+      ) {
+        sendResponse({ ok: false, error: 'FOREIGN_SENDER: Message did not come from this extension' });
+        return false;
+      }
+
       // Validate incoming message structure
       const parseResult = extensionMessageSchema.safeParse(rawMessage);
       if (!parseResult.success) {
@@ -71,7 +87,7 @@ export class MessageRouter {
                 timestamp: Date.now(),
                 payload: {
                   id: `err_${Date.now()}`,
-                  category: 'UNEXPECTED_ERROR',
+                  category: 'UNKNOWN',
                   severity: 'ERROR',
                   message: errorMessage,
                   timestamp: Date.now(),
@@ -93,7 +109,7 @@ export class MessageRouter {
           timestamp: Date.now(),
           payload: {
             id: `err_${Date.now()}`,
-            category: 'UNEXPECTED_ERROR',
+            category: 'UNKNOWN',
             severity: 'ERROR',
             message: errorMessage,
             timestamp: Date.now(),

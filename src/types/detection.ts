@@ -1,4 +1,4 @@
-import { FieldExtractorType, FieldDefinition } from './field';
+import { FieldExtractorType } from './field';
 
 export type DiscoveredFieldType =
   | 'text'

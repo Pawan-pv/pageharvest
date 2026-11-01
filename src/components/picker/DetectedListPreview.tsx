@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layers, ChevronRight, RotateCcw, Code, ArrowRight } from 'lucide-react';
+import { Layers, RotateCcw, Code, ArrowRight } from 'lucide-react';
 import { Card, CardHeader } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';

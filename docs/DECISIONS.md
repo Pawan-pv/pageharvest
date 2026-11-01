@@ -89,3 +89,161 @@ This document tracks all foundational architectural and technical decisions made
 - **Consequences**:
   - *Positive*: Seamless opening in Excel, Numbers, and Google Sheets without encoding issues.
   - *Negative*: Must sanitize filenames across different OS filesystems.
+
+---
+
+## ADR-009: Service Worker State Resilience & Robust Browser Messaging Architecture
+
+- **Status**: Accepted, except item 2. ADR-017 replaces the `chrome.storage.local` snapshot with the durable job lifecycle.
+- **Context**: Manifest V3 service workers are ephemeral and will be suspended by Chrome after ~30 seconds of inactivity. In addition, communication between the side panel, service worker, and content scripts can encounter transient disconnections, restricted internal pages (`chrome://`), or duplicate concurrent requests.
+- **Decision**:
+  1. Build a typed `MessageRouter` and `MessagingClient` layer that validates all messages using canonical Zod schemas, deduplicates concurrent in-flight requests, supports `AbortSignal` cancellation, and handles disconnected receiver errors with retry backoff.
+  2. Implement durable extraction job checkpointing (`job-recovery.ts`) in `chrome.storage.local` under `__pageharvest_active_job__`. On service worker restart, suspended extraction state is inspected, recovered, and surfaced to the UI.
+  3. Enforce least-privilege permissions (`activeTab`, `scripting`, `sidePanel`, `storage`, `downloads`), sanitize file downloads, and block execution on browser internal URLs.
+
+---
+
+## ADR-010: Deterministic Reusable Extraction Engine & Multi-Type Normalization Pipeline
+
+- **Status**: Accepted, except item 5, which ADR-018 supersedes.
+- **Context**: Converting complex website DOM hierarchies into clean, normalized structured records requires deterministic parsing without LLM hallucinations or network latency. Scraped websites exhibit varied markup conventions: missing optional fields, malformed CSS selectors, international currency/price formats (`$129.00`, `129,00 €`, `1 299,50 €`), relative URLs, lazy-loaded images (`srcset`, `data-src`, `data-lazy-src`), and varied date formats. A missing element or malformed selector must never crash the job or corrupt clean records.
+- **Decision**:
+  1. Implement a unified, reusable `ExtractionEngine` in `src/core/extraction/` adhering to documented input and output contracts (`ExtractionInput` $\to$ `ExtractionOutput`).
+  2. Implement comprehensive data normalizers for 10+ data types: Text, Links, Images, Attributes, Prices, Dates, Numeric values, Boolean values, Metadata, HTML, and Regex.
+  3. Support full HTML entity decoding (named, decimal `&#...;`, hex `&#x...;`), whitespace/newline collapse, and non-breaking space normalization.
+  4. Implement relative URL and image resolution supporting `srcset`, background styles, protocol-relative links, and invalid URI safety filters.
+  5. Employ fast FNV-1a 32-bit content hashing for in-memory deduplication, isolating provenance metadata (`_id`, `_page`, `_extractedAt`, `_sourceUrl`, `_hash`) from content hashing.
+  6. Provide structured diagnostic error collection (`ExtractionJobError`) and operational statistics (`ExtractionStatistics`) with real-time field coverage tracking.
+- **Consequences**:
+  - *Positive*: Completely deterministic, local-first execution; parses 1,000 records in sub-second time; missing fields or invalid selectors safely fall back without job abortion; 100% backward compatibility with `extractRecordsFromScope` and `extractFieldValue`.
+  - *Negative*: Complex custom site-specific date formats beyond ISO/standard notations may require custom regex extractors.
+
+---
+
+## ADR-011: Content Workflow Coordinator Owns Real DOM Operations
+
+- **Status**: Accepted
+- **Context**: The side panel already dispatched typed detection and extraction requests, but the content entrypoint only handled `PING` and picker lifecycle messages. The UI also contained synthetic lists, fields, records, and URLs for disconnected-tab fallbacks.
+- **Decision**: Keep DOM-dependent work in a content-script coordinator that calls the existing local detection, extraction, and navigation engines. It emits validated progress/results back through `chrome.runtime.sendMessage`; communication errors become structured error states and never become fabricated data.
+- **Consequences**:
+  - *Positive*: The extension’s user-visible workflow now uses the live page DOM and preserves the local-first privacy boundary.
+  - *Negative*: Browser-context failures are visible to the user and require a refresh/retry instead of silently showing a demo result.
+
+## ADR-012: Preserve Least-Privilege Tab Access in Browser Tests
+
+- **Status**: Accepted
+- **Context**: A directly opened extension page in Playwright cannot always read the active tab URL with only `activeTab`; adding persistent `tabs` permission would broaden access solely to accommodate that harness.
+- **Decision**: Keep `activeTab` as the production permission. When Chrome redacts URL/title fields from a directly opened extension document, recover the metadata from the already-loaded content script's typed `PING` response; do not add broad `tabs` permission. Native side-panel user-gesture coverage remains a follow-up item.
+- **Consequences**:
+  - *Positive*: The manifest stays least-privilege aligned while browser tests still exercise the real content script and DOM.
+  - *Negative*: The E2E harness still does not reproduce the exact action-click/native-side-panel activation sequence.
+
+## ADR-013: Durable URL Pagination Handoff Across Documents
+
+- **Status**: Superseded by ADR-016 and ADR-017. The handoff design remains; sessions moved from `chrome.storage.local` into IndexedDB, and they no longer hold records.
+- **Context**: A full-page URL navigation unloads the content script and cannot leave an in-memory extraction engine waiting for the next document. The existing generic navigation engine therefore could not safely resume URL-template jobs.
+- **Decision**: Store a URL-pagination session in `chrome.storage.local` before navigation. The checkpoint contains the canonical recipe and fields, job/project/dataset identifiers, completed records, seen hashes, current page, counters, terminal status, and expected next URL. A new content script emits `URL_PAGINATION_READY`; the service worker validates the URL and sends the next typed extraction request. Terminal sessions are idempotent, and unexpected or failed navigation transitions the session to `failed`.
+- **Consequences**:
+  - *Positive*: Page reloads and service-worker store recreation do not lose the extraction configuration or collected records; duplicate pages are rejected deterministically.
+  - *Negative*: The native toolbar/user-gesture side-panel sequence still requires headed Chrome manual verification because Playwright cannot reliably drive browser chrome.
+
+## ADR-014: Side-Panel Route-Level Code Splitting
+
+- **Status**: Accepted
+- **Context**: The initial side-panel chunk exceeded the Rollup 500 KB warning threshold because the data grid, export surface, history, and settings views were eagerly imported by the shell.
+- **Decision**: Lazy-load the results grid, history, and settings views behind `Suspense` boundaries. Keep the dashboard and extraction workflow in the initial shell.
+- **Consequences**:
+  - *Positive*: Initial side-panel JavaScript decreased from approximately 580 KB to 471 KB without removing functionality; the grid is isolated in a 97 KB chunk.
+  - *Negative*: First navigation to a lazy view performs one local extension chunk fetch and displays a short loading fallback.
+
+## ADR-015: Layered Automated Release Verification
+
+- **Status**: Accepted
+- **Context**: Unit and integration suites prove local algorithms, but release confidence also requires the production MV3 artifact to run inside a real Chromium profile and the native toolbar gesture to be distinguished from direct extension-page navigation.
+- **Decision**: Add a release runner with three explicit layers: deterministic unit/static checks, headed Playwright tests that load `.output/chrome-mv3` into a temporary profile and exercise real fixture workflows, and a Windows native-Chrome probe that launches an isolated profile, confirms the unpacked extension loads, and reports `BLOCKED` unless a configured desktop UI backend can genuinely click the browser action. Every run emits JSON and Markdown reports plus command/browser diagnostics.
+- **Consequences**:
+  - *Positive*: One command produces auditable release evidence, preserves failure artifacts, and prevents a direct side-panel page test from being misreported as native toolbar coverage.
+  - *Negative*: The complete gate can legitimately exit `3` when the host lacks pywinauto/AutoHotkey; manual or desktop-driver verification remains necessary for the browser-chrome gesture.
+
+## ADR-016: Background-Owned Durable Persistence
+
+- **Status**: Accepted
+- **Context**: Extracted rows were written by a React hook in the side panel, so closing the panel lost rows. Records were tagged only with what the panel remembered, and the content script could not write them itself, because a content script's IndexedDB belongs to the page.
+- **Decision**: The background `JobCoordinator` is the only writer of extraction data. Content scripts send `RECORD_BATCH` and wait for an acknowledgement, which is only sent after the IndexedDB transaction resolves. Rows, job counters and the checkpoint commit together. The side panel sends commands and reads from storage.
+- **Consequences**:
+  - *Positive*: An acknowledged record survives a closed panel, closed tab, worker restart and browser restart. The panel can open and close at any time.
+  - *Negative*: Each batch round-trips through the worker, so extraction waits on storage. This is deliberate backpressure.
+
+## ADR-017: One Job Lifecycle, Enforced by the State Machine
+
+- **Status**: Accepted
+- **Context**: Three unconnected models existed: `ExtractionStateMachine` (used only by tests), lower-case `JobStatus`, and UI-only statuses. `persistJobState` had no callers, so the recovery banner could not appear. `UrlPaginationSession` kept every row in `chrome.storage.local`, was never read back, and was never deleted.
+- **Decision**: `JobStatus` is the lifecycle: CREATED, RUNNING, PAUSED, INTERRUPTED, RECOVERABLE, COMPLETED, CANCELLED, FAILED, EXPIRED. `ExtractionStateMachine` owns the transitions, and the coordinator applies them inside the transaction that persists them. A `checkpoints` table holds resumable state and is deleted with the transition to any terminal state. `job-recovery.ts` and `url-pagination-session.ts` are removed. UI inspection states are not job states; they stay in the panel's `view`.
+- **Consequences**:
+  - *Positive*: Illegal transitions cannot reach storage. Recovery is one path for every pagination type. The banner shows only for a job that can really resume.
+  - *Negative*: A recovered infinite-scroll job has to scroll back through known rows, because the feed reloads from the top.
+
+## ADR-018: Canonical Record Identity with SHA-256 Fingerprints
+
+- **Status**: Accepted
+- **Context**: Deduplication compared 32-bit FNV-1a hashes and nothing else, which silently dropped real rows: "Product 1079599" and "Product 1262382" collide. Values were also lower-cased, merging variants like "SKU-aB3" and "SKU-Ab3". Signatures joined pairs with `|`, so values could imitate separators.
+- **Decision**: Identity is the canonical record (see `record-identity.ts` for the rules). SHA-256 only narrows which stored rows to compare, and a row is a duplicate only if its canonical form is equal. Within a page run, an exact signature set is used with no hash at all. Single-page jobs do not deduplicate unless recovering, because each matched element is its own row.
+- **Consequences**:
+  - *Positive*: A collision cannot remove a distinct record.
+  - *Negative*: This is a deliberate behavior change: rows differing only by letter case are now distinct. Deduplicating a resumed single-page job compares against stored rows, so identical rows on that page collapse in that one case.
+
+## ADR-019: One Runtime Message Protocol
+
+- **Status**: Accepted
+- **Context**: `BrowserMessage` in `src/shared/contracts` was documented as canonical but never used at runtime, while `ExtensionMessage` in `src/contracts` was used with different names. `MessagingClient`, which has timeouts, retries and validation, was used only by tests.
+- **Decision**: `src/shared/contracts/message.ts` now defines the protocol the extension actually speaks, and `src/contracts/messages.ts` only re-exports it. All sends go through `MessagingClient`. The picker's hover, confirm and cancel messages were being dropped because they were not in the protocol; they are now defined, and cancel returns the panel to the dashboard.
+- **Consequences**:
+  - *Positive*: One protocol, validated at every boundary.
+  - *Negative*: Older `BrowserMessage` variant names are gone.
+
+## ADR-020: Module Decisions After the Wiring Audit
+
+- **Status**: Accepted
+- **Context**: Several modules were reached only by tests.
+- **Decision**:
+
+| Module | Decision | Now |
+| :--- | :--- | :--- |
+| `MessagingClient` | Wired | All panel, content and background sends |
+| `ExtractionStateMachine` | Wired, reworked to the lifecycle | Every job transition |
+| `error-reporter` | Wired | Coordinator and content workflow errors, persisted on jobs |
+| `storage/repositories` | Wired, completed | All production storage access |
+| `platform/downloads` | Wired | All exports; the duplicate in `exporter.ts` is removed |
+| `platform/permissions` | Wired | Checked before a job starts; `requestPermission` removed, because every permission is required in the manifest and nothing could call it |
+| `navigation/runner` | Wired, reworked | `runNavigationJob` runs every job; step helpers with no caller are removed, and their behavior is tested through the engine |
+| `TabManager` | Wired | Tab close and load detection in the worker |
+| `ExtractionEngine` | Wired | Single-page and URL-template extraction, sharing one loop with the engine path |
+| `DuplicateDetector` | Wired | The in-run signature check |
+| `job-recovery`, `url-pagination-session` | Removed | Replaced by ADR-017 |
+| `EXECUTE_PAGINATION_STEP`, `EXECUTE_SCROLL_STEP` | Removed | Nothing sent them |
+| `theme`, `autoCleanOnExtract` settings | Removed | Nothing read them |
+
+- **Consequences**: `tests/integration/production-wiring.test.ts` walks the import graph from the entry points and fails if a source module is unreachable.
+
+## ADR-021: Value-Aware CSV Formula Protection
+
+- **Status**: Accepted
+- **Context**: Every value starting with `-` or `+` was prefixed, so `-5` was written as `' -5`, which corrupts data. Leading whitespace also bypassed the check.
+- **Decision**: Numbers and booleans are never prefixed. Text is prefixed only when it is formula-like, and signed numeric text is treated as data. Leading whitespace no longer bypasses the check. The prefix stays `' `.
+- **Consequences**:
+  - *Positive*: Numeric columns export unchanged, and anything able to reference a cell or run a command is neutralized.
+  - *Negative*: Text like `-2+3` is prefixed even though it only does arithmetic, because it contains an operator after the first character.
+
+## ADR-022: Closed Shadow Root for the Picker Overlay
+
+- **Status**: Accepted
+- **Context**: ADR-004 required a closed root but the code used an open one, and the page could reach into the overlay through `host.shadowRoot`.
+- **Decision**: The overlay attaches a closed root and keeps the only reference in a private field, with no global or attribute exposing it. Browser tests use the keyboard and on-screen coordinates, using CDP to locate buttons. Unit tests observe `attachShadow` from the test side to check what renders.
+- **Consequences**: Page scripts cannot read or change the overlay. A leftover host cannot be reused, so each attach creates a new one.
+
+## ADR-023: Auto-Detect Ranks by Record Content
+
+- **Status**: Accepted
+- **Context**: A trial on real sites stored navigation links with status COMPLETED, while every fixture test passed. Lists were ranked by confidence times size, so a 50-link sidebar beat 20 products. Only containers with list-like class names were scanned, so plain `div.quote` items were never considered. A `ul > li` selector also matched the site menu.
+- **Decision**: Every parent with repeated children is a candidate. The score weighs confidence and size against field variety, and reduces it for link-only items, navigation regions, and items that wrap another list. Outside list-like containers a list needs three items. The selector is narrowed until it matches exactly the chosen items. Items with no recognized text offer their text elements as columns, and a `title` attribute that extends the visible text is preferred, because sites shorten long titles on screen.
+- **Consequences**: `detectListFromSelection`, used by the picker, is unchanged. Navigation is still listed as a lower-ranked candidate. Fixtures must include the surroundings of real pages: `tests/unit/detection-real-pages.test.ts` follows real page layouts.

@@ -35,6 +35,95 @@ export function normalizeUrlForDeduplication(rawUrl: string): string {
   }
 }
 
+export const URL_TEMPLATE_PLACEHOLDERS = ['{page}', '{offset}'] as const;
+
+export interface UrlTemplateSequence {
+  template: string;
+  startPage?: number;
+  pageIncrement?: number;
+}
+
+/**
+ * The URL of a step in a template sequence. `step` counts pages visited, from 1.
+ *
+ * {page}   = startPage + (step - 1) * pageIncrement   e.g. 1, 2, 3 or 10, 20, 30
+ * {offset} = (startPage - 1) + (step - 1) * pageIncrement   e.g. 0, 20, 40
+ */
+export function buildTemplateUrl(sequence: UrlTemplateSequence, step: number): string {
+  const startPage = sequence.startPage ?? 1;
+  const increment = sequence.pageIncrement ?? 1;
+  const progress = (step - 1) * increment;
+  return sequence.template
+    .replace(/\{page\}/g, String(startPage + progress))
+    .replace(/\{offset\}/g, String(startPage - 1 + progress));
+}
+
+export function previewTemplateUrls(sequence: UrlTemplateSequence, count: number = 3): string[] {
+  return Array.from({ length: count }, (_, index) => buildTemplateUrl(sequence, index + 1));
+}
+
+export function isSameOrigin(a: string, b: string): boolean {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
+}
+
+export interface UrlTemplateValidation {
+  valid: boolean;
+  error?: string;
+}
+
+/**
+ * Checks a template before it is saved or used. A valid template produces a distinct
+ * http(s) URL for each page, on the same origin as the page the job starts from.
+ */
+export function validateUrlTemplate(
+  sequence: Partial<UrlTemplateSequence>,
+  originUrl?: string
+): UrlTemplateValidation {
+  const template = sequence.template?.trim();
+  if (!template) {
+    return { valid: false, error: 'Enter a URL template.' };
+  }
+  if (!URL_TEMPLATE_PLACEHOLDERS.some((placeholder) => template.includes(placeholder))) {
+    return { valid: false, error: 'The template needs a {page} or {offset} placeholder.' };
+  }
+
+  const leftover = template.replace(/\{page\}|\{offset\}/g, '').match(/[{}]/);
+  if (leftover) {
+    return { valid: false, error: 'Only the {page} and {offset} placeholders are supported.' };
+  }
+
+  const resolved = { template, startPage: sequence.startPage, pageIncrement: sequence.pageIncrement };
+  let first: URL;
+  try {
+    first = new URL(buildTemplateUrl(resolved, 1));
+  } catch {
+    return { valid: false, error: 'The template does not produce a valid URL.' };
+  }
+  if (first.protocol !== 'http:' && first.protocol !== 'https:') {
+    return { valid: false, error: 'The template must produce http or https URLs.' };
+  }
+  if (originUrl && !isSameOrigin(first.href, originUrl)) {
+    return { valid: false, error: `The template must stay on ${new URL(originUrl).origin}.` };
+  }
+  if (first.origin !== safeOrigin(buildTemplateUrl(resolved, 2))) {
+    return { valid: false, error: 'A placeholder cannot change the website the template points to.' };
+  }
+
+  return { valid: true };
+}
+
+function safeOrigin(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
 export interface NextUrlOptions {
   currentPage: number;
   nextPage: number;
@@ -46,7 +135,7 @@ export interface NextUrlOptions {
  * Generates the target URL for the next page given current URL and pagination state.
  */
 export function generateNextPageUrl(currentUrl: string, options: NextUrlOptions): string {
-  const { currentPage, nextPage, pageSize = 20, template } = options;
+  const { nextPage, pageSize = 20, template } = options;
 
   // 1. Explicit template provided (e.g. https://example.com/items?page={page})
   if (template && template.includes('{page}')) {
@@ -111,17 +200,12 @@ export function generateNextPageUrl(currentUrl: string, options: NextUrlOptions)
 /**
  * Runner that tracks visited URLs to prevent cyclic navigation loops.
  */
-export function createUrlPaginationRunner(options: {
-  startUrl: string;
+export function createUrlPaginationRunner(_options?: {
+  startUrl?: string;
   maxPages?: number;
 }) {
   const visitedUrls = new Set<string>();
   let loopDetected = false;
-
-  const initialNormalized = normalizeUrlForDeduplication(options.startUrl);
-  if (initialNormalized) {
-    visitedUrls.add(initialNormalized);
-  }
 
   return {
     visit(url: string): boolean {
@@ -141,6 +225,10 @@ export function createUrlPaginationRunner(options: {
     },
     getVisitedUrls(): string[] {
       return Array.from(visitedUrls);
+    },
+    reset(): void {
+      visitedUrls.clear();
+      loopDetected = false;
     },
   };
 }

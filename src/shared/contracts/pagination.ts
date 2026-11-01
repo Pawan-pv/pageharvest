@@ -25,16 +25,23 @@ export type PaginationStopCondition = z.infer<typeof PaginationStopConditionSche
 
 /**
  * Canonical PaginationConfig schema.
+ *
+ * Limits are independent and apply only to their own dimension:
+ * - `maxPages` limits page navigation (`next_button`, `url_template`).
+ * - `scrollCount` limits scroll actions (`infinite_scroll`).
+ * - `maxRecords` is an optional ceiling that applies to every strategy.
  */
 export const PaginationConfigSchema = z.object({
   type: PaginationTypeSchema.default('none'),
   nextButtonSelector: z.string().optional(),
   maxPages: z.number().int().min(1).max(500).default(20),
+  maxRecords: z.number().int().min(1).optional(),
   delayMs: z.number().int().min(200).max(30000).default(1500),
   scrollCount: z.number().int().min(1).max(200).default(30),
   scrollDelayMs: z.number().int().min(300).max(10000).default(1500),
   urlTemplate: z.string().optional(),
   startPage: z.number().int().min(1).default(1),
+  pageIncrement: z.number().int().min(1).default(1),
   stopCondition: PaginationStopConditionSchema.default('no_new_records'),
 });
 

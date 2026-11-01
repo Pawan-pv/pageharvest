@@ -1,0 +1,212 @@
+import React from 'react';
+import { Loader2, Pause, Play, Square, Clock, Layers, CopyX, AlertCircle } from 'lucide-react';
+import { Card } from '@/components/common/Card';
+import { Button } from '@/components/common/Button';
+import { Badge } from '@/components/common/Badge';
+import { Alert } from '@/components/common/Alert';
+import { ExtractionStats } from '@/hooks/useExtractionWorkflow';
+
+export interface ExtractionProgressViewProps {
+  stats: ExtractionStats;
+  /** Rows above this count show a size warning. */
+  recordWarningThreshold?: number;
+  onPause: () => void;
+  onResume: () => void;
+  onStop: () => void;
+  onCancel: () => void;
+}
+
+/** Progress in the unit this job actually advances by. */
+function describeProgress(stats: ExtractionStats): { label: string; value: string; percent: number | null } {
+  if (stats.progressKind === 'scrolls') {
+    return {
+      label: 'Scrolling',
+      value: `Scroll ${stats.currentStep} of ${stats.targetSteps}`,
+      percent: Math.min(Math.round((stats.currentStep / stats.targetSteps) * 100), 100),
+    };
+  }
+  if (stats.progressKind === 'pages') {
+    return {
+      label: 'Page Crawled',
+      value: `Page ${stats.currentStep} of ${stats.targetSteps}`,
+      percent: Math.min(Math.round((stats.currentStep / stats.targetSteps) * 100), 100),
+    };
+  }
+  return { label: 'Scope', value: 'Current page', percent: null };
+}
+
+export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
+  stats,
+  recordWarningThreshold,
+  onPause,
+  onResume,
+  onStop,
+  onCancel,
+}) => {
+  const isPaused = stats.status === 'PAUSED';
+  const isError = stats.status === 'FAILED';
+  const progress = describeProgress(stats);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="flex flex-col gap-4 p-4 text-left">
+      <Card variant="default" className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            {!isPaused && !isError ? (
+              <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" />
+            ) : isPaused ? (
+              <Pause className="w-5 h-5 text-amber-600" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-rose-600" />
+            )}
+            <h3 className="text-base font-semibold text-slate-900">
+              {isPaused ? 'Extraction Paused' : isError ? 'Extraction Interrupted' : 'Harvesting in Progress...'}
+            </h3>
+          </div>
+
+          <Badge
+            variant={isPaused ? 'warning' : isError ? 'danger' : 'brand'}
+            size="md"
+          >
+            {stats.status}
+          </Badge>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="w-full bg-slate-100 rounded-full h-2 mb-4 overflow-hidden">
+          <div
+            className={`h-2 transition-all duration-300 rounded-full ${
+              isPaused ? 'bg-amber-500' : isError ? 'bg-rose-500' : 'bg-emerald-600 animate-pulse'
+            }`}
+            style={{ width: `${progress.percent ?? 100}%` }}
+          />
+        </div>
+
+        {/* Real-time metrics grid */}
+        <div className="grid grid-cols-2 gap-2.5 mb-2">
+          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
+            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
+              <Layers className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Records Harvested</span>
+            </div>
+            <span className="text-lg font-bold text-slate-900 tracking-tight">
+              {stats.totalExtracted}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
+            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
+              <Clock className="w-3.5 h-3.5 text-sky-600" />
+              <span>Elapsed Time</span>
+            </div>
+            <span className="text-lg font-bold text-slate-900 tracking-tight font-mono">
+              {formatTime(stats.elapsedSeconds)}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
+            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
+              <span>{progress.label}</span>
+            </div>
+            <span className="text-sm font-semibold text-slate-800">
+              {progress.value}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
+            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
+              <CopyX className="w-3.5 h-3.5 text-slate-400" />
+              <span>Duplicates Skipped</span>
+            </div>
+            <span className="text-sm font-semibold text-slate-800">
+              {stats.duplicatesSkipped}
+            </span>
+          </div>
+        </div>
+
+        {/* What happened to each detected item, so nothing disappears silently */}
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500 mt-3">
+          <div className="flex justify-between">
+            <dt>Items detected</dt>
+            <dd className="font-semibold text-slate-700">{stats.recordsDetected}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>Missing some fields</dt>
+            <dd className="font-semibold text-slate-700">{stats.recordsWithMissingFields}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>Filtered out</dt>
+            <dd className="font-semibold text-slate-700">{stats.recordsFiltered}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>Failed</dt>
+            <dd className="font-semibold text-slate-700">{stats.recordsFailed}</dd>
+          </div>
+        </dl>
+
+        {recordWarningThreshold !== undefined && stats.totalExtracted >= recordWarningThreshold && (
+          <Alert variant="warning" title="Large dataset" className="mt-3">
+            This extraction has passed {recordWarningThreshold.toLocaleString()} rows. The grid may slow down.
+          </Alert>
+        )}
+
+        {/* Error notice if present */}
+        {isError && (
+          <Alert variant="error" title="Extraction Error" className="mt-3">
+            {stats.errorMessage || 'An error occurred during extraction. You can still inspect the records harvested so far.'}
+          </Alert>
+        )}
+      </Card>
+
+      {/* Control Buttons */}
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onCancel}
+          title="Stops the job. Rows already saved stay in Datasets."
+        >
+          {isError ? 'Close' : 'Cancel Job'}
+        </Button>
+
+        <div className="flex items-center gap-2">
+          {isPaused ? (
+            <Button
+              variant="outline"
+              size="sm"
+              iconLeft={<Play className="w-3.5 h-3.5 fill-current" />}
+              onClick={onResume}
+            >
+              Resume
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              iconLeft={<Pause className="w-3.5 h-3.5" />}
+              onClick={onPause}
+              disabled={isError}
+            >
+              Pause
+            </Button>
+          )}
+
+          <Button
+            variant="primary"
+            size="sm"
+            iconLeft={<Square className="w-3.5 h-3.5 fill-current" />}
+            onClick={onStop}
+          >
+            Finish & View Results
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};

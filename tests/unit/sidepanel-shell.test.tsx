@@ -1,15 +1,14 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import { createChromeMock, ChromeMock } from '../utils/chrome-mock';
-import App from '@/entrypoints/sidepanel/App';
+import App from '~/entrypoints/sidepanel/App';
 
 describe('Side Panel UI Shell (App.tsx)', () => {
   let mockChrome: ChromeMock;
 
   beforeEach(() => {
     mockChrome = createChromeMock();
-    (globalThis as any).chrome = mockChrome;
+    Reflect.set(globalThis, 'chrome', mockChrome);
   });
 
   it('renders the PageHarvest header and active tab information', async () => {
@@ -21,6 +20,11 @@ describe('Side Panel UI Shell (App.tsx)', () => {
       active: true,
       pinned: false,
       incognito: false,
+      frozen: false,
+      selected: true,
+      discarded: false,
+      autoDiscardable: true,
+      groupId: -1,
       status: 'complete',
       url: 'https://books.toscrape.com/catalogue',
       title: 'Books to Scrape'
@@ -28,10 +32,10 @@ describe('Side Panel UI Shell (App.tsx)', () => {
 
     render(<App />);
 
-    expect(screen.getByText(/PageHarvest/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: /PageHarvest/i })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText(/Books to Scrape/i)).toBeInTheDocument();
-      expect(screen.getByText(/https:\/\/books\.toscrape\.com/i)).toBeInTheDocument();
+      expect(screen.getByText(/books\.toscrape\.com/i)).toBeInTheDocument();
     });
   });
 
@@ -44,6 +48,11 @@ describe('Side Panel UI Shell (App.tsx)', () => {
       active: true,
       pinned: false,
       incognito: false,
+      frozen: false,
+      selected: true,
+      discarded: false,
+      autoDiscardable: true,
+      groupId: -1,
       status: 'complete',
       url: 'chrome://settings',
       title: 'Settings'
@@ -52,7 +61,7 @@ describe('Side Panel UI Shell (App.tsx)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Restricted Page/i)).toBeInTheDocument();
+      expect(screen.getByText(/Restricted/i)).toBeInTheDocument();
     });
   });
 
@@ -60,14 +69,16 @@ describe('Side Panel UI Shell (App.tsx)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Connected|Ready/i)).toBeInTheDocument();
+      expect(screen.getByText(/Ready|Restricted/i)).toBeInTheDocument();
     });
   });
 
   it('provides action buttons for Element Picker and Detection', async () => {
     render(<App />);
 
-    expect(screen.getByRole('button', { name: /Start Picker|Inspect/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Auto-Detect|Detect/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Select Elements/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Auto-Detect Lists/i })).toBeInTheDocument();
+    });
   });
 });

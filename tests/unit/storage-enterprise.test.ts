@@ -9,7 +9,7 @@ import {
   SettingsRepository,
 } from '@/storage/repositories';
 import { ExtractionProject } from '@/shared/contracts/project';
-import { ExtractionJob } from '@/shared/contracts/job';
+import { ExtractionJobSchema } from '@/shared/contracts/job';
 import { ExtractionSchema } from '@/shared/contracts/schema';
 import { RecordEntity } from '@/types';
 
@@ -76,6 +76,9 @@ describe('Local Storage & Persistence Engine (Enterprise Normalized Model)', () 
             delayMs: 1000,
             scrollCount: 20,
             scrollDelayMs: 1000,
+            startPage: 1,
+            pageIncrement: 1,
+            stopCondition: 'no_new_records',
           },
           version: 1,
           createdAt: Date.now(),
@@ -110,7 +113,7 @@ describe('Local Storage & Persistence Engine (Enterprise Normalized Model)', () 
 
   describe('Job Lifecycle & Execution History', () => {
     it('tracks jobs, transitions status, and saves history', async () => {
-      const mockJob: ExtractionJob = {
+      const mockJob = ExtractionJobSchema.parse({
         id: 'job_101',
         projectId: 'proj_1',
         targetUrl: 'https://example.com/products',
@@ -119,35 +122,35 @@ describe('Local Storage & Persistence Engine (Enterprise Normalized Model)', () 
           name: 'Schema',
           urlPattern: '*',
           containerSelector: '.card',
-          fields: [{ id: 'f1', name: 'Name', selector: '.title', extractor: 'text', transform: 'trim' }],
-          pagination: { type: 'none', maxPages: 1, delayMs: 1000, scrollCount: 1, scrollDelayMs: 500 },
+          fields: [{ id: 'f1', name: 'Name', selector: '.title', extractor: 'text', transform: 'trim', required: false }],
+          pagination: { type: 'none', maxPages: 1, delayMs: 1000, scrollCount: 1, scrollDelayMs: 500, startPage: 1, pageIncrement: 1, stopCondition: 'no_new_records' },
           version: 1,
           createdAt: Date.now(),
           updatedAt: Date.now(),
         },
-        status: 'queued',
+        status: 'CREATED',
         totalExtracted: 0,
         duplicatesSkipped: 0,
         pagesVisited: 0,
         startedAt: Date.now(),
-      };
+      });
 
       await jobRepo.createJob(mockJob);
 
       // Transition to running
-      await jobRepo.updateJobStatus('job_101', 'running', { pagesVisited: 1 });
+      await jobRepo.updateJobStatus('job_101', 'RUNNING', { pagesVisited: 1 });
       let currentJob = await jobRepo.getJob('job_101');
-      expect(currentJob?.status).toBe('running');
+      expect(currentJob?.status).toBe('RUNNING');
       expect(currentJob?.pagesVisited).toBe(1);
 
       // Transition to completed
-      await jobRepo.updateJobStatus('job_101', 'completed', {
+      await jobRepo.updateJobStatus('job_101', 'COMPLETED', {
         totalExtracted: 50,
         duplicatesSkipped: 3,
         pagesVisited: 5,
       });
       currentJob = await jobRepo.getJob('job_101');
-      expect(currentJob?.status).toBe('completed');
+      expect(currentJob?.status).toBe('COMPLETED');
       expect(currentJob?.totalExtracted).toBe(50);
       expect(currentJob?.finishedAt).toBeDefined();
 
@@ -177,10 +180,10 @@ describe('Local Storage & Persistence Engine (Enterprise Normalized Model)', () 
         urlPattern: 'https://quotes.toscrape.com/*',
         containerSelector: '.quote',
         fields: [
-          { id: 'f1', name: 'quote', selector: '.text', extractor: 'text', transform: 'trim' },
-          { id: 'f2', name: 'author', selector: '.author', extractor: 'text', transform: 'trim' },
+          { id: 'f1', name: 'quote', selector: '.text', extractor: 'text', transform: 'trim', required: false },
+          { id: 'f2', name: 'author', selector: '.author', extractor: 'text', transform: 'trim', required: false },
         ],
-        pagination: { type: 'none', maxPages: 5, delayMs: 1000, scrollCount: 10, scrollDelayMs: 500 },
+        pagination: { type: 'none', maxPages: 5, delayMs: 1000, scrollCount: 10, scrollDelayMs: 500, startPage: 1, pageIncrement: 1, stopCondition: 'no_new_records' },
         version: 1,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -200,22 +203,22 @@ describe('Local Storage & Persistence Engine (Enterprise Normalized Model)', () 
   describe('User Settings Persistence', () => {
     it('provides default settings and updates them', async () => {
       const defaultSettings = await settingsRepo.getSettings();
-      expect(defaultSettings.theme).toBe('system');
+      expect(defaultSettings.defaultDelayMs).toBe(1500);
       expect(defaultSettings.defaultExportFormat).toBe('csv');
       expect(defaultSettings.csvIncludeBom).toBe(true);
 
       const updated = await settingsRepo.updateSettings({
-        theme: 'dark',
+        defaultDelayMs: 2500,
         defaultExportFormat: 'json',
         csvDelimiter: ';',
       });
 
-      expect(updated.theme).toBe('dark');
+      expect(updated.defaultDelayMs).toBe(2500);
       expect(updated.defaultExportFormat).toBe('json');
       expect(updated.csvDelimiter).toBe(';');
 
       const reloaded = await settingsRepo.getSettings();
-      expect(reloaded.theme).toBe('dark');
+      expect(reloaded.defaultDelayMs).toBe(2500);
     });
   });
 

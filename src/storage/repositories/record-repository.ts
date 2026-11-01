@@ -1,4 +1,5 @@
-import { PageHarvestDB, db as defaultDb } from '../db';
+import { compareRecordOrder, PageHarvestDB, db as defaultDb } from '../db';
+import type { Collection } from 'dexie';
 import { RecordEntity } from '@/types';
 
 export interface RecordQueryOptions {
@@ -27,7 +28,7 @@ export class RecordRepository {
   public async getRecords(
     options: RecordQueryOptions = {}
   ): Promise<{ records: RecordEntity[]; total: number }> {
-    let collection: Dexie.Collection<RecordEntity, string>;
+    let collection: Collection<RecordEntity, string>;
 
     if (options.datasetId) {
       collection = this.db.records.where('datasetId').equals(options.datasetId);
@@ -41,7 +42,7 @@ export class RecordRepository {
 
     const total = await collection.count();
 
-    let items = await collection.toArray();
+    const items = await collection.toArray();
 
     // In-memory sorting if custom field requested
     if (options.sortBy) {
@@ -59,8 +60,7 @@ export class RecordRepository {
         return String(valA).localeCompare(String(valB)) * order;
       });
     } else {
-      // Default sort by extraction time asc
-      items.sort((a, b) => (a._extractedAt || 0) - (b._extractedAt || 0));
+      items.sort(compareRecordOrder);
     }
 
     // Apply offset and limit
@@ -76,22 +76,19 @@ export class RecordRepository {
     field: string,
     value: string | number | boolean | null | undefined
   ): Promise<void> {
-    await this.db.records.update(recordId, {
+    const changed = await this.db.records.update(recordId, {
       [field]: value,
     });
+    if (changed === 0) {
+      const exists = await this.db.records.get(recordId);
+      if (!exists) {
+        throw new Error('This row no longer exists.');
+      }
+    }
   }
 
   public async deleteRecord(recordId: string, datasetId?: string): Promise<void> {
-    await this.db.transaction('rw', [this.db.records, this.db.datasets], async () => {
-      await this.db.records.delete(recordId);
-      if (datasetId) {
-        const remaining = await this.db.records.where('datasetId').equals(datasetId).count();
-        await this.db.datasets.update(datasetId, {
-          recordsCount: remaining,
-          updatedAt: Date.now(),
-        });
-      }
-    });
+    await this.deleteBatch([recordId], datasetId);
   }
 
   public async deleteBatch(recordIds: string[], datasetId?: string): Promise<number> {

@@ -107,7 +107,7 @@ describe('Repeated Element & Field Detection', () => {
     const fieldDefs = suggestionsToFieldDefinitions(suggestions);
 
     expect(fieldDefs.length).toBe(suggestions.length);
-    expect(fieldDefs[0].required).toBe(true);
+    expect(fieldDefs.every((field) => field.required === false)).toBe(true);
     expect(fieldDefs[0].id).toBeDefined();
     expect(fieldDefs[0].selector).toBe(suggestions[0].selector);
   });

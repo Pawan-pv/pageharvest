@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Long Scroll Feed - PageHarvest Fixture</title>
+  <style>
+    body { font-family: sans-serif; margin: 1rem; }
+    .feed { display: flex; flex-direction: column; gap: 1rem; }
+    .scroll-card { height: 220px; border: 1px solid #444; padding: 1rem; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Long Scroll Feed</h1>
+  <div id="feed" class="feed"></div>
+  <div id="sentinel">Loading more...</div>
+  <script>
+    // Loads one fixed batch for each scroll, up to a limit, like a real paginated feed API.
+    var BATCH = 5;
+    var LIMIT = 200;
+    var next = 1;
+    var timer = null;
+
+    function append() {
+      var feed = document.getElementById('feed');
+      for (var i = 0; i < BATCH && next <= LIMIT; i++, next++) {
+        var card = document.createElement('article');
+        card.className = 'scroll-card';
+        card.innerHTML = '<h2 class="title">Feed item ' + next + '</h2><p class="summary">Summary for item ' + next + '</p>';
+        feed.appendChild(card);
+      }
+    }
+
+    append();
+
+    window.addEventListener('scroll', function () {
+      clearTimeout(timer);
+      // A smooth scroll fires many events; it counts as one load when it settles.
+      timer = setTimeout(append, 150);
+    });
+  </script>
+</body>
+</html>

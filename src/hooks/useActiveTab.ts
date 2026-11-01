@@ -46,6 +46,8 @@ export function useActiveTab() {
         chrome.tabs.onUpdated?.removeListener(handleUpdated);
       };
     }
+
+    return undefined;
   }, [refreshTab]);
 
   return { tab, isLoading, error, refreshTab };

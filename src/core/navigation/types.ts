@@ -46,6 +46,7 @@ export interface DOMStabilityOptions {
   timeoutMs?: number;      // Maximum time to wait (default: 5000)
   quietPeriodMs?: number;  // Required mutation-free quiet window (default: 250)
   pollIntervalMs?: number; // Check interval (default: 50)
+  minWaitMs?: number;      // Minimum wait before declaring stable (default: 0)
 }
 
 /**
@@ -59,6 +60,8 @@ export interface WaitForNewElementsOptions {
 
 /**
  * User-configurable and default safety limits.
+ * Each limit applies only to its own dimension: `maxPages` to page navigation,
+ * `maxScrolls` to scroll actions, `maxRecords` to the extracted row count.
  */
 export interface PaginationEngineSafetyLimits {
   maxPages: number;                  // Max page limit (default: 20)
@@ -74,15 +77,34 @@ export interface PaginationEngineSafetyLimits {
 }
 
 /**
- * Batch of records extracted from a single page step.
+ * Batch of records extracted from a single page or scroll step.
  */
 export interface PageExtractionBatch {
   page: number;
   records: ExtractedRecord[];
   newRecordsCount: number;
   duplicatesCount: number;
+  /** Containers examined in this step, excluding elements unchanged since the last step. */
+  detectedCount: number;
+  missingFieldCount: number;
+  filteredCount: number;
+  failedCount: number;
+  /** Scroll actions completed before this batch was extracted. */
+  scrollsCompleted: number;
+  /** True while a resumed scroll job is scrolling back to where it was interrupted. */
+  isCatchUp: boolean;
   url: string;
   timestamp: number;
+}
+
+/**
+ * What the durable layer reported for a committed batch.
+ */
+export interface PageCommitResult {
+  /** Rows actually stored, after durable deduplication. */
+  inserted?: number;
+  /** The coordinator ended the job, so the engine must stop. */
+  stop?: boolean;
 }
 
 /**
@@ -96,6 +118,8 @@ export type NavigationStopReason =
   | 'empty_page_limit'
   | 'duplicate_page_limit'
   | 'repeated_url'
+  | 'cross_origin_blocked'
+  | 'stopped_by_coordinator'
   | 'cancelled'
   | 'navigation_failure'
   | 'manual_stop'
@@ -122,7 +146,7 @@ export interface NavigationProgress {
 }
 
 /**
- * Persisted state to resume an extraction job across Service Worker restarts.
+ * State used to continue an extraction job in a new document.
  */
 export interface PaginationSessionState {
   jobId?: string;
@@ -134,6 +158,10 @@ export interface PaginationSessionState {
   visitedUrls: string[];
   lastUrl: string;
   savedAt: number;
+  /** Scroll actions already counted against the limit. */
+  scrollsCompleted?: number;
+  /** Scroll actions to repeat first, because a reload returned the page to the top. */
+  catchUpScrolls?: number;
 }
 
 /**
@@ -150,7 +178,21 @@ export interface PaginationEngineOptions extends Partial<PaginationEngineSafetyL
   scrollContainerSelector?: string;
   initialSessionState?: PaginationSessionState;
   onProgress?: (progress: NavigationProgress) => void;
-  onPageExtracted?: (batch: PageExtractionBatch) => void;
+  /** Awaited before the engine moves on, so a page is committed before the next begins. */
+  onPageExtracted?: (batch: PageExtractionBatch) => void | PageCommitResult | Promise<void | PageCommitResult>;
+  /**
+   * Awaited immediately before a control is activated. The durable checkpoint is
+   * written here, because activating a link can unload this document at any moment.
+   */
+  beforeNavigate?: (target: { href?: string; page: number }) => void | Promise<void>;
+  /** Resolves when the job is not paused. Awaited before every step. */
+  waitWhilePaused?: () => Promise<void>;
+  /** Where the page is now. Defaults to window.location. */
+  getCurrentUrl?: () => string;
+  /** When set, a next link leading to another origin stops the job instead of being followed. */
+  allowedOrigin?: string;
+  /** How long to wait for a clicked link to change the page before treating it as in-page. */
+  navigationTimeoutMs?: number;
   signal?: AbortSignal;
   manualStepTrigger?: () => Promise<boolean>;
   navigateUrl?: (targetUrl: string) => Promise<boolean>;

@@ -35,3 +35,27 @@ export const ExtractionErrorSchema = z.object({
 });
 
 export type ExtractionError = z.infer<typeof ExtractionErrorSchema>;
+
+/**
+ * Workflow error reported by the runtime and persisted on the job it belongs to.
+ */
+export const HarvestErrorSchema = z.object({
+  id: z.string().min(1),
+  category: z.enum([
+    'DOM_PARSING',
+    'SELECTOR_NOT_FOUND',
+    'PAGINATION_FAILED',
+    'STORAGE_FAILED',
+    'RUNTIME_MESSAGING',
+    'VALIDATION_FAILED',
+    'CIRCUIT_BREAKER_TRIGGERED',
+    'UNKNOWN',
+  ]),
+  severity: z.enum(['WARN', 'ERROR', 'FATAL']),
+  message: z.string().min(1),
+  timestamp: z.number(),
+  context: z.record(z.unknown()).optional(),
+  stack: z.string().optional(),
+});
+
+export type HarvestErrorContract = z.infer<typeof HarvestErrorSchema>;

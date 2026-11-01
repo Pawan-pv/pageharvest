@@ -1,35 +1,43 @@
-import { PageHarvestDB, db as defaultDb } from '../db';
-import { UserSettings, DEFAULT_USER_SETTINGS } from '@/types';
+import { PageHarvestDB, db as defaultDb, migrateStoredSettings } from '../db';
+import { UserSettings } from '@/types/settings';
+import { UserSettingsSchema } from '@/shared/contracts/settings';
 
 export class SettingsRepository {
-  constructor(private db: PageHarvestDB = defaultDb) {}
+  private db: PageHarvestDB;
 
-  public async getSettings(): Promise<UserSettings> {
-    const settings = await this.db.settings.get('current');
-    if (!settings) {
-      await this.db.settings.put(DEFAULT_USER_SETTINGS);
-      return { ...DEFAULT_USER_SETTINGS };
-    }
-    return settings;
+  constructor(db?: PageHarvestDB) {
+    this.db = db || defaultDb;
   }
 
+  /** Reads the settings, upgrading a row stored by an earlier version. */
+  public async getSettings(): Promise<UserSettings> {
+    const stored = await this.db.settings.get('current');
+    if (!stored) {
+      const defaults = UserSettingsSchema.parse({ id: 'current' });
+      await this.db.settings.put(defaults);
+      return defaults;
+    }
+    return migrateStoredSettings(stored);
+  }
+
+  /**
+   * Validates and writes settings. Rejects on invalid values or a failed write;
+   * the returned value is what was committed.
+   */
   public async updateSettings(updates: Partial<UserSettings>): Promise<UserSettings> {
     const current = await this.getSettings();
-    const updated: UserSettings = {
+    const updated = UserSettingsSchema.parse({
       ...current,
       ...updates,
       id: 'current',
       updatedAt: Date.now(),
-    };
+    });
     await this.db.settings.put(updated);
     return updated;
   }
 
   public async resetSettings(): Promise<UserSettings> {
-    const reset: UserSettings = {
-      ...DEFAULT_USER_SETTINGS,
-      updatedAt: Date.now(),
-    };
+    const reset = UserSettingsSchema.parse({ id: 'current' });
     await this.db.settings.put(reset);
     return reset;
   }

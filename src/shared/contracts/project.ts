@@ -14,14 +14,16 @@ export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
 
 /**
  * Canonical ExtractionProject contract.
- * Represents a user-managed scraping project/recipe.
+ * A project groups the datasets, jobs, schemas and recipes of one scraping effort.
+ * The target URL and schema are optional because a project can exist before its
+ * first extraction has been configured.
  */
 export const ExtractionProjectSchema = z.object({
   id: z.string().min(1, 'Project ID is required'),
   name: z.string().min(1, 'Project name is required'),
   description: z.string().optional(),
-  targetUrl: z.string().url('A valid URL is required'),
-  schema: ExtractionSchemaSchema,
+  targetUrl: z.string().url('A valid URL is required').optional(),
+  schema: ExtractionSchemaSchema.optional(),
   status: ProjectStatusSchema.default('draft'),
   tags: z.array(z.string()).default([]).optional(),
   createdAt: z.number().int().default(() => Date.now()),

@@ -1,7 +1,4 @@
 import { defineConfig } from '@playwright/test';
-import path from 'path';
-
-const pathToExtension = path.resolve(__dirname, '.output/chrome-mv3');
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -11,8 +8,12 @@ export default defineConfig({
   use: {
     headless: false, // Chrome extensions are only fully supported in headful/new-headless Chromium
     viewport: { width: 1280, height: 720 },
-    ignoreHTTPSErrors: true
+    ignoreHTTPSErrors: true,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
   },
+  outputDir: 'artifacts/release-testing/playwright',
   webServer: {
     command: 'node tests/fixtures/serve.cjs',
     url: 'http://127.0.0.1:3456/simple-grid.html',

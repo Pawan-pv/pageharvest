@@ -13,6 +13,10 @@ export class HistoryRepository {
     return this.db.history.get(id);
   }
 
+  public async getRunForJob(jobId: string): Promise<ExtractionRunHistory | undefined> {
+    return this.db.history.where('jobId').equals(jobId).first();
+  }
+
   public async getHistoryByDataset(datasetId: string): Promise<ExtractionRunHistory[]> {
     return this.db.history.where('datasetId').equals(datasetId).reverse().sortBy('startedAt');
   }

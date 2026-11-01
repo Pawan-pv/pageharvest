@@ -1,71 +1,86 @@
 export interface DownloadOptions {
   filename: string;
-  content: string | Blob;
+  content: string;
   mimeType: string;
 }
 
 export interface DownloadResult {
   success: boolean;
-  downloadId?: number;
   error?: string;
 }
 
-/**
- * Sanitizes file names to prevent directory traversal and invalid OS characters.
- */
-export function sanitizeFilename(filename: string): string {
-  if (!filename || !filename.trim()) {
-    return 'pageharvest_export.csv';
+export function sanitizeFilename(filename: string, defaultName: string = 'pageharvest_export.csv'): string {
+  if (!filename || filename.trim().length === 0) {
+    return defaultName;
   }
-
-  // Remove control characters and illegal filesystem characters: \ / : * ? " < > |
-  const sanitized = filename
-    .trim()
-    .replace(/[\\/:*?"<>|\x00-\x1f\x80-\x9f]/g, '_')
-    .replace(/\s+/g, ' ');
-
-  return sanitized || 'pageharvest_export.csv';
+  // Replace invalid filesystem characters: : / \ * ? " < > |
+  const sanitized = filename.replace(/[:/\\*?"<>|]/g, '_');
+  return sanitized.trim().length > 0 ? sanitized : defaultName;
 }
 
 /**
- * Triggers a file download using Chrome's native Downloads API.
+ * Releases the blob once Chrome has finished with the download. The blob must stay
+ * alive until then, so it cannot be revoked as soon as the download starts.
+ */
+function revokeWhenFinished(downloadId: number | undefined, url: string): void {
+  if (!url.startsWith('blob:')) return;
+
+  const onChanged = chrome.downloads?.onChanged;
+  if (typeof downloadId !== 'number' || !onChanged?.addListener) {
+    return;
+  }
+
+  const listener = (delta: chrome.downloads.DownloadDelta) => {
+    if (delta.id !== downloadId) return;
+    const state = delta.state?.current;
+    if (state === 'complete' || state === 'interrupted') {
+      onChanged.removeListener(listener);
+      URL.revokeObjectURL(url);
+    }
+  };
+  onChanged.addListener(listener);
+}
+
+/**
+ * The single export download path. Resolves with success only after the browser has
+ * accepted the download; a refused or cancelled download is reported as a failure.
  */
 export async function triggerDownload(options: DownloadOptions): Promise<DownloadResult> {
-  const safeName = sanitizeFilename(options.filename);
-
   try {
+    const filename = sanitizeFilename(options.filename);
     let url: string;
 
-    if (typeof options.content === 'string') {
-      // Build a base64 Data URL or Blob URL
+    if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+      const blob = new Blob([options.content], { type: `${options.mimeType};charset=utf-8` });
+      url = URL.createObjectURL(blob);
+    } else {
       const encoded = encodeURIComponent(options.content);
       url = `data:${options.mimeType};charset=utf-8,${encoded}`;
-    } else {
-      url = URL.createObjectURL(options.content);
     }
 
-    if (typeof chrome === 'undefined' || !chrome.downloads?.download) {
-      return {
-        success: false,
-        error: 'Chrome Downloads API is not available in the current context'
-      };
+    if (typeof chrome !== 'undefined' && chrome.downloads?.download) {
+      const downloadId = await chrome.downloads.download({
+        url,
+        filename,
+        saveAs: true,
+      });
+      revokeWhenFinished(downloadId, url);
+      return { success: true };
     }
 
-    const downloadId = await chrome.downloads.download({
-      url,
-      filename: safeName,
-      saveAs: true
-    });
+    if (typeof document !== 'undefined') {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return { success: true };
+    }
 
-    return {
-      success: true,
-      downloadId
-    };
+    return { success: false, error: 'No download mechanism is available in this context.' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    return {
-      success: false,
-      error: `Download failed: ${message}`
-    };
+    return { success: false, error: message };
   }
 }

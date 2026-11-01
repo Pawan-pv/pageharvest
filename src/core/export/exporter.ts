@@ -1,31 +1,185 @@
 import { ExtractedRecord, FieldDefinition } from '@/types';
+import { isRecordMetadataKey } from '@/shared/contracts/record';
 
 export interface CsvExportOptions {
   includeMetadata?: boolean; // If true, includes _id, _page, _extractedAt
   useBom?: boolean;          // Prepends \uFEFF for Excel UTF-8 compatibility
+  delimiter?: string;        // Default: ','
+  orderedColumns?: string[]; // Custom column sequence
+  chunkSize?: number;        // Batch size for streaming
 }
 
 export interface JsonExportOptions {
   includeMetadata?: boolean;
   pretty?: boolean;
+  indent?: number;
   format?: 'json' | 'ndjson';
+  orderedColumns?: string[];
+}
+
+export interface FilenameOptions {
+  datasetName?: string;
+  projectName?: string;
+  format: 'csv' | 'json' | 'ndjson';
+  timestamp?: number;
 }
 
 /**
- * Escapes a string for RFC 4180 CSV compliance
+ * Sanitizes a string into a cross-platform safe filename (Windows, macOS, Linux).
+ */
+export function sanitizeFilename(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[\\/:*?"<>|]/g, ' ')      // Replace illegal OS chars with space
+    .replace(/[^\w\s-]/g, '')           // Strip punctuation
+    .trim()
+    .replace(/\s+/g, '-')               // Replace spaces with hyphens
+    .replace(/-+/g, '-');               // Collapse consecutive hyphens
+}
+
+/**
+ * Generates an appropriate export filename with current or provided timestamp.
+ * e.g. "amazon-laptops-2026-11-01.csv"
+ */
+export function generateExportFilename(options: FilenameOptions): string {
+  const rawBase = (options.datasetName || options.projectName || '').trim();
+  const sanitized = sanitizeFilename(rawBase);
+  const baseName = sanitized.length > 0 ? sanitized : 'pageharvest-export';
+
+  const dateObj = options.timestamp ? new Date(options.timestamp) : new Date();
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const dateStr = `${year}-${month}-${day}`;
+
+  const extension = options.format === 'ndjson' ? 'ndjson' : options.format === 'json' ? 'json' : 'csv';
+
+  return `${baseName}-${dateStr}.${extension}`;
+}
+
+/** A cell whose first visible character can start a spreadsheet formula. */
+const FORMULA_TRIGGER = /^\s*[=+\-@]/;
+
+/**
+ * Signed values that spreadsheets read as data, not as a formula: plain and
+ * scientific numbers, currency amounts, percentages and phone numbers. Letters
+ * (other than an exponent), operators and function calls never match, so anything
+ * able to reference a cell or run a command is still neutralized.
+ */
+const SIGNED_NUMERIC_VALUE =
+  /^[+-]\s?[$€£¥₹]?\s?\d[\d,.\s]*(?:[eE][+-]?\d+)?\s?%?$|^[+-][$€£¥₹]?\.\d+$|^\+?[\d\s().-]*\(\d+\)[\d\s().-]*$/;
+
+function isFormulaLike(text: string): boolean {
+  // A leading tab or carriage return can also begin a formula in some spreadsheets.
+  if (/^[\t\r]/.test(text) && text.trim().length > 0) return true;
+  if (!FORMULA_TRIGGER.test(text)) return false;
+  return !SIGNED_NUMERIC_VALUE.test(text.trim());
+}
+
+/**
+ * Escapes a value for RFC 4180 CSV compliance and neutralizes formula injection.
+ *
+ * JavaScript numbers and booleans are written unchanged. Text that could execute as
+ * a formula is prefixed with an apostrophe and a space; signed numeric text such as
+ * "-5", "-12.50", "+5" or "-$5.00" is data and is left exactly as extracted.
  */
 export function escapeCsvCell(value: unknown): string {
   if (value === null || value === undefined) {
     return '';
   }
 
-  const str = String(value);
-  // If cell contains commas, quotes, or newlines, wrap in quotes and escape internal quotes
-  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+  let str = String(value);
+
+  const isFormula = typeof value === 'string' && isFormulaLike(str);
+  if (isFormula) {
+    str = `' ${str}`;
+  }
+
+  // If cell contains commas, semicolons, tabs, quotes, or newlines, wrap in quotes and escape internal quotes
+  if (
+    str.includes(',') ||
+    str.includes(';') ||
+    str.includes('\t') ||
+    str.includes('"') ||
+    str.includes('\n') ||
+    str.includes('\r') ||
+    isFormula
+  ) {
     return `"${str.replace(/"/g, '""')}"`;
   }
 
   return str;
+}
+
+/**
+ * Resolves column names according to user preferences and ordering.
+ */
+function resolveColumns(
+  records: ExtractedRecord[],
+  fields?: FieldDefinition[],
+  options?: { includeMetadata?: boolean; orderedColumns?: string[] }
+): string[] {
+  if (options?.orderedColumns && options.orderedColumns.length > 0) {
+    return options.orderedColumns;
+  }
+
+  const columnNames = fields && fields.length > 0
+    ? fields.map((f) => f.name)
+    : (() => {
+    // Dynamic keys from records
+    const keySet = new Set<string>();
+    for (const r of records) {
+      Object.keys(r).forEach((k) => keySet.add(k));
+    }
+    return Array.from(keySet);
+  })();
+
+  if (!options?.includeMetadata) {
+    return columnNames.filter((col) => !isRecordMetadataKey(col));
+  }
+
+  return columnNames;
+}
+
+/**
+ * Generator producing CSV content in chunks to support very large datasets.
+ */
+export function* recordsToCsvChunks(
+  records: ExtractedRecord[],
+  fields?: FieldDefinition[],
+  options: CsvExportOptions = {}
+): Generator<string> {
+  if (records.length === 0) {
+    return;
+  }
+
+  const delimiter = options.delimiter || ',';
+  const columnNames = resolveColumns(records, fields, options);
+  const chunkSize = options.chunkSize || 1000;
+
+  // Header line
+  let header = columnNames.map(escapeCsvCell).join(delimiter) + '\r\n';
+  if (options.useBom) {
+    header = `\uFEFF${header}`;
+  }
+  yield header;
+
+  // Stream records in chunks
+  let currentChunk: string[] = [];
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
+    const row = columnNames.map((col) => escapeCsvCell(record[col])).join(delimiter);
+    currentChunk.push(row);
+
+    if (currentChunk.length >= chunkSize) {
+      yield currentChunk.join('\r\n') + '\r\n';
+      currentChunk = [];
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    yield currentChunk.join('\r\n');
+  }
 }
 
 /**
@@ -40,38 +194,11 @@ export function recordsToCsv(
     return '';
   }
 
-  // Determine columns
-  let columnNames: string[] = [];
-  if (fields && fields.length > 0) {
-    columnNames = fields.map((f) => f.name);
-  } else {
-    // Dynamic keys from records
-    const keySet = new Set<string>();
-    for (const r of records) {
-      Object.keys(r).forEach((k) => keySet.add(k));
-    }
-    columnNames = Array.from(keySet);
+  let csv = '';
+  for (const chunk of recordsToCsvChunks(records, fields, options)) {
+    csv += chunk;
   }
-
-  if (!options.includeMetadata) {
-    columnNames = columnNames.filter(
-      (col) => !['_id', '_page', '_extractedAt', 'datasetId'].includes(col)
-    );
-  }
-
-  const lines: string[] = [];
-
-  // Header line
-  lines.push(columnNames.map(escapeCsvCell).join(','));
-
-  // Rows
-  for (const record of records) {
-    const row = columnNames.map((col) => escapeCsvCell(record[col]));
-    lines.push(row.join(','));
-  }
-
-  const csvContent = lines.join('\r\n');
-  return options.useBom ? `\uFEFF${csvContent}` : csvContent;
+  return csv;
 }
 
 /**
@@ -82,18 +209,18 @@ export function recordsToJson(
   fields?: FieldDefinition[],
   options: JsonExportOptions = { includeMetadata: false, pretty: true, format: 'json' }
 ): string {
-  const allowedCols = fields ? fields.map((f) => f.name) : undefined;
+  if (records.length === 0) {
+    return options.format === 'ndjson' ? '' : '[]';
+  }
+
+  const allowedCols = resolveColumns(records, fields, options);
 
   const cleanRecords = records.map((r) => {
     const cleaned: Record<string, unknown> = {};
-    for (const key of Object.keys(r)) {
-      if (!options.includeMetadata && ['_id', '_page', '_extractedAt', 'datasetId'].includes(key)) {
-        continue;
+    for (const key of allowedCols) {
+      if (Object.prototype.hasOwnProperty.call(r, key)) {
+        cleaned[key] = r[key];
       }
-      if (allowedCols && !allowedCols.includes(key)) {
-        continue;
-      }
-      cleaned[key] = r[key];
     }
     return cleaned;
   });
@@ -102,36 +229,5 @@ export function recordsToJson(
     return cleanRecords.map((r) => JSON.stringify(r)).join('\n');
   }
 
-  return JSON.stringify(cleanRecords, null, options.pretty ? 2 : undefined);
-}
-
-/**
- * Triggers a file download in the browser or via Chrome Downloads API.
- */
-export async function downloadExportFile(
-  content: string,
-  filename: string,
-  mimeType: string
-): Promise<void> {
-  const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
-
-  if (typeof chrome !== 'undefined' && chrome.downloads?.download) {
-    const blobUrl = URL.createObjectURL(blob);
-    await chrome.downloads.download({
-      url: blobUrl,
-      filename,
-      saveAs: true,
-    });
-    return;
-  }
-
-  // Fallback for standard browser context / tests
-  if (typeof document !== 'undefined') {
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
+  return JSON.stringify(cleanRecords, null, options.pretty ? (options.indent ?? 2) : undefined);
 }

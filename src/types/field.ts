@@ -17,6 +17,7 @@ export interface FieldDefinition {
   regexGroup?: number;
   defaultValue?: string;
   required?: boolean;
+  transform?: 'none' | 'trim' | 'lowercase' | 'uppercase' | 'capitalize';
 }
 
 export interface DetectedFieldSuggestion {

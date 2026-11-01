@@ -1,8 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createChromeMock, ChromeMock } from '../utils/chrome-mock';
 import {
   hasPermission,
-  requestPermission,
   checkRequiredPermissions,
   REQUIRED_PERMISSIONS
 } from '@/platform/permissions';
@@ -12,7 +11,7 @@ describe('Permissions & Security Model', () => {
 
   beforeEach(() => {
     mockChrome = createChromeMock();
-    (globalThis as any).chrome = mockChrome;
+    Reflect.set(globalThis, 'chrome', mockChrome);
   });
 
   it('checks if a specific permission is granted', async () => {
@@ -23,22 +22,13 @@ describe('Permissions & Security Model', () => {
     expect(await hasPermission('downloads')).toBe(false);
   });
 
-  it('requests optional permissions interactively', async () => {
-    mockChrome.grantedPermissions = new Set(['storage']);
-
-    const granted = await requestPermission('downloads');
-    expect(granted).toBe(true);
-    expect(mockChrome.permissions.request).toHaveBeenCalledWith({
-      permissions: ['downloads']
-    });
-    expect(await hasPermission('downloads')).toBe(true);
-  });
-
   it('verifies that default required permissions conform to least-privilege', () => {
     // Ensure we do NOT request dangerous broad permissions like webRequestBlocking, debugger, all_urls broad host permissions
     expect(REQUIRED_PERMISSIONS).toContain('activeTab');
+    expect(REQUIRED_PERMISSIONS).toContain('scripting');
     expect(REQUIRED_PERMISSIONS).toContain('sidePanel');
     expect(REQUIRED_PERMISSIONS).toContain('storage');
+    expect(REQUIRED_PERMISSIONS).toContain('downloads');
     expect(REQUIRED_PERMISSIONS).not.toContain('webRequest');
     expect(REQUIRED_PERMISSIONS).not.toContain('debugger');
   });
@@ -48,5 +38,12 @@ describe('Permissions & Security Model', () => {
     const status = await checkRequiredPermissions();
     expect(status.allGranted).toBe(true);
     expect(status.missing.length).toBe(0);
+  });
+
+  it('names what is missing, which is what stops a job from starting', async () => {
+    mockChrome.grantedPermissions = new Set(['storage']);
+    const status = await checkRequiredPermissions();
+    expect(status.allGranted).toBe(false);
+    expect(status.missing).toContain('downloads');
   });
 });

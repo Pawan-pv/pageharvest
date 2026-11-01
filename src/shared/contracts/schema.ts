@@ -10,6 +10,7 @@ export const ExtractionSchemaSchema = z.object({
   id: z.string().min(1, 'Schema ID is required'),
   name: z.string().min(1, 'Schema name is required'),
   description: z.string().optional(),
+  projectId: z.string().optional(),
   urlPattern: z.string().min(1, 'URL pattern or wildcard is required'),
   containerSelector: z.string().min(1, 'Container selector is required'),
   fields: z.array(ExtractionFieldSchema).min(1, 'At least one field is required'),

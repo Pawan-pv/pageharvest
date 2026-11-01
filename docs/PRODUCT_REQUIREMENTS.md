@@ -45,6 +45,7 @@
   - `Price / Numeric`: Currencies, numbers with decimals -> Float
   - `Description`: `p`, `[class*="desc"]` -> Text
 - **FR-3.3**: Users can manually add, edit, reorder, or delete fields.
+- **FR-3.6**: A selected field with no value never removes a record. Only a field the user explicitly marks to skip empty rows filters records, and every outcome (detected, kept, missing fields, filtered, failed, duplicate) is shown.
 - **FR-3.4**: Supported extractors: `text`, `attribute`, `href`, `src`, `html`, `number`, `regex`.
 - **FR-3.5**: Supported post-processors: `trim`, `lowercase`, `uppercase`, `capitalize`.
 
@@ -58,13 +59,17 @@
   - Automatically scrolls the window or specific scroll container in increments.
   - Waits for DOM child expansion via MutationObserver.
   - Halts when scroll limit is hit or no new elements load after 3 retries.
+- **FR-4.3a**: URL Template Mode (`url_template`):
+  - Visits numbered URLs built from a template with `{page}` or `{offset}`, a starting page, an increment and a maximum page count, with a preview of the generated URLs.
+  - Stays on the website the job started from. Stops at the limit, on an empty page, or when a page adds nothing new.
 - **FR-4.4**: Configurable delay throttle (default 1500ms, range 200ms–30000ms) to respect host website resources.
 - **FR-4.5**: Circuit Breakers: Hard page cap (default 20, max 500) and instant user "Pause" / "Stop" abort buttons.
 
 ### 3.5 Local-First Persistence & Storage
 - **FR-5.1**: Datasets, schemas/recipes, and execution logs persist in IndexedDB via Dexie.
 - **FR-5.2**: Schema management allows users to save extraction templates per domain and reload them on future visits.
-- **FR-5.3**: Automatic content deduplication via SHA-256 / content hashing prevents duplicate rows from being inserted across pages or scrolls.
+- **FR-5.3**: Automatic content deduplication prevents duplicate rows across pages or scrolls. Two rows are duplicates only if their canonical records are equal; SHA-256 fingerprints only find candidates, so a hash collision can never remove a distinct record.
+- **FR-5.5**: Durable jobs: an acknowledged record survives closing the panel or tab, a service worker restart and a browser restart. An interrupted job can be resumed or discarded, without duplicate records.
 - **FR-5.4**: History tracking logs timestamp, duration, records count, duplicates skipped, and errors for every job run.
 
 ### 3.6 Data Grid & Transformation

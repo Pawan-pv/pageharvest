@@ -3,9 +3,19 @@ import {
   serializeMessage,
   deserializeMessage,
   isValidMessage,
-  ExtensionMessage
+  ExtensionMessage,
+  BatchAckSchema,
 } from '@/contracts/messages';
 import { createMockRecipe, createMockRecord } from '../utils/test-factories';
+import { extractionRecipeSchema } from '@/contracts/schemas';
+
+const identity = {
+  jobId: 'job_1',
+  projectId: 'project_1',
+  datasetId: 'dataset_1',
+  runId: 'run_1',
+  generation: 'gen_1',
+};
 
 describe('Extension Message Protocol', () => {
   it('serializes and deserializes PING / PONG messages', () => {
@@ -33,8 +43,16 @@ describe('Extension Message Protocol', () => {
       type: 'EXTRACT_RECORDS',
       timestamp: Date.now(),
       payload: {
-        recipe,
-        pageNumber: 2
+        identity,
+        recipe: extractionRecipeSchema.parse(recipe),
+        resume: {
+          page: 2,
+          nextSequence: 2,
+          scrollsCompleted: 0,
+          catchUpScrolls: 0,
+          visitedUrls: [],
+          startUrl: 'https://example.com/',
+        },
       }
     };
 
@@ -43,34 +61,81 @@ describe('Extension Message Protocol', () => {
 
     expect(parsed.type).toBe('EXTRACT_RECORDS');
     if (parsed.type === 'EXTRACT_RECORDS') {
-      expect(parsed.payload.pageNumber).toBe(2);
+      expect(parsed.payload.resume.page).toBe(2);
       expect(parsed.payload.recipe.containerSelector).toBe(recipe.containerSelector);
+      expect(parsed.payload.identity).toEqual(identity);
     }
   });
 
-  it('serializes and deserializes EXTRACTION_PROGRESS with extracted records', () => {
+  it('serializes and deserializes RECORD_BATCH with extracted records', () => {
     const record = createMockRecord({ title: 'Gaming Headset', price: 79.99 });
-    const progressMsg: ExtensionMessage = {
-      id: 'msg_prog_1',
-      type: 'EXTRACTION_PROGRESS',
+    const batch: ExtensionMessage = {
+      id: 'msg_batch_1',
+      type: 'RECORD_BATCH',
       timestamp: Date.now(),
       payload: {
+        identity,
+        sequence: 1,
         page: 1,
         records: [record],
-        newRecordsCount: 1,
-        duplicatesCount: 0,
-        isComplete: false
+        stats: { detected: 1, missingFields: 0, filtered: 0, failed: 0, duplicates: 0 },
+        navigation: {
+          nextPage: 2,
+          scrollsCompleted: 0,
+          awaitingNavigation: false,
+          visitedUrls: [],
+          url: 'https://example.com/',
+        },
       }
     };
 
-    const serialized = serializeMessage(progressMsg);
+    const serialized = serializeMessage(batch);
     const parsed = deserializeMessage(serialized);
 
-    expect(parsed.type).toBe('EXTRACTION_PROGRESS');
-    if (parsed.type === 'EXTRACTION_PROGRESS') {
+    expect(parsed.type).toBe('RECORD_BATCH');
+    if (parsed.type === 'RECORD_BATCH') {
       expect(parsed.payload.records.length).toBe(1);
       expect(parsed.payload.records[0].title).toBe('Gaming Headset');
+      expect(parsed.payload.sequence).toBe(1);
     }
+  });
+
+  it('rejects a batch without identity or a sequence number', () => {
+    const base = {
+      id: 'b',
+      type: 'RECORD_BATCH',
+      timestamp: 1,
+      payload: {
+        identity,
+        sequence: 1,
+        page: 1,
+        records: [],
+        stats: { detected: 0, missingFields: 0, filtered: 0, failed: 0, duplicates: 0 },
+        navigation: {
+          nextPage: 2,
+          scrollsCompleted: 0,
+          awaitingNavigation: false,
+          visitedUrls: [],
+          url: 'https://example.com/',
+        },
+      },
+    };
+    expect(isValidMessage(base)).toBe(true);
+
+    const { identity: _identity, ...withoutIdentity } = base.payload;
+    expect(isValidMessage({ ...base, payload: withoutIdentity })).toBe(false);
+
+    const { sequence: _sequence, ...withoutSequence } = base.payload;
+    expect(isValidMessage({ ...base, payload: withoutSequence })).toBe(false);
+  });
+
+  it('validates acknowledgements, so a garbled reply cannot count as durable', () => {
+    expect(
+      BatchAckSchema.safeParse({ status: 'committed', sequence: 1, inserted: 2, duplicates: 0 }).success
+    ).toBe(true);
+    expect(BatchAckSchema.safeParse({ status: 'ok' }).success).toBe(false);
+    expect(BatchAckSchema.safeParse(undefined).success).toBe(false);
+    expect(BatchAckSchema.safeParse({ ok: false, error: 'NO_HANDLER' }).success).toBe(false);
   });
 
   it('validates messages and rejects invalid structure', () => {

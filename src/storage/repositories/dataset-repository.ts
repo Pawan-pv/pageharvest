@@ -1,5 +1,5 @@
 import { PageHarvestDB, db as defaultDb } from '../db';
-import { DatasetEntity, RecordEntity } from '@/types';
+import { DatasetEntity, FieldDefinition, RecordEntity } from '@/types';
 
 export class DatasetRepository {
   constructor(private db: PageHarvestDB = defaultDb) {}
@@ -18,15 +18,7 @@ export class DatasetRepository {
   }
 
   public async addRecords(datasetId: string, records: RecordEntity[]): Promise<void> {
-    await this.db.transaction('rw', [this.db.datasets, this.db.records], async () => {
-      await this.db.records.bulkPut(records);
-      const dataset = await this.db.datasets.get(datasetId);
-      if (dataset) {
-        dataset.recordsCount = await this.db.records.where('datasetId').equals(datasetId).count();
-        dataset.updatedAt = Date.now();
-        await this.db.datasets.put(dataset);
-      }
-    });
+    await this.db.saveExtractedBatch(datasetId, records);
   }
 
   public async getRecordsByDataset(
@@ -34,20 +26,34 @@ export class DatasetRepository {
     limit?: number,
     offset: number = 0
   ): Promise<RecordEntity[]> {
-    let collection = this.db.records.where('datasetId').equals(datasetId);
-    if (offset > 0) {
-      collection = collection.offset(offset);
-    }
-    if (limit !== undefined) {
-      collection = collection.limit(limit);
-    }
-    return collection.toArray();
+    const records = await this.db.getDatasetRecords(datasetId);
+    return records.slice(offset, limit !== undefined ? offset + limit : undefined);
+  }
+
+  /**
+   * Replaces a dataset's rows and columns as one transaction. Rows absent from
+   * `records` are deleted, so this covers cleaning, renames and bulk deletes.
+   * If the transaction fails nothing changes and the promise rejects.
+   */
+  public async applyEdit(
+    datasetId: string,
+    records: RecordEntity[],
+    fields: FieldDefinition[]
+  ): Promise<void> {
+    await this.db.transaction('rw', this.db.datasets, this.db.records, async () => {
+      const keptIds = new Set(records.map((record) => record._id));
+      const existingIds = await this.db.records.where('datasetId').equals(datasetId).primaryKeys();
+      await this.db.records.bulkDelete(existingIds.filter((id) => !keptIds.has(id)));
+      await this.db.records.bulkPut(records.map((record) => ({ ...record, datasetId })));
+      await this.db.datasets.update(datasetId, {
+        fields,
+        recordsCount: records.length,
+        updatedAt: Date.now(),
+      });
+    });
   }
 
   public async deleteDataset(id: string): Promise<void> {
-    await this.db.transaction('rw', [this.db.datasets, this.db.records], async () => {
-      await this.db.records.where('datasetId').equals(id).delete();
-      await this.db.datasets.delete(id);
-    });
+    await this.db.deleteDatasetWithRecords(id);
   }
 }
