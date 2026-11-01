@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Infinite Scrolling - PageHarvest Fixture</title>
+  <style>
+    body { font-family: sans-serif; margin: 1rem; }
+    .scroll-list { display: flex; flex-direction: column; gap: 2rem; }
+    .scroll-card { height: 180px; border: 1px solid #444; padding: 1rem; border-radius: 8px; background: #fafafa; }
+    #scroll-sentinel { height: 40px; margin: 2rem 0; text-align: center; color: #888; }
+  </style>
+</head>
+<body>
+  <h1>Infinite Scrolling Articles</h1>
+  <div id="infinite-container" class="scroll-list">
+    <div class="scroll-card" data-index="1">
+      <h2 class="title">Article #1: Introduction to Web Scraping</h2>
+      <p class="summary">First article summary content...</p>
+    </div>
+    <div class="scroll-card" data-index="2">
+      <h2 class="title">Article #2: DOM Tree Traversal Patterns</h2>
+      <p class="summary">Second article summary content...</p>
+    </div>
+    <div class="scroll-card" data-index="3">
+      <h2 class="title">Article #3: Shadow DOM Isolation</h2>
+      <p class="summary">Third article summary content...</p>
+    </div>
+  </div>
+
+  <div id="scroll-sentinel">Scroll down to load more...</div>
+
+  <script>
+    let currentIndex = 3;
+    const maxItems = 15;
+    let loading = false;
+
+    function loadMore() {
+      if (loading || currentIndex >= maxItems) return;
+      loading = true;
+      setTimeout(() => {
+        const container = document.getElementById('infinite-container');
+        for (let i = 0; i < 3 && currentIndex < maxItems; i++) {
+          currentIndex++;
+          const card = document.createElement('div');
+          card.className = 'scroll-card';
+          card.setAttribute('data-index', String(currentIndex));
+          card.innerHTML = '<h2 class="title">Article #' + currentIndex + ': Dynamic Post</h2><p class="summary">Content loaded via infinite scroll index ' + currentIndex + '</p>';
+          container.appendChild(card);
+        }
+        loading = false;
+        if (currentIndex >= maxItems) {
+          document.getElementById('scroll-sentinel').textContent = 'No more articles to load.';
+        }
+      }, 300);
+    }
+
+    window.addEventListener('scroll', () => {
+      const sentinel = document.getElementById('scroll-sentinel');
+      const rect = sentinel.getBoundingClientRect();
+      if (rect.top <= window.innerHeight + 100) {
+        loadMore();
+      }
+    });
+  </script>
+</body>
+</html>

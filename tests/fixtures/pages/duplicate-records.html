@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Duplicate Records - PageHarvest Fixture</title>
+</head>
+<body>
+  <h1>Product Feed with Duplicate Items</h1>
+  <div class="duplicate-list" id="dup-container">
+    <!-- Item A (Occurrence 1) -->
+    <div class="item-card" data-sku="SKU-DUP-1">
+      <h3 class="title">Wireless Ergonomic Vertical Mouse</h3>
+      <span class="price">$39.99</span>
+      <span class="category">Electronics</span>
+    </div>
+
+    <!-- Item B -->
+    <div class="item-card" data-sku="SKU-UNIQUE-2">
+      <h3 class="title">Aluminum Dual Monitor Arm</h3>
+      <span class="price">$79.99</span>
+      <span class="category">Office</span>
+    </div>
+
+    <!-- Item A (Duplicate Occurrence 2) -->
+    <div class="item-card" data-sku="SKU-DUP-1">
+      <h3 class="title">Wireless Ergonomic Vertical Mouse</h3>
+      <span class="price">$39.99</span>
+      <span class="category">Electronics</span>
+    </div>
+
+    <!-- Item C -->
+    <div class="item-card" data-sku="SKU-UNIQUE-3">
+      <h3 class="title">Felt Desk Pad Dark Grey</h3>
+      <span class="price">$19.99</span>
+      <span class="category">Office</span>
+    </div>
+
+    <!-- Item A (Duplicate Occurrence 3 with extra whitespace) -->
+    <div class="item-card" data-sku="SKU-DUP-1">
+      <h3 class="title">  Wireless Ergonomic Vertical Mouse  </h3>
+      <span class="price"> $39.99 </span>
+      <span class="category">Electronics</span>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Malformed Data - PageHarvest Fixture</title>
+</head>
+<body>
+  <h1>Malformed & Complex Data Fixtures</h1>
+  <div class="problem-container">
+    <!-- Unsanitized script tag & html entities in title -->
+    <div class="problem-item">
+      <h3 class="title">Item with &amp; entity &lt;script&gt;alert('xss')&lt;/script&gt; &amp; &quot;quotes&quot;</h3>
+      <span class="price">USD $ 1,299.95 / unit (special offer!)</span>
+      <span class="notes">Line 1\nLine 2 with \t tabs and    extra spaces</span>
+    </div>
+
+    <!-- Negative and scientific prices or complex currency symbols -->
+    <div class="problem-item">
+      <h3 class="title">European Pricing &#8364;59,99 &amp; Discount -15%</h3>
+      <span class="price">&euro; 59,99</span>
+      <span class="notes">Non-standard separator</span>
+    </div>
+
+    <!-- Missing title element completely -->
+    <div class="problem-item">
+      <span class="price">$42.00</span>
+      <span class="notes">No title header element here</span>
+    </div>
+
+    <!-- Emoji and high-unicode text -->
+    <div class="problem-item">
+      <h3 class="title">🔥 Hot Deal 🚀 Special Edition 2026 📦</h3>
+      <span class="price">&#165; 15,000</span>
+      <span class="notes">Yen currency symbol &amp; Japanese Kanji: &#26481;&#20140;</span>
+    </div>
+  </div>
+</body>
+</html>

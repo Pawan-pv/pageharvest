@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Delayed Content (1.5s) - PageHarvest Fixture</title>
+</head>
+<body>
+  <h1>Delayed Content Feed</h1>
+  <p>Items appear after an asynchronous 1500ms network emulation delay.</p>
+  
+  <div id="delayed-container" class="items-list">
+    <div id="skeleton-loader">Fetching slow remote database records...</div>
+  </div>
+
+  <script>
+    setTimeout(() => {
+      const container = document.getElementById('delayed-container');
+      container.innerHTML = `
+        <div class="delayed-item" data-id="delay-01">
+          <h2 class="title">Delayed Product Alpha</h2>
+          <span class="price">$149.00</span>
+        </div>
+        <div class="delayed-item" data-id="delay-02">
+          <h2 class="title">Delayed Product Beta</h2>
+          <span class="price">$249.00</span>
+        </div>
+        <div class="delayed-item" data-id="delay-03">
+          <h2 class="title">Delayed Product Gamma</h2>
+          <span class="price">$349.00</span>
+        </div>
+      `;
+    }, 1500);
+  </script>
+</body>
+</html>

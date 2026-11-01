@@ -1,0 +1,40 @@
+export type FieldExtractorType =
+  | 'text'
+  | 'attribute'
+  | 'href'
+  | 'src'
+  | 'html'
+  | 'number'
+  | 'regex';
+
+export interface FieldDefinition {
+  id: string;
+  name: string;
+  selector: string;
+  extractor: FieldExtractorType;
+  attributeName?: string;
+  regexPattern?: string;
+  regexGroup?: number;
+  defaultValue?: string;
+  required?: boolean;
+}
+
+export interface DetectedFieldSuggestion {
+  name: string;
+  selector: string;
+  extractor: FieldExtractorType;
+  attributeName?: string;
+  sampleValue: string;
+}
+
+export interface CandidateSample {
+  tag: string;
+  previewText: string;
+  classes: string[];
+}
+
+export interface RepeatedPatternCandidate {
+  containerSelector: string;
+  count: number;
+  sampleElements: CandidateSample[];
+}

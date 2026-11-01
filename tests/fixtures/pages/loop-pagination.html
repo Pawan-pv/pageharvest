@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Loop Pagination - PageHarvest Fixture</title>
+</head>
+<body>
+  <h1>Cyclic Search Results</h1>
+  <div class="product-grid" id="products">
+    <div class="product-item">
+      <h3 class="title">Cyclic Product</h3>
+      <span class="price">$99.00</span>
+    </div>
+  </div>
+  <div class="pagination">
+    <!-- Points back to itself to test infinite loop prevention -->
+    <a id="cyclic-next" class="next" href="/loop-pagination.html">Next Page</a>
+  </div>
+</body>
+</html>

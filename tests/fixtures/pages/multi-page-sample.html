@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Multi-Page 90 Records Fixture - PageHarvest</title>
+</head>
+<body>
+  <h1>Product Catalog</h1>
+  <div id="catalog-container" class="products-container"></div>
+  <div class="pagination-bar">
+    <button id="prev-btn" disabled>Previous</button>
+    <span id="page-indicator">Page 1 of 4</span>
+    <button id="next-btn">Next</button>
+  </div>
+
+  <script>
+    const pageCounts = [24, 24, 24, 18];
+    let currentPage = 1;
+
+    function renderPage(pageNum) {
+      currentPage = pageNum;
+      const count = pageCounts[pageNum - 1];
+      const container = document.getElementById('catalog-container');
+      container.innerHTML = '';
+
+      for (let i = 1; i <= count; i++) {
+        const item = document.createElement('div');
+        item.className = 'product-card';
+        item.setAttribute('data-id', 'p' + pageNum + '-' + i);
+        item.innerHTML = `
+          <h2 class="title">Product P${pageNum}-${i}</h2>
+          <span class="price">$${(pageNum * 10 + i)}.99</span>
+          <a class="link" href="/item/p${pageNum}-${i}">Details</a>
+        `;
+        container.appendChild(item);
+      }
+
+      document.getElementById('page-indicator').textContent = 'Page ' + pageNum + ' of 4';
+      document.getElementById('prev-btn').disabled = (pageNum === 1);
+      const nextBtn = document.getElementById('next-btn');
+      if (pageNum >= 4) {
+        nextBtn.disabled = true;
+        nextBtn.setAttribute('aria-disabled', 'true');
+      } else {
+        nextBtn.disabled = false;
+        nextBtn.removeAttribute('aria-disabled');
+      }
+    }
+
+    document.getElementById('next-btn').addEventListener('click', () => {
+      if (currentPage < 4) {
+        renderPage(currentPage + 1);
+      }
+    });
+
+    renderPage(1);
+  </script>
+</body>
+</html>

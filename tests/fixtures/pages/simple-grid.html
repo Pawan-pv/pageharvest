@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Simple Product Grid - PageHarvest Fixture</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+    .product-card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
+    .product-title { font-size: 1.2rem; font-weight: bold; margin: 0.5rem 0; }
+    .product-price { color: #2e7d32; font-weight: 600; }
+    .product-rating { color: #f57c00; font-size: 0.9rem; }
+    .product-link { display: inline-block; margin-top: 0.5rem; color: #1976d2; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Featured Products</h1>
+    <p>Simple 3-item grid for basic extraction verification</p>
+  </header>
+  <main>
+    <div class="product-grid" data-testid="products-container">
+      <div class="product-card" data-id="p101">
+        <img class="product-img" src="https://images.example.com/p101.jpg" alt="Ergonomic Mechanical Keyboard" width="150" height="150">
+        <h2 class="product-title">Ergonomic Mechanical Keyboard</h2>
+        <div class="product-price">$129.99</div>
+        <div class="product-rating">4.8 / 5 (120 reviews)</div>
+        <a class="product-link" href="/products/p101">View Details</a>
+      </div>
+
+      <div class="product-card" data-id="p102">
+        <img class="product-img" src="https://images.example.com/p102.jpg" alt="Ultra-Wide Gaming Monitor" width="150" height="150">
+        <h2 class="product-title">Ultra-Wide Gaming Monitor</h2>
+        <div class="product-price">$349.50</div>
+        <div class="product-rating">4.6 / 5 (85 reviews)</div>
+        <a class="product-link" href="/products/p102">View Details</a>
+      </div>
+
+      <div class="product-card" data-id="p103">
+        <img class="product-img" src="https://images.example.com/p103.jpg" alt="Wireless Noise-Cancelling Headphones" width="150" height="150">
+        <h2 class="product-title">Wireless Noise-Cancelling Headphones</h2>
+        <div class="product-price">$89.00</div>
+        <div class="product-rating">4.3 / 5 (310 reviews)</div>
+        <a class="product-link" href="/products/p103">View Details</a>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

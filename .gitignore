@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# WXT build outputs
+.output/
+.wxt/
+dist/
+
+# Test and coverage
+coverage/
+test-results/
+playwright-report/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log
+*.tsbuildinfo
+
+# Env files
+.env
+.env.local

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Load More Pagination - PageHarvest Fixture</title>
+</head>
+<body>
+  <h1>Product Feed with "Load More"</h1>
+  <div id="product-feed" class="feed">
+    <div class="feed-item" data-id="batch1-1">
+      <h3 class="name">Feed Product 1</h3>
+      <span class="price">$15.00</span>
+    </div>
+    <div class="feed-item" data-id="batch1-2">
+      <h3 class="name">Feed Product 2</h3>
+      <span class="price">$25.00</span>
+    </div>
+  </div>
+
+  <button id="load-more-btn" type="button">Load More Products</button>
+
+  <script>
+    let batch = 1;
+    const maxBatches = 3;
+    document.getElementById('load-more-btn').addEventListener('click', () => {
+      if (batch >= maxBatches) return;
+      batch++;
+      const feed = document.getElementById('product-feed');
+      const item1 = document.createElement('div');
+      item1.className = 'feed-item';
+      item1.setAttribute('data-id', 'batch' + batch + '-1');
+      item1.innerHTML = '<h3 class="name">Feed Product ' + (batch * 2 - 1) + '</h3><span class="price">$' + (batch * 20) + '.00</span>';
+      
+      const item2 = document.createElement('div');
+      item2.className = 'feed-item';
+      item2.setAttribute('data-id', 'batch' + batch + '-2');
+      item2.innerHTML = '<h3 class="name">Feed Product ' + (batch * 2) + '</h3><span class="price">$' + (batch * 22) + '.50</span>';
+
+      feed.appendChild(item1);
+      feed.appendChild(item2);
+
+      if (batch >= maxBatches) {
+        const btn = document.getElementById('load-more-btn');
+        btn.disabled = true;
+        btn.textContent = 'All products loaded';
+      }
+    });
+  </script>
+</body>
+</html>

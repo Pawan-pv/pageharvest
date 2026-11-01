@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dynamic Client Content - PageHarvest Fixture</title>
+</head>
+<body>
+  <h1>Client-Side Rendered Products</h1>
+  <div id="dynamic-app">
+    <div id="loading-spinner">Loading dynamic catalog...</div>
+    <div id="rendered-cards" class="card-grid" style="display: none;"></div>
+  </div>
+
+  <script>
+    // Simulate Single Page Application (SPA) render
+    window.addEventListener('DOMContentLoaded', () => {
+      const items = [
+        { id: 'spa-1', name: 'Smart Watch Series 9', price: '$399.00', inStock: true },
+        { id: 'spa-2', name: 'Fitness Band Pro', price: '$79.95', inStock: true },
+        { id: 'spa-3', name: 'Wireless Charging Pad', price: '$29.99', inStock: false }
+      ];
+
+      setTimeout(() => {
+        const spinner = document.getElementById('loading-spinner');
+        const grid = document.getElementById('rendered-cards');
+        spinner.style.display = 'none';
+        grid.style.display = 'grid';
+
+        items.forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'spa-product-card';
+          card.setAttribute('data-id', item.id);
+          card.innerHTML = `
+            <h3 class="spa-title">${item.name}</h3>
+            <span class="spa-price">${item.price}</span>
+            <span class="spa-status">${item.inStock ? 'In Stock' : 'Out of Stock'}</span>
+          `;
+          grid.appendChild(card);
+        });
+      }, 50);
+    });
+  </script>
+</body>
+</html>

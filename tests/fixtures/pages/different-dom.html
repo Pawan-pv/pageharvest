@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Different DOM Structures - PageHarvest Fixture</title>
+</head>
+<body>
+  <h1>Heterogeneous DOM Structures</h1>
+
+  <!-- Table structure -->
+  <h2>Data Table</h2>
+  <table id="price-table" border="1">
+    <thead>
+      <tr><th>Item</th><th>SKU</th><th>Price</th><th>Stock</th></tr>
+    </thead>
+    <tbody>
+      <tr class="table-row">
+        <td class="col-name">Widget Alpha</td>
+        <td class="col-sku">W-01</td>
+        <td class="col-price">$12.50</td>
+        <td class="col-stock">In Stock</td>
+      </tr>
+      <tr class="table-row">
+        <td class="col-name">Widget Beta</td>
+        <td class="col-sku">W-02</td>
+        <td class="col-price">$24.00</td>
+        <td class="col-stock">Low Stock</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Definition List structure -->
+  <h2>Specification List</h2>
+  <dl class="spec-list">
+    <div class="spec-entry">
+      <dt class="spec-term">CPU</dt>
+      <dd class="spec-desc">Octa-Core 3.5GHz</dd>
+    </div>
+    <div class="spec-entry">
+      <dt class="spec-term">RAM</dt>
+      <dd class="spec-desc">32GB DDR5</dd>
+    </div>
+  </dl>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Broken Images - PageHarvest Fixture</title>
+</head>
+<body>
+  <h1>Product Cards with Image Edge Cases</h1>
+  <div class="gallery">
+    <!-- Valid Image -->
+    <div class="gallery-card">
+      <img class="thumb" src="https://example.com/valid-image.png" alt="Valid Image">
+      <span class="caption">Valid Image Card</span>
+    </div>
+
+    <!-- 404 Image -->
+    <div class="gallery-card">
+      <img class="thumb" src="/non-existent-404.jpg" alt="Broken 404 Image">
+      <span class="caption">404 Broken Image</span>
+    </div>
+
+    <!-- Missing src attribute -->
+    <div class="gallery-card">
+      <img class="thumb" alt="Missing SRC Image">
+      <span class="caption">No src Attribute</span>
+    </div>
+
+    <!-- Empty string src -->
+    <div class="gallery-card">
+      <img class="thumb" src="" alt="Empty SRC Image">
+      <span class="caption">Empty src String</span>
+    </div>
+
+    <!-- Lazy loaded with data-src -->
+    <div class="gallery-card">
+      <img class="thumb" data-src="https://example.com/lazy-actual.png" alt="Lazy Image">
+      <span class="caption">Lazy data-src Image</span>
+    </div>
+  </div>
+</body>
+</html>
