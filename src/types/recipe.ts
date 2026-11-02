@@ -28,6 +28,7 @@ export interface ExtractionRecipe {
   containerSelector: string;
   fields: FieldDefinition[];
   pagination?: ExtractionPaginationConfig;
+  dedupeFields?: string[];
   createdAt: number;
   updatedAt: number;
 }

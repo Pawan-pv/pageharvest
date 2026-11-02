@@ -8,9 +8,13 @@ import {
   extensionMessageSchema,
 } from '@/contracts/messages';
 import { fieldDefinitionSchema } from '@/contracts/schemas';
+import { ListCandidate } from '@/shared/contracts/message';
+import { detectLinkRegions, linkFields } from '@/core/extraction/link-extractor';
+import { detectTables, tableFields } from '@/core/extraction/table-extractor';
+import { DetectedListResult } from '@/types/detection';
 import {
   autoDetectLists,
-  detectFieldsInContainer,
+  discoverFieldsInCluster,
   detectListFromSelection,
   suggestionsToFieldDefinitions,
 } from '@/core/detection';
@@ -79,6 +83,20 @@ interface ActiveRun {
   resumeWaiters: Array<() => void>;
   nextSequence: number;
   settled: Promise<void>;
+}
+
+function listCandidateOf(list: DetectedListResult): ListCandidate {
+  return {
+    containerSelector: list.containerSelector,
+    matchCount: list.itemCount,
+    sampleSnippets: list.sampleElements.map((sample) => sample.previewText),
+    name: list.name,
+    kind: 'list',
+    credible: list.credible,
+    confidence: list.confidence,
+    evidence: list.evidence,
+    suggestedFields: list.availableFields.filter((field) => field.suggested).map((field) => field.name),
+  };
 }
 
 export function createContentWorkflowCoordinator(
@@ -254,44 +272,61 @@ export function createContentWorkflowCoordinator(
   return {
     async detectRepeatedElements(message) {
       const targetSelector = message.payload?.targetSelector;
-      const result = targetSelector
-        ? (() => {
-            const target = root.querySelector(targetSelector);
-            if (!target) {
-              throw new Error(`The selected element could not be found for selector "${targetSelector}".`);
-            }
-            return detectListFromSelection(target);
-          })()
-        : autoDetectLists(root)[0] ?? null;
+      const mode = message.payload?.mode;
+      let candidates: ListCandidate[];
 
-      if (!result) {
+      if (mode === 'table') {
+        candidates = detectTables(root);
+        if (candidates.length === 0) throw new Error('No data table was found on this page.');
+      } else if (mode === 'links') {
+        candidates = detectLinkRegions(root);
+        if (candidates.length === 0) throw new Error('No links were found on this page.');
+      } else if (targetSelector) {
+        const target = root.querySelector(targetSelector);
+        if (!target) {
+          throw new Error(`The selected element could not be found for selector "${targetSelector}".`);
+        }
+        const picked = detectListFromSelection(target);
+        candidates = picked ? [listCandidateOf(picked)] : [];
+      } else {
+        candidates = autoDetectLists(root).map(listCandidateOf);
+      }
+
+      if (candidates.length === 0) {
         throw new Error('No repeated list or table rows were detected on this page.');
       }
 
+      const [best] = candidates;
       return publish({
         id: messageId('repeated'),
         type: 'REPEATED_ELEMENTS_DETECTED',
         timestamp: Date.now(),
         payload: {
-          containerSelector: result.containerSelector,
-          matchCount: result.itemCount,
-          sampleSnippets: result.sampleElements.map((sample) => sample.previewText),
+          containerSelector: best.containerSelector,
+          matchCount: best.matchCount,
+          sampleSnippets: best.sampleSnippets,
+          candidates,
+          credible: best.credible,
         },
       });
     },
 
     async detectFields(message) {
       const containers = Array.from(root.querySelectorAll(message.payload.containerSelector));
-      const firstContainer = containers[0];
-      if (!firstContainer) {
+      if (containers.length === 0) {
         throw new Error(
           `No elements matched the container selector "${message.payload.containerSelector}".`
         );
       }
 
-      const suggestions = suggestionsToFieldDefinitions(detectFieldsInContainer(firstContainer)).map(
-        (field) => fieldDefinitionSchema.parse(field)
-      );
+      const { containerSelector, kind } = message.payload;
+      const definitions =
+        kind === 'table'
+          ? tableFields(containerSelector, root)
+          : kind === 'links'
+            ? linkFields(containerSelector, root)
+            : suggestionsToFieldDefinitions(discoverFieldsInCluster(containers));
+      const suggestions = definitions.map((field) => fieldDefinitionSchema.parse(field));
       return publish({
         id: messageId('fields'),
         type: 'FIELDS_DETECTED',

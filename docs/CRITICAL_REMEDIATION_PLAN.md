@@ -2,6 +2,12 @@
 
 Date: 2026-11-02. Baseline commit: `b0cf556`. The remediation is in `7f532cc` and `5888574` on `main`.
 
+## Update: Trustworthy Extraction milestone
+
+This plan covers the persistence and job work. The extraction work that followed is on branch `feat/trustworthy-extraction`, with results in [REAL_WORLD_TEST_BENCHMARK.md](REAL_WORLD_TEST_BENCHMARK.md) and [PERFORMANCE_AND_COVERAGE.md](PERFORMANCE_AND_COVERAGE.md), and decisions in ADR-025 to ADR-028.
+
+**Correction to the audit that started that work:** it reported `€1.234,56` and `1 234,56 €` as extraction errors. They were not. It had tested `parseNumberValue`, which extraction does not use. Those errors affected only field samples and the Normalize tool. The real extraction parser had other errors, which the audit missed, and all of them are now fixed.
+
 ## Release decision: FUNCTIONAL MVP
 
 Every P0, P1 and P2 finding below is fixed and tested on the production path, including in real Chromium. It is not called a release candidate yet, because these are still open:
@@ -66,7 +72,7 @@ See [storage-schema.md](architecture/storage-schema.md), section 2.
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
-| Unit and integration | PASS | 670 tests in 64 files |
+| Unit and integration | PASS | 685 tests in 64 files on `main` |
 | TypeScript | PASS | `tsc --noEmit` on the final code |
 | ESLint | PASS | `eslint .` on the final code |
 | Production build | PASS | `wxt build` on the final code |

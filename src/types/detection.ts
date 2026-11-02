@@ -40,6 +40,8 @@ export interface DiscoveredField {
   confidence: number;
   occurrences: number;
   coverage: number;
+  sampleSize: number;
+  suggested: boolean;
   required?: boolean;
 }
 
@@ -65,6 +67,10 @@ export interface RepeatedPatternCandidate {
 }
 
 export interface DetectedListResult {
+  /** Whether this looks like data rather than navigation or a promotion. */
+  credible: boolean;
+  /** The observations behind the confidence, in words a user can check. */
+  evidence: string[];
   name: string;
   containerSelector: string;
   parentSelector: string;

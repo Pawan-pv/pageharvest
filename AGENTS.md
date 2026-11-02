@@ -19,6 +19,9 @@ Before modifying any file, agents must read the relevant architectural documenta
 | [IMPLEMENTATION_STATUS.md](file:///c:/myProject/extension/docs/IMPLEMENTATION_STATUS.md) | Implementation roadmap, task DAG, dependency chains, and parallel execution tracks. |
 | [TEST_STRATEGY.md](file:///c:/myProject/extension/docs/TEST_STRATEGY.md) | TDD methodology, test pyramid, naming standards, coverage gates, and fixture layout. |
 | [TEST_MATRIX.md](file:///c:/myProject/extension/docs/TEST_MATRIX.md) | Comprehensive mapping of requirements to test suites, edge cases, and failure modes. |
+| [REAL_WORLD_TEST_BENCHMARK.md](file:///c:/myProject/extension/docs/REAL_WORLD_TEST_BENCHMARK.md) | Permitted real pages, how extraction accuracy is measured, and the latest results. |
+| [INDEPENDENT_REVIEW_CHECKLIST.md](file:///c:/myProject/extension/docs/INDEPENDENT_REVIEW_CHECKLIST.md) | What another engineer should check in the extraction work, including known weak points. |
+| [PERFORMANCE_AND_COVERAGE.md](file:///c:/myProject/extension/docs/PERFORMANCE_AND_COVERAGE.md) | Performance and coverage baselines, and how to reproduce them. |
 | [TEST_RUNBOOK.md](file:///c:/myProject/extension/docs/TEST_RUNBOOK.md) | Step-by-step commands to run, watch, debug tests and generate coverage reports. |
 | [INTEGRATION_GUIDE.md](file:///c:/myProject/extension/docs/INTEGRATION_GUIDE.md) | Detailed protocols and code snippets for integrating with shared contracts, background worker, and storage. |
 

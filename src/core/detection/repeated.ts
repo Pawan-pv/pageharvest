@@ -1,6 +1,6 @@
 import { RepeatedPatternCandidate, CandidateSample } from '@/types';
 import { filterMeaningfulClasses, escapeCss, isDynamicId } from '@/utils/selector';
-import { normalizeText } from '@/utils/dom';
+import { visibleText } from '@/utils/dom';
 
 /**
  * Computes a structural signature for an element based on its tag, classes, and immediate children tags.
@@ -21,7 +21,7 @@ export function getElementSignature(el: Element): string {
 export function createCandidateSample(el: Element): CandidateSample {
   return {
     tag: el.tagName.toLowerCase(),
-    previewText: normalizeText(el.textContent).slice(0, 100),
+    previewText: visibleText(el).slice(0, 100),
     classes: filterMeaningfulClasses(el.classList),
   };
 }

@@ -3,11 +3,7 @@ import { FileSpreadsheet, FileJson, Download, X } from 'lucide-react';
 import { Alert } from '@/components/common/Alert';
 import { Button } from '@/components/common/Button';
 import { ExtractedRecord, FieldDefinition, Dataset } from '@/types';
-import {
-  recordsToCsv,
-  recordsToJson,
-  generateExportFilename,
-} from '@/core/export/exporter';
+import { recordsToCsv, recordsToJson, generateExportFilename, withValueDetails } from '@/core/export/exporter';
 import { triggerDownload } from '@/platform/downloads';
 import { SettingsRepository } from '@/storage/repositories/settings-repository';
 
@@ -34,6 +30,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   const [prettyJson, setPrettyJson] = useState(true);
   const [jsonIndent, setJsonIndent] = useState(2);
   const [includeMetadata, setIncludeMetadata] = useState(false);
+  const [includeValueDetails, setIncludeValueDetails] = useState(false);
   const [customFilename, setCustomFilename] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -74,22 +71,31 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     setIsExporting(true);
     setExportError(null);
     try {
+      const details = includeValueDetails ? withValueDetails(records, fields) : null;
+      const exportRecords = details?.records ?? records;
+      const exportFields = details ? details.fields ?? fields : fields;
+      const orderedColumns = details
+        ? activeColumnOrder?.flatMap((column) => [
+            column,
+            ...details.detailColumns.filter((name) => name.startsWith(`${column} (`)),
+          ])
+        : activeColumnOrder;
       let result;
       if (format === 'csv') {
-        const csv = recordsToCsv(records, fields, {
+        const csv = recordsToCsv(exportRecords, exportFields, {
           useBom: includeBom,
           delimiter,
           includeMetadata,
-          orderedColumns: activeColumnOrder,
+          orderedColumns,
         });
         result = await triggerDownload({ content: csv, filename, mimeType: 'text/csv' });
       } else {
-        const json = recordsToJson(records, fields, {
+        const json = recordsToJson(exportRecords, exportFields, {
           pretty: format === 'json' && prettyJson,
           indent: jsonIndent || 2,
           format,
           includeMetadata,
-          orderedColumns: activeColumnOrder,
+          orderedColumns,
         });
         const mimeType = format === 'ndjson' ? 'application/x-ndjson' : 'application/json';
         result = await triggerDownload({ content: json, filename, mimeType });
@@ -238,6 +244,17 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
               className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500"
             />
           </div>
+
+          {/* How numbers were read */}
+          <label className="flex items-center justify-between cursor-pointer">
+            <span className="text-slate-700">Include original text and currency for numbers</span>
+            <input
+              type="checkbox"
+              checked={includeValueDetails}
+              onChange={(e) => setIncludeValueDetails(e.target.checked)}
+              className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500"
+            />
+          </label>
 
           {/* Filename Preview */}
           <div className="flex flex-col gap-1">

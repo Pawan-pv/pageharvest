@@ -42,9 +42,7 @@ import { Badge } from '@/components/common/Badge';
 import { EmptyState } from '@/components/common/EmptyState';
 import { isRecordMetadataKey } from '@/shared/contracts/record';
 import { ExtractedRecord, FieldDefinition, Dataset } from '@/types';
-import {
-  recordsToCsv,
-} from '@/core/export/exporter';
+import { recordsToCsv, countValuesNeedingReview } from '@/core/export/exporter';
 import {
   removeDuplicates,
   removeEmptyRows,
@@ -181,6 +179,8 @@ export const DataTable: React.FC<DataTableProps> = ({
     setCleaningFeedback(msg);
     setTimeout(() => setCleaningFeedback(null), 3000);
   }, []);
+
+  const valuesNeedingReview = useMemo(() => countValuesNeedingReview(currentRecords), [currentRecords]);
 
   // Derive visible fields
   const visibleFields = useMemo(() => {
@@ -645,6 +645,14 @@ export const DataTable: React.FC<DataTableProps> = ({
       {gridError && (
         <Alert variant="error" onDismiss={() => setGridError(null)}>
           {gridError}
+        </Alert>
+      )}
+
+      {valuesNeedingReview > 0 && (
+        <Alert variant="warning">
+          {valuesNeedingReview} {valuesNeedingReview === 1 ? 'value' : 'values'} could not be read as one
+          certain number, so {valuesNeedingReview === 1 ? 'it was' : 'they were'} kept as written. Export with
+          the original text and currency to see why.
         </Alert>
       )}
 

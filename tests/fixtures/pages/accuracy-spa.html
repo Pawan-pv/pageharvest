@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Client-side paging - PageHarvest Fixture</title>
+</head>
+<body>
+<h1>Pages change without a reload</h1>
+<div class="spa-list" id="list"></div>
+<nav class="pagination"><a id="next" class="next" href="#" rel="next">Next</a></nav>
+<script>
+  const pages = [
+    ['Spa One', 'Spa Two', 'Spa Three'],
+    ['Spa Four', 'Spa Five', 'Spa Six'],
+    ['Spa Seven', 'Spa Eight'],
+  ];
+  let current = 0;
+  const list = document.getElementById('list');
+  const next = document.getElementById('next');
+  function render() {
+    list.innerHTML = pages[current]
+      .map((name, i) => '<div class="spa-card"><h3>' + name + '</h3><span class="price">$' + (current + 1) + '.' + i + '0</span></div>')
+      .join('');
+    if (current === pages.length - 1) next.remove();
+  }
+  next.addEventListener('click', (event) => {
+    event.preventDefault();
+    current += 1;
+    history.pushState({}, '', '?page=' + (current + 1));
+    setTimeout(render, 120);
+  });
+  render();
+</script>
+</body>
+</html>

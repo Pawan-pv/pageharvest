@@ -1,6 +1,8 @@
 import { ExtractionRecipe, ExtractedRecord, FieldDefinition } from '@/types';
 import { ExtractionField, ExtractionSchema } from '@/shared/contracts';
-import { normalizeFieldValue } from './normalizer';
+import { normalizeFieldValue, normalizeText, pageLocaleOf } from './normalizer';
+import { parseNumberDetailed, NumberParseResult } from '@/utils/number-parser';
+import { readTableCell } from './table-extractor';
 import { DuplicateDetector, generateRecordSignature } from './duplicate-detector';
 import { validateExtractionInput, validateRecord, isValidCssSelector } from './validator';
 import {
@@ -39,6 +41,8 @@ function normalizeExtractor(value: string): ExtendedFieldExtractorType {
     case 'html':
     case 'number':
     case 'regex':
+    case 'table_cell':
+    case 'link_text':
       return value;
     default:
       return 'text';
@@ -67,6 +71,46 @@ export interface ExtractionResult {
   metadata?: ExtractionMetadata;
 }
 
+function resolveFieldTarget(
+  element: Element,
+  field: FieldDefinition | ExtractionField | ExtractionFieldConfig
+): Element | null {
+  const sel = field.selector ? field.selector.trim() : '';
+  if (!sel || sel === '.' || sel === ':scope') return element;
+  try {
+    return element.matches && element.matches(sel) ? element : element.querySelector(sel);
+  } catch {
+    return null;
+  }
+}
+
+function isNumberField(field: FieldDefinition | ExtractionField | ExtractionFieldConfig): boolean {
+  const extractor = (field.extractor || 'text').toLowerCase();
+  return extractor === 'number' || extractor === 'numeric';
+}
+
+/**
+ * Reads a number field once, returning the value and how it was read. The note is stored
+ * with the row, so the original text, the currency and anything uncertain are never lost
+ * when the cell holds only a number.
+ */
+function readNumberField(
+  container: Element,
+  field: FieldDefinition | ExtractionField | ExtractionFieldConfig
+): { value: string | number | boolean | null; note: NumberParseResult | null } {
+  const fallback = field.defaultValue !== undefined ? field.defaultValue : null;
+  const target = resolveFieldTarget(container, field);
+  if (!target) return { value: fallback, note: null };
+
+  const text = normalizeText((target as HTMLElement).innerText || target.textContent);
+  if (!text) return { value: fallback, note: null };
+
+  const note = parseNumberDetailed(text, { locale: pageLocaleOf(target) });
+  // A range or an uncertain value stays as its text. It is never replaced by a guess.
+  const value = note.status === 'ok' ? note.value : note.status === 'invalid' ? fallback : text;
+  return { value, note };
+}
+
 /**
  * Extracts a single field value from a container or target DOM element.
  * Safely handles invalid CSS selectors and missing elements without crashing.
@@ -80,18 +124,7 @@ export function extractFieldValue(
     return field.defaultValue !== undefined ? field.defaultValue : null;
   }
 
-  const sel = field.selector ? field.selector.trim() : '';
-  const targetEl = !sel || sel === '.' || sel === ':scope'
-    ? element
-    : (() => {
-      try {
-        return element.matches && element.matches(sel)
-          ? element
-          : element.querySelector(sel);
-      } catch {
-        return null;
-      }
-    })();
+  const targetEl = resolveFieldTarget(element, field);
 
   if (!targetEl) {
     return field.defaultValue !== undefined ? field.defaultValue : null;
@@ -99,6 +132,21 @@ export function extractFieldValue(
 
   let rawValue: unknown;
   const extractor = (field.extractor || 'text').toLowerCase();
+
+  if (extractor === 'table_cell') {
+    return readTableCell(targetEl, field.columnIndex ?? 0) ?? field.defaultValue ?? null;
+  }
+  if (extractor === 'link_text') {
+    const text = normalizeText(targetEl.textContent);
+    return (
+      text ||
+      normalizeText(targetEl.getAttribute('aria-label')) ||
+      normalizeText(targetEl.querySelector('img[alt]')?.getAttribute('alt')) ||
+      normalizeText(targetEl.getAttribute('title')) ||
+      field.defaultValue ||
+      null
+    );
+  }
 
   switch (extractor) {
     case 'text':
@@ -157,8 +205,12 @@ export function extractFieldValue(
       rawValue = targetEl.textContent;
   }
 
+  // A <base> tag changes what relative URLs mean, and only the element knows about it. This
+  // runs for every field of every row, so it must not search the document.
+  const hasBaseTag = targetEl.ownerDocument !== null && targetEl.baseURI !== targetEl.ownerDocument.URL;
+
   return normalizeFieldValue(rawValue, field.extractor as ExtendedFieldExtractorType, {
-    baseUrl,
+    baseUrl: hasBaseTag ? targetEl.baseURI : baseUrl,
     regexPattern: field.regexPattern,
     regexGroup: field.regexGroup,
     defaultValue: field.defaultValue,
@@ -209,6 +261,7 @@ function resolveFieldDefinitions(input: ExtractionInput): ResolvedFieldDefinitio
         defaultValue: f.defaultValue,
         required: f.required ?? false,
         transform: getFieldTransform(f),
+        columnIndex: f.columnIndex,
       });
     }
   }
@@ -228,6 +281,7 @@ function resolveFieldDefinitions(input: ExtractionInput): ResolvedFieldDefinitio
         defaultValue: f.defaultValue !== undefined ? f.defaultValue : existing?.defaultValue,
         required: f.required !== undefined ? f.required : (existing?.required ?? false),
         transform: f.transform || existing?.transform || 'trim',
+        columnIndex: f.columnIndex ?? existing?.columnIndex,
       });
     }
   }
@@ -247,6 +301,20 @@ interface ExtractFromElementsOptions {
    * Keyed by content as well as element, so a recycled virtualized row is re-read.
    */
   elementMemory?: WeakMap<Element, string>;
+}
+
+/**
+ * Whether a later read of an element only added values to an earlier read. If any value
+ * changed, the element now holds something else, as a recycled row in a long list does.
+ */
+function fillsInValues(previous: string, current: string): boolean {
+  try {
+    const before = JSON.parse(previous) as Array<[string, unknown]>;
+    const after = new Map(JSON.parse(current) as Array<[string, unknown]>);
+    return after.size > before.length && before.every(([key, value]) => after.get(key) === value);
+  } catch {
+    return false;
+  }
 }
 
 function isEmptyValue(value: unknown): boolean {
@@ -283,6 +351,7 @@ function extractFromElements(
     try {
       const record: Record<string, unknown> = {};
       const missing: string[] = [];
+      const valueNotes: Record<string, NumberParseResult> = {};
 
       for (const field of fields) {
         if (field.selector && !isValidCssSelector(field.selector)) {
@@ -298,7 +367,13 @@ function extractFromElements(
           });
           record[field.name] = field.defaultValue !== undefined ? field.defaultValue : null;
         } else {
-          record[field.name] = extractFieldValue(container, field, baseUrl);
+          if (isNumberField(field)) {
+            const { value, note } = readNumberField(container, field);
+            record[field.name] = value;
+            if (note) valueNotes[field.name] = note;
+          } else {
+            record[field.name] = extractFieldValue(container, field, baseUrl);
+          }
         }
 
         if (isEmptyValue(record[field.name])) {
@@ -309,11 +384,14 @@ function extractFromElements(
       }
 
       const signature = generateRecordSignature(record);
-      if (elementMemory?.get(container) === signature) {
+      const previous = elementMemory?.get(container);
+      if (previous === signature) {
         continue;
       }
       elementMemory?.set(container, signature);
-      totalParsed++;
+      // An image or price that loaded late is the same row, not another one.
+      const supersedes = previous !== undefined && fillsInValues(previous, signature) ? previous : undefined;
+      if (!supersedes) totalParsed++;
 
       const validation = validateRecord(record, fields, i);
       if (!validation.isValid) {
@@ -336,6 +414,8 @@ function extractFromElements(
         _extractedAt: Date.now(),
         ...(record as Record<string, ExtractedRecord[string]>),
         ...(missing.length > 0 ? { _missingFields: missing.join(', ') } : {}),
+        ...(Object.keys(valueNotes).length > 0 ? { _valueNotes: JSON.stringify(valueNotes) } : {}),
+        ...(supersedes ? { _supersedes: supersedes } : {}),
       });
     } catch (error: unknown) {
       totalParsed++;

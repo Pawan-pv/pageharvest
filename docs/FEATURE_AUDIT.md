@@ -26,6 +26,25 @@ Assessment: **functional MVP**.
 | Native toolbar and real side panel | PASS in Chrome for Testing | `native-side-panel` job, [3 of 3 runs](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028); [fails when broken](https://github.com/Pawan-pv/pageharvest/actions/runs/41364264985) | Branded Chrome is manual, below |
 | Complete release gate | PASS, as two jobs | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028) | Linux runs the automated layers, Windows the native check |
 
+## Extraction accuracy
+
+Measured on real pages in [REAL_WORLD_TEST_BENCHMARK.md](REAL_WORLD_TEST_BENCHMARK.md), on practice sites only.
+
+| Area | Status | Evidence | Notes |
+| --- | --- | --- | --- |
+| Number and price parsing | PASS | `number-parser.test.ts`, browser test | Uncertain values stay as text, marked ambiguous |
+| Picker scope | PASS | `detection-picker-scope.test.ts`, browser test | Selector can fall back to a position-based path |
+| Multi-record field discovery | PASS | `field-discovery.test.ts`, browser test, benchmark | First page of a job only |
+| List chooser and credibility | PASS | `list-ranking.test.ts`, `list-chooser.test.tsx`, browser test | Weights are not calibrated |
+| Extract Tables | PASS | `table-and-link-extraction.test.ts`, browser test, benchmark | |
+| Extract Links | PASS | `table-and-link-extraction.test.ts`, browser test | Depends on landmarks to exclude menus |
+| Lazy images | PASS | `image-sources.test.ts`, browser test, benchmark | |
+| Late-arriving values | PASS | `late-values.test.ts`, browser test | |
+| Load more, paging without reload | PASS | Browser tests, benchmark | |
+| Add Column, regex, NDJSON, clipboard, search, column filter, Find & Replace, Remove Duplicates, projects, schemas | PASS | `extraction-accuracy.spec.ts` | Browser coverage restored |
+| Commercial websites | NOT TESTED | | Only practice sites so far |
+| Independent review | NOT TESTED | [Checklist ready](INDEPENDENT_REVIEW_CHECKLIST.md) | |
+
 ## Native Chrome Side Panel manual verification
 
 The `native-side-panel` job does this automatically in Chrome for Testing. Use these steps for branded Chrome, or if the job cannot run.

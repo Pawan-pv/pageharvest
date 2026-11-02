@@ -98,9 +98,32 @@ export const selectionCancelledMessageSchema = baseMessageSchema.extend({
 // ---------------------------------------------------------------------------
 // Detection
 // ---------------------------------------------------------------------------
+export const CandidateKindSchema = z.enum(['list', 'table', 'links']);
+export type CandidateKind = z.infer<typeof CandidateKindSchema>;
+
+/** One thing on the page the user could extract, with the evidence for choosing it. */
+export const ListCandidateSchema = z.object({
+  containerSelector: z.string(),
+  matchCount: z.number(),
+  sampleSnippets: z.array(z.string()),
+  name: z.string(),
+  kind: CandidateKindSchema,
+  credible: z.boolean(),
+  confidence: z.number().min(0).max(1),
+  evidence: z.array(z.string()),
+  suggestedFields: z.array(z.string()),
+  dedupeFields: z.array(z.string()).optional(),
+});
+export type ListCandidate = z.infer<typeof ListCandidateSchema>;
+
 export const detectRepeatedElementsMessageSchema = baseMessageSchema.extend({
   type: z.literal('DETECT_REPEATED_ELEMENTS'),
-  payload: z.object({ targetSelector: z.string().optional() }).optional(),
+  payload: z
+    .object({
+      targetSelector: z.string().optional(),
+      mode: z.enum(['table', 'links']).optional(),
+    })
+    .optional(),
 });
 
 export const repeatedElementsDetectedMessageSchema = baseMessageSchema.extend({
@@ -109,12 +132,14 @@ export const repeatedElementsDetectedMessageSchema = baseMessageSchema.extend({
     containerSelector: z.string(),
     matchCount: z.number(),
     sampleSnippets: z.array(z.string()),
+    candidates: z.array(ListCandidateSchema).optional(),
+    credible: z.boolean().optional(),
   }),
 });
 
 export const detectFieldsMessageSchema = baseMessageSchema.extend({
   type: z.literal('DETECT_FIELDS'),
-  payload: z.object({ containerSelector: z.string() }),
+  payload: z.object({ containerSelector: z.string(), kind: CandidateKindSchema.optional() }),
 });
 
 export const fieldsDetectedMessageSchema = baseMessageSchema.extend({

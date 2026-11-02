@@ -1,3 +1,5 @@
+import { parseNumberDetailed } from './number-parser';
+
 /**
  * DOM Value Extraction and Normalization Utilities
  */
@@ -11,6 +13,19 @@ export function normalizeText(text: string | null | undefined): string {
     .replace(/[\r\n\t]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
+}
+
+/**
+ * The text a person would read in an element. textContent also includes the contents of
+ * style and script tags, which some sites put inside every card.
+ */
+export function visibleText(element: Element): string {
+  if (!element.querySelector('style, script, noscript, template')) {
+    return normalizeText(element.textContent);
+  }
+  const copy = element.cloneNode(true) as Element;
+  copy.querySelectorAll('style, script, noscript, template').forEach((node) => node.remove());
+  return normalizeText(copy.textContent);
 }
 
 /**
@@ -32,15 +47,9 @@ export function resolveAbsoluteUrl(relativeUrl: string | null | undefined, baseU
 }
 
 /**
- * Parses numbers, prices, and percentages from text.
- * e.g. "$1,299.99" -> 1299.99
- * " -45.50 %" -> -45.5
+ * Reads one number from text, or null if the text has none or is not certain.
+ * Use parseNumberDetailed to learn why, and to keep ranges and the original text.
  */
 export function parseNumberValue(text: string | null | undefined): number | null {
-  if (!text) return null;
-  const cleaned = text.replace(/,/g, '').trim();
-  const match = cleaned.match(/[-+]?\d*\.?\d+/);
-  if (!match) return null;
-  const num = parseFloat(match[0]);
-  return isNaN(num) ? null : num;
+  return parseNumberDetailed(text).value;
 }

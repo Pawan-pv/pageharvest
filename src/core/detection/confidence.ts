@@ -81,8 +81,8 @@ export function calculateConfidence(input: ConfidenceInput): {
     semanticScore = Math.max(semanticScore, 0.90);
   }
 
-  const parentClass = (parent.className || '').toLowerCase();
-  const itemClass = (repItem.className || '').toLowerCase();
+  const parentClass = (parent.getAttribute('class') ?? '').toLowerCase();
+  const itemClass = (repItem.getAttribute('class') ?? '').toLowerCase();
   const hasContainerClass = /grid|list|cards|feed|results|directory|items|catalog|table|wrapper/i.test(parentClass);
   const hasItemClass = /card|item|row|entry|product|job|post|listing|cell|bundle/i.test(itemClass);
 
