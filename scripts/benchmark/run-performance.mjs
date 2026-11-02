@@ -1,3 +1,4 @@
+/* global window, document, performance */
 /**
  * Measures the production detection and extraction code in real Chromium, on generated
  * pages of 100, 1,000 and 5,000 records. It reports what it measures and sets no targets,

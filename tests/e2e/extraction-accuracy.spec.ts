@@ -195,7 +195,7 @@ test.describe('numbers', () => {
     const csv = await downloadFile(panel, async () => {
       await panel.getByLabel('Include original text and currency for numbers').check();
     });
-    const lines = csv.replace(/^﻿/, '').split('\r\n');
+    const lines = csv.replace(/^\uFEFF/, '').split('\r\n');
 
     expect(lines[0]).toContain('Price (original),Price (status),Price (currency),Price (min),Price (max)');
     expect(lines.find((line) => line.startsWith('European amount'))).toContain('1234.56,"€1.234,56",ok,EUR');
@@ -570,7 +570,7 @@ test.describe('the library', () => {
     await expect(panel.getByText('Renamed project')).toBeVisible();
 
     await panel.getByRole('button', { name: 'Delete project Renamed project' }).click();
-    await panel.getByRole('button', { name: /^Delete/ }).last().click();
+    await panel.getByRole('button', { name: 'Delete Project', exact: true }).click();
     await expect(panel.getByText('Renamed project')).toHaveCount(0);
     expect(await readTable<Row>(panel, 'projects')).toHaveLength(0);
   });

@@ -254,3 +254,31 @@ This document tracks all foundational architectural and technical decisions made
 - **Context**: Playwright cannot click browser chrome, so its tests open `sidepanel.html` in a tab, and that does not prove the toolbar works. The native check meant to cover this had no way to pass, and the report stayed BLOCKED.
 - **Decision**: A `windows-latest` job clicks the extension in the real toolbar with pywinauto, finding controls by name. A pass needs the browser to report a `SIDE_PANEL` context, 20 rows saved through that panel, and the rows still present after closing and reopening it from the toolbar. Neither `chrome.sidePanel.open()` nor opening the page in a tab is used. The job runs Chrome for Testing, because branded Chrome did not load the unpacked extension. A step with no evidence fails, and BLOCKED fails the job. The Linux job uses a new `automated` scope.
 - **Consequences**: A green run means the toolbar was verified, in Chrome for Testing. Branded Chrome stays a manual check. The job only works on machines with a desktop, and Windows minutes count double on a private repository.
+
+## ADR-025: One Number Parser That Never Guesses
+
+- **Status**: Accepted
+- **Context**: Extraction used `normalizeNumber`, while field samples and the Normalize tool used `parseNumberValue`, and both silently produced wrong numbers: `1.234.567` became 1.234, a Unicode minus was lost, and `49,99 €` became 4999 in the Normalize tool.
+- **Decision**: `src/utils/number-parser.ts` serves every path. A value is read as a number only if its format, currency or the page's `lang` settles it. Otherwise the status is `ambiguous`, both readings are returned, and the cell keeps its text. Ranges keep both ends and keep their text as the cell value. Each row stores how its numbers were read in `_valueNotes`, which can be exported as extra columns.
+- **Consequences**: Contract addition: `_valueNotes` on records. A price column can now hold text as well as numbers, and the grid says how many values need a look. A `srcset` now resolves to its largest candidate instead of its first, which changed one earlier test expectation deliberately. Known gap: currency is metadata, so `€5` and `$5` have equal canonical forms.
+
+## ADR-026: Discover Fields From Many Records
+
+- **Status**: Accepted
+- **Context**: Fields came from the first record only, so a column missing there was never offered, and positional selectors could read different data in different records.
+- **Decision**: `discoverFieldsInCluster` samples up to 12 records, including the first and last, and merges what it finds. For each field it tries several selectors and keeps the one with the most correct values and fewest conflicts across the sample. An element belongs to the fields that recognized it, so a badge on one record can't claim another record's price. Values known only by a class name become columns named after that class, and a card's other links become columns named after their text if they recur. Coverage and confidence are recorded on the field, and a rare field is offered but not selected.
+- **Consequences**: Contract additions: `discovery` on fields, and the `table_cell` and `link_text` extractors. More columns are offered than before. Naming from class names is a heuristic with a hand-written list of layout classes. Discovery still looks only at the page it starts on.
+
+## ADR-027: Rank Lists on Recorded Evidence and Let the User Choose
+
+- **Status**: Accepted
+- **Context**: Auto-detect silently took its first result, and gave a blog menu 88% confidence because that score only measured how alike the items were.
+- **Decision**: Confidence starts from structural similarity and is adjusted by observations, each recorded as evidence: how many consistent values items have, whether they are only links, whether they sit in navigation, whether they are labelled as promotions, and whether they are in the main content. The chooser shows up to eight candidates with samples, columns, confidence and evidence. A list in navigation, or below a minimum score, is not credible. If nothing is credible the panel says so, and continuing takes a deliberate click. Extract Tables and Extract Links produce candidates through the same chooser, and the picker's selector is narrowed until it matches exactly the chosen items.
+- **Consequences**: Contract addition: `candidates` and `credible` on `REPEATED_ELEMENTS_DETECTED`, and `kind` on `DETECT_FIELDS`. The weights are judgment calls, not calibrated, and the label vocabulary is English. The score is a heuristic, not a probability.
+
+## ADR-028: A Value That Arrives Late Updates Its Row
+
+- **Status**: Accepted
+- **Context**: On an infinite-scroll job, a row read before its image loaded was saved again once it had, leaving two rows for one record.
+- **Decision**: When an element is read again and has only gained values, the new record carries `_supersedes` with the earlier canonical form. In the batch's transaction, the coordinator finds that row by hash, confirms it by canonical comparison, and replaces it in place, keeping its order. If it isn't found, the record is added normally, so nothing is lost. A changed value is treated as new content, as a recycled row is. The marker is never stored.
+- **Consequences**: This is the only change to the durable commit path in this milestone. It is covered by `tests/integration/late-values.test.ts`, and listed for independent review.

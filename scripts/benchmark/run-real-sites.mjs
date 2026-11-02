@@ -1,3 +1,4 @@
+/* global document, indexedDB, URL */
 /**
  * The real-site benchmark. It uses the built extension the way a person does: open the
  * panel, run a tool, choose a list, start a job. It then compares what was saved with truth

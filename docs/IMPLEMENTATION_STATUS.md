@@ -8,7 +8,7 @@ This document serves as the master tracking status for all features, modules, an
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
-| Unit and integration | PASS | `pnpm test`: 64 files, 670 tests |
+| Unit and integration | PASS | `pnpm test`: 64 files, 685 tests on `main` |
 | TypeScript | PASS | `pnpm typecheck` |
 | ESLint | PASS | `pnpm lint` |
 | Production build | PASS | `pnpm build` on the final code |
@@ -17,6 +17,8 @@ This document serves as the master tracking status for all features, modules, an
 | Public practice sites | PASS | Two sites, five scenarios; see the plan |
 | Complete release gate | PASS, as two jobs | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028) |
 | Native toolbar and side panel | PASS in Chrome for Testing | `native-side-panel` job, 3 of 3 runs; branded Chrome is manual |
+
+Branch `feat/trustworthy-extraction` adds the extraction milestone: 919 unit and integration tests, 58 browser tests, and a real-site benchmark. See [REAL_WORLD_TEST_BENCHMARK.md](REAL_WORLD_TEST_BENCHMARK.md) and [PERFORMANCE_AND_COVERAGE.md](PERFORMANCE_AND_COVERAGE.md).
 
 Assessment: **FUNCTIONAL MVP**. See the plan for what a release candidate still needs.
 
