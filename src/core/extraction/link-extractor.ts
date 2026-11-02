@@ -20,6 +20,10 @@ const NAVIGATION_REGIONS = [
   '[role="contentinfo"]',
   '[role="banner"]',
   'body > header',
+  '[id*="menu" i]',
+  '[class*="menu" i]',
+  '[id*="navigation" i]',
+  '[class*="navigation" i]',
 ];
 const OUTSIDE_NAVIGATION = `:not(${NAVIGATION_REGIONS.map((region) => `${region} a`).join(', ')})`;
 const CONTENT_LINKS = `${LINK}${GOES_SOMEWHERE}${OUTSIDE_NAVIGATION}`;

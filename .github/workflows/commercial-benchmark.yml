@@ -1,0 +1,68 @@
+name: Authorized commercial benchmark
+
+# Manual only. Every selected entry must be explicitly authorized in the benchmark allowlist.
+on:
+  workflow_dispatch:
+    inputs:
+      site_ids:
+        description: Space-separated commercial site IDs from tests/benchmark/sites.json
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate authorized commercial sites
+        env:
+          SITE_IDS: ${{ inputs.site_ids }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          import { validateAuthorizedBenchmarkSites } from './scripts/benchmark/site-selection.mjs';
+
+          const ids = process.env.SITE_IDS.trim().split(/\s+/).filter(Boolean);
+          const { sites } = JSON.parse(await readFile('tests/benchmark/sites.json', 'utf8'));
+          validateAuthorizedBenchmarkSites(sites, ids, true);
+          console.log(`Validated ${ids.length} authorized commercial site(s).`);
+          NODE
+
+      - name: Build the extension
+        run: pnpm build
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run the bounded benchmark
+        env:
+          SITE_IDS: ${{ inputs.site_ids }}
+        run: |
+          read -r -a ids <<< "$SITE_IDS"
+          xvfb-run --auto-servernum pnpm benchmark:sites "${ids[@]}"
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authorized-commercial-benchmark
+          path: artifacts/benchmark/
+          if-no-files-found: warn
+          retention-days: 30

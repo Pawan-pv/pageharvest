@@ -225,7 +225,6 @@ export async function runMultiPageExtraction(
     const batchDuplicates = extractionResult.duplicatesCount;
     const isCatchUp = strategy === 'infinite_scroll' && scrollsCompleted < catchUpScrolls;
     duplicatesSkipped += batchDuplicates;
-    totalExtracted += newRecords.length;
     allRecords.push(...newRecords);
 
     const batch: PageExtractionBatch = {
@@ -246,6 +245,7 @@ export async function runMultiPageExtraction(
 
     // 6. Commit before anything else happens. The next action may unload this document.
     const commit = await onPageExtracted?.(batch);
+    totalExtracted += commit?.inserted ?? newRecords.length;
     emitProgress('running');
 
     if (commit && commit.stop) {
@@ -561,13 +561,12 @@ export async function runMultiPageExtraction(
   };
 
   const priorPages = initialSessionState ? initialSessionState.currentPage : 0;
-  const priorRecords = initialSessionState ? initialSessionState.totalExtracted : 0;
 
   return {
     success: isFinalSuccess,
     strategy,
     totalPages: priorPages + pages.length,
-    totalRecords: priorRecords + allRecords.length,
+    totalRecords: totalExtracted,
     duplicatesSkipped,
     records: allRecords,
     pages,

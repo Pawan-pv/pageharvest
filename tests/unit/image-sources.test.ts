@@ -59,6 +59,12 @@ describe('normalizeImageUrl finds the real image', () => {
     expect(image(`<img src="${PIXEL}" data-srcset="/s.jpg 100w, /l.jpg 800w">`)).toBe('https://shop.example/l.jpg');
   });
 
+  it('prefers the largest srcset candidate over a smaller fallback src', () => {
+    expect(image('<img src="/small.jpg" srcset="/small.jpg 300w, /large.jpg 1200w">')).toBe(
+      'https://shop.example/large.jpg'
+    );
+  });
+
   it('handles commas inside srcset URLs', () => {
     expect(image(`<img src="${PIXEL}" srcset="/w_100,h_100/a.jpg 100w, /w_900,h_900/a.jpg 900w">`)).toBe('https://shop.example/w_900,h_900/a.jpg');
   });

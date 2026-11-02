@@ -13,6 +13,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { computeMetrics, summarizeResults } from './metrics.mjs';
+import { selectBenchmarkSites } from './site-selection.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const extensionPath = join(root, '.output/chrome-mv3');
@@ -295,7 +296,7 @@ function toMarkdown(report) {
 
 const { sites } = JSON.parse(await readFile(join(root, 'tests/benchmark/sites.json'), 'utf8'));
 const only = process.argv.slice(2);
-const selected = only.length > 0 ? sites.filter((site) => only.includes(site.id)) : sites;
+const selected = selectBenchmarkSites(sites, only);
 
 const profile = await mkdtemp(join(os.tmpdir(), 'pageharvest-benchmark-'));
 const context = await chromium.launchPersistentContext(profile, {

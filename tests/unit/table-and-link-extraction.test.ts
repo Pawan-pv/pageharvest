@@ -224,6 +224,17 @@ describe('Extract Links', () => {
     expect(rows(best.containerSelector).every((link) => !link.closest('nav'))).toBe(true);
   });
 
+  it('leaves out a menu built from plain div elements', () => {
+    document.body.innerHTML = `
+      <div class="site-menu">${repeat(5, (i) => `<a href="/m/${i}">Menu ${i}</a>`)}</div>
+      <div id="content"><div class="list">${repeat(7, (i) => `<p><a href="/a/${i}">Article ${i}</a></p>`)}</div></div>`;
+
+    const [best] = detectLinkRegions(document);
+    const hrefs = rows(best.containerSelector).map((link) => link.getAttribute('href'));
+
+    expect(hrefs).toEqual(Array.from({ length: 7 }, (_, i) => `/a/${i}`));
+  });
+
   it('finds nothing on a page without links', () => {
     document.body.innerHTML = '<p>Text only.</p>';
 

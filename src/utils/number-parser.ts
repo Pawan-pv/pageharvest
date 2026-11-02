@@ -61,6 +61,8 @@ const SCALE_WORD = /^\s?(?:k|m|mn|bn|b|thousand|million|billion|trillion)(?![a-z
 const RANGE_WORD = /^(?:-|–|—|~|to|bis|à|até)$/i;
 const FREE_WORD = /^(?:free|gratis|complimentary)\b/i;
 const RATING = /(\d+(?:[.,]\d+)?)\s*(?:out of|\/)\s*\d+/i;
+const UNCERTAIN_QUALIFIER =
+  /\b(?:from|up\s+to|starting\s+(?:at|from)|as\s+low\s+as|under|over|less\s+than|more\s+than|at\s+least|at\s+most|about|around|approximately|approx\.?)\b/i;
 
 type TokenReading =
   | { kind: 'number'; value: number }
@@ -245,6 +247,10 @@ export function parseNumberDetailed(input: unknown, options: NumberParseOptions 
 
   if (tokens.length > 1) {
     return ambiguous('The text has multiple numbers, so no single value can be chosen.');
+  }
+
+  if (UNCERTAIN_QUALIFIER.test(text)) {
+    return ambiguous('The text includes a qualifier that makes the number uncertain.');
   }
 
   const token = tokens[0];

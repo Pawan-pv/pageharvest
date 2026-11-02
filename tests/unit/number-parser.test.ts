@@ -30,7 +30,6 @@ describe('parseNumberDetailed', () => {
       ['1 500.00 USD', 1500],
       ['42', 42],
       ['Price: 42 €', 42],
-      ['From $5', 5],
       ['12 reviews', 12],
       ['100%', 100],
     ])('reads %s as %d', (text, expected) => {
@@ -89,6 +88,8 @@ describe('parseNumberDetailed', () => {
       ['$1.234', 'separator'],
       ['2 for $10', 'multiple numbers'],
       ['Was $20 now $15', 'multiple numbers'],
+      ['From $5', 'qualifier'],
+      ['Up to 5', 'qualifier'],
       ['2024-01-02', 'multiple numbers'],
       ['1.2.3', 'separator'],
       ['1,23,4', 'separator'],
