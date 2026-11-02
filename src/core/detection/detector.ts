@@ -37,8 +37,8 @@ export function inferListName(
   const rep = items[0];
   const itemTag = rep.tagName.toLowerCase();
   const parentTag = parent.tagName.toLowerCase();
-  const parentClass = (parent.className || '').toLowerCase();
-  const itemClass = (rep.className || '').toLowerCase();
+  const parentClass = (parent.getAttribute('class') ?? '').toLowerCase();
+  const itemClass = (rep.getAttribute('class') ?? '').toLowerCase();
 
   const types = new Set(fields.map((f) => f.type));
   const hasPrice = types.has('price');

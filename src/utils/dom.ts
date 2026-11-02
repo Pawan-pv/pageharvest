@@ -16,6 +16,19 @@ export function normalizeText(text: string | null | undefined): string {
 }
 
 /**
+ * The text a person would read in an element. textContent also includes the contents of
+ * style and script tags, which some sites put inside every card.
+ */
+export function visibleText(element: Element): string {
+  if (!element.querySelector('style, script, noscript, template')) {
+    return normalizeText(element.textContent);
+  }
+  const copy = element.cloneNode(true) as Element;
+  copy.querySelectorAll('style, script, noscript, template').forEach((node) => node.remove());
+  return normalizeText(copy.textContent);
+}
+
+/**
  * Resolves a relative URL or path against the current document base URL.
  */
 export function resolveAbsoluteUrl(relativeUrl: string | null | undefined, baseUrl?: string): string {

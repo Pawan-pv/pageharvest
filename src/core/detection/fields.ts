@@ -16,7 +16,7 @@ const MAX_PLAIN_TEXT_FIELDS = 4;
 const NOT_PLAIN_TEXT_TAGS = new Set(['A', 'BUTTON', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'SVG']);
 
 // Currency regex supporting $, €, £, ¥, ₹, C$, A$, USD, EUR, GBP, INR, etc.
-const DEFAULT_PRICE_REGEX = /(?:[$€£¥₹]|C\$|A\$)\s*[-+]?\d+(?:[.,]\d+)?|\b\d+(?:[.,]\d+)?\s*(?:[$€£¥₹]|USD|EUR|GBP|INR)\b/i;
+const DEFAULT_PRICE_REGEX = /(?:[$€£¥₹]|C\$|A\$)\s*[-+]?\d+(?:[.,]\d+)?|\b\d+(?:[.,]\d+)?\s*(?:[$€£¥₹]|(?:USD|EUR|GBP|INR)\b)/i;
 
 // Rating regex matching "4.5 out of 5", "4.8 / 5", "4.8", "★★★★★", etc.
 const DEFAULT_RATING_REGEX = /\b([0-5](?:\.\d{1,2})?)\s*(?:\/|\s*out\s*of)\s*5\b|\b[0-5]\.\d\b|[★☆]{3,5}/i;
@@ -39,6 +39,11 @@ export interface InternalFieldCandidate {
   element: Element;
   /** Text found only because the item had no recognized heading or description. */
   plain?: boolean;
+  /** A value recognized only by its class name. */
+  labelled?: boolean;
+  /** A link other than the record's main one. */
+  otherLink?: boolean;
+  linkText?: string;
 }
 
 function describeNumber(parsed: NumberParseResult): string {
@@ -88,7 +93,11 @@ export function extractCandidatesFromElement(
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     '[class*="title" i]', '[class*="name" i]', '[class*="headline" i]',
   ];
-  const titleEl = container.querySelector(titleSelectors.join(', '));
+  // A heading that holds only a number is a price or a count, not the title.
+  const titleEl = Array.from(container.querySelectorAll(titleSelectors.join(', '))).find((element) => {
+    const heading = normalizeText(element.textContent);
+    return heading.length > 0 && /\p{L}/u.test(heading.replace(/\b[A-Z]{3}\b/g, ''));
+  });
   if (titleEl && !visitedElements.has(titleEl)) {
     const text = normalizeText(titleEl.textContent);
     if (text) {
@@ -253,7 +262,7 @@ export function extractCandidatesFromElement(
     if (text && text.length > 10) {
       visitedElements.add(descEl);
       candidates.push({
-        name: 'Description',
+        name: descriptionName(descEl),
         type: 'text',
         selector: generateRelativeSelector(container, descEl),
         extractor: 'text',
@@ -280,8 +289,15 @@ export function extractCandidatesFromElement(
     }
   }
 
-  // 10. Plain text, for items with no heading or description to recognize
-  if (!candidates.some((candidate) => candidate.type === 'text' && candidate.name !== 'Category')) {
+  // 10. Other labelled values and links the record holds
+  const hasHeadingOrDescription = candidates.some(
+    (candidate) => candidate.type === 'text' && candidate.name !== 'Category'
+  );
+  candidates.push(...labelledTextCandidates(container, visitedElements, candidates));
+  candidates.push(...otherLinkCandidates(container, visitedElements));
+
+  // 11. Plain text, for items with no heading or description to recognize
+  if (!hasHeadingOrDescription) {
     candidates.push(...plainTextCandidates(container, visitedElements));
   }
 
@@ -303,6 +319,113 @@ function findFullTitle(titleEl: Element, text: string): { element: Element; valu
     }
   }
   return null;
+}
+
+/** Class names that say how something looks, not what it is. */
+const LAYOUT_CLASS =
+  /^(?:col|row|mb|mt|ml|mr|mx|my|me|ms|pb|pt|pl|pr|px|py|ps|pe|p|m|d|text|font|fw|fs|bg|flex|grid|gap|w|h|border|rounded|shadow|is|has|js|align|justify|float|clearfix|container|wrapper|inner|outer|hidden|visible|sr|small|large|big|bold|italic|center|left|right|lead|muted)(?:$|[-_])/i;
+const LOOKS_GENERATED = /\d.*[a-z]|[a-z].*\d/i;
+const DESCRIPTION_CLASS = /desc|summary|snippet|excerpt|^text$|content|body/i;
+const MAX_LABELLED_FIELDS = 6;
+const MAX_OTHER_LINKS = 3;
+
+function titleCaseWords(text: string): string {
+  return text.replace(/[-_]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+/** A column name from what an element's classes say it is, if they say anything. */
+function labelFromClasses(element: Element): string | null {
+  const useful = filterMeaningfulClasses(element.classList).filter(
+    (name) => !LAYOUT_CLASS.test(name) && !LOOKS_GENERATED.test(name) && name.length >= 3
+  );
+  const last = useful[useful.length - 1];
+  return last ? titleCaseWords(last) : null;
+}
+
+function descriptionName(element: Element): string {
+  const label = labelFromClasses(element);
+  return !label || DESCRIPTION_CLASS.test(label) ? 'Description' : label;
+}
+
+function isInsideAny(element: Element, others: Set<Element>): boolean {
+  let current = element.parentElement;
+  while (current) {
+    if (others.has(current)) return true;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+/**
+ * A record usually holds more than a title and a price. A value whose class says what it is
+ * becomes a column named after that class, such as the capital of a country.
+ */
+function labelledTextCandidates(
+  container: Element,
+  visited: Set<Element>,
+  existing: InternalFieldCandidate[]
+): InternalFieldCandidate[] {
+  const names = new Set(existing.map((candidate) => candidate.name));
+  const candidates: InternalFieldCandidate[] = [];
+
+  for (const element of Array.from(container.querySelectorAll('[class]'))) {
+    if (candidates.length >= MAX_LABELLED_FIELDS) break;
+    if (visited.has(element) || isInsideAny(element, visited) || NOT_PLAIN_TEXT_TAGS.has(element.tagName)) continue;
+    const text = ownText(element);
+    if ((text.length < 3 && !/[0-9]/.test(text)) || text.endsWith(':')) continue;
+    const name = labelFromClasses(element);
+    if (!name || names.has(name)) continue;
+
+    names.add(name);
+    visited.add(element);
+    candidates.push({
+      name,
+      type: 'text',
+      selector: generateRelativeSelector(container, element),
+      extractor: 'text',
+      sampleValue: text.slice(0, 100),
+      element,
+      labelled: true,
+    });
+  }
+  return candidates;
+}
+
+/**
+ * A card's other links, such as Apply next to Learn more. A second link to the same place
+ * is not another value, and a run of links that look alike is a list of tags, not columns.
+ */
+function otherLinkCandidates(container: Element, visited: Set<Element>): InternalFieldCandidate[] {
+  const candidates: InternalFieldCandidate[] = [];
+  const links = Array.from(container.querySelectorAll('a[href]'));
+  const known = new Set(links.filter((link) => visited.has(link)).map((link) => link.getAttribute('href')));
+  const siblingsAlike = (link: Element) =>
+    Array.from(link.parentElement?.children ?? []).filter(
+      (other) => other.tagName === 'A' && other.getAttribute('class') === link.getAttribute('class')
+    ).length;
+
+  for (const link of links) {
+    if (candidates.length >= MAX_OTHER_LINKS) break;
+    const href = link.getAttribute('href') ?? '';
+    if (visited.has(link) || known.has(href) || /^(?:#|javascript:)/i.test(href)) continue;
+    if (siblingsAlike(link) > 2) continue;
+    const text = normalizeText(link.textContent);
+    if (!text || text.length > 24 || text.split(' ').length > 3) continue;
+
+    known.add(href);
+    visited.add(link);
+    candidates.push({
+      name: `${titleCaseWords(text)} link`,
+      type: 'link',
+      selector: generateRelativeSelector(container, link),
+      extractor: 'href',
+      sampleValue: resolveAbsoluteUrl(href),
+      element: link,
+      otherLink: true,
+      linkText: text,
+    });
+  }
+  return candidates;
 }
 
 function ownText(element: Element): string {
@@ -357,6 +480,10 @@ const DEFAULT_FIELD_SAMPLE = 12;
 const LABEL_MIN_COVERAGE = 0.5;
 /** A column on fewer records than this is offered, but not selected by default. */
 const MIN_SUGGESTED_COVERAGE = 0.2;
+/** A link column must recur. Links that differ on each record are content, such as tags. */
+const MIN_OTHER_LINK_COVERAGE = 0.5;
+/** A value known only by its class must recur to be offered at all. */
+const MIN_LABELLED_COVERAGE = 0.2;
 
 /** Evenly spread through the list, always including the first and the last. */
 function representativeSample(cluster: Element[], size: number): Element[] {
@@ -401,6 +528,8 @@ function selectorOptions(item: Element, element: Element, generated: string): st
 function holdsValue(element: Element, candidate: InternalFieldCandidate): boolean {
   switch (candidate.type) {
     case 'link':
+      // A link named after what it says is only that link, not any link with the same class.
+      if (candidate.otherLink && normalizeText(element.textContent) !== candidate.linkText) return false;
       return Boolean(element.getAttribute('href'));
     case 'image':
       return normalizeImageUrl(element, element.baseURI || undefined) !== null;
@@ -424,7 +553,7 @@ function scoreOption(
   option: string,
   evidence: FieldEvidence,
   sample: Element[],
-  claimedElements: Map<Element, FieldEvidence>
+  claimedElements: Map<Element, Set<FieldEvidence>>
 ) {
   let hits = 0;
   let conflicts = 0;
@@ -437,8 +566,8 @@ function scoreOption(
     }
     if (!found) continue;
     const expected = evidence.elementByItem.get(item);
-    const owner = claimedElements.get(found);
-    const ownedByAnother = owner !== undefined && owner !== evidence;
+    const owners = claimedElements.get(found);
+    const ownedByAnother = owners !== undefined && !owners.has(evidence);
     if (!ownedByAnother && holdsValue(found, evidence.candidate) && (!expected || expected === found)) {
       hits += 1;
     } else {
@@ -485,11 +614,14 @@ export function discoverFieldsInCluster(
     }
   }
 
-  // On each record, every element belongs to the field that recognized it there.
-  const claimedElements = new Map<Element, FieldEvidence>();
+  // On each record, every element belongs to the fields that recognized it there. One link
+  // can rightly supply two, with its address as the link and its title as the name.
+  const claimedElements = new Map<Element, Set<FieldEvidence>>();
   for (const evidence of merged.values()) {
     for (const element of evidence.elementByItem.values()) {
-      claimedElements.set(element, evidence);
+      const owners = claimedElements.get(element) ?? new Set<FieldEvidence>();
+      owners.add(evidence);
+      claimedElements.set(element, owners);
     }
   }
 
@@ -508,6 +640,8 @@ export function discoverFieldsInCluster(
     if (!best || best.hits === 0) continue;
 
     const coverage = Math.round((best.hits / sample.length) * 100) / 100;
+    if (evidence.candidate.otherLink && coverage < MIN_OTHER_LINK_COVERAGE) continue;
+    if (evidence.candidate.labelled && coverage < MIN_LABELLED_COVERAGE) continue;
     const agreement = best.hits / (best.hits + best.conflicts);
     const { candidate } = evidence;
     discovered.push({
@@ -529,13 +663,13 @@ export function discoverFieldsInCluster(
     });
   }
 
-  // Text picked up from records with no heading is noise once a real heading column exists.
-  const hasRealText = discovered.some(
-    (field) => field.type === 'text' && field.name !== 'Category' && !merged.get(`text|${field.name}`)?.candidate.plain && field.coverage >= 0.5
-  );
-  return hasRealText
-    ? discovered.filter((field) => !merged.get(`${field.type}|${field.name}`)?.candidate.plain)
-    : discovered;
+  // Text picked up from a record with no heading is noise once a real heading column exists.
+  const candidateOf = (field: DiscoveredField) => merged.get(`${field.type}|${field.name}`)?.candidate;
+  const hasHeadingColumn = discovered.some((field) => {
+    const candidate = candidateOf(field);
+    return field.type === 'text' && field.name !== 'Category' && !candidate?.plain && !candidate?.labelled && field.coverage >= 0.5;
+  });
+  return hasHeadingColumn ? discovered.filter((field) => !candidateOf(field)?.plain) : discovered;
 }
 
 /**

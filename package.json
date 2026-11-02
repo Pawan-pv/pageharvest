@@ -22,7 +22,9 @@
     "test:release:chrome": "node scripts/release-testing/run-release.mjs --scope=chrome",
     "test:release:automated": "node scripts/release-testing/run-release.mjs --scope=automated",
     "test:release:report": "node scripts/release-testing/run-release.mjs --scope=report",
-    "serve:fixtures": "node tests/fixtures/serve.cjs"
+    "serve:fixtures": "node tests/fixtures/serve.cjs",
+    "benchmark:sites": "node scripts/benchmark/run-real-sites.mjs",
+    "benchmark:performance": "node scripts/benchmark/run-performance.mjs"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.2",

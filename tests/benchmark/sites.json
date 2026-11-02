@@ -1,0 +1,302 @@
+{
+  "$comment": "Pages permitted for automated testing. See docs/REAL_WORLD_TEST_BENCHMARK.md. Truth selectors are written by hand from the page source and share no code with the extension. Fields marked volatile can change on the live site, so they are compared with the live page at run time and are never expected sample values.",
+  "excluded": [
+    {
+      "url": "https://www.scrapingcourse.com/ecommerce/",
+      "reason": "Describes itself as a practice site, but its robots.txt has Disallow: /ecommerce/*."
+    }
+  ],
+  "sites": [
+    {
+      "id": "books-home",
+      "url": "https://books.toscrape.com/",
+      "categories": ["E-commerce", "Paginated pages"],
+      "permission": "Sandbox. The page header says: We love being scraped! No robots.txt.",
+      "structure": "Book cards in a grid, with a large category sidebar.",
+      "method": "auto-detect",
+      "pagination": { "mode": "Next Button", "maxPages": 3, "delayMs": 1000 },
+      "expectedPages": 3,
+      "truth": {
+        "recordSelector": "article.product_pod",
+        "key": "Title",
+        "fields": [
+          { "name": "Title", "kind": "text", "selector": "h3 a", "attribute": "title" },
+          { "name": "Price", "kind": "number", "numberFormat": "us", "selector": ".price_color", "volatile": true },
+          { "name": "Link", "kind": "url", "selector": "h3 a", "attribute": "href" },
+          { "name": "Image", "kind": "url", "selector": "img.thumbnail", "attribute": "src" }
+        ],
+        "pages": [
+          "https://books.toscrape.com/",
+          "https://books.toscrape.com/catalogue/page-2.html",
+          "https://books.toscrape.com/catalogue/page-3.html"
+        ]
+      },
+      "expectedSamples": [{ "Title": "A Light in the Attic" }, { "Title": "Tipping the Velvet" }]
+    },
+    {
+      "id": "books-category",
+      "url": "https://books.toscrape.com/catalogue/category/books/travel_2/index.html",
+      "categories": ["E-commerce"],
+      "permission": "Sandbox. The page header says: We love being scraped! No robots.txt.",
+      "structure": "One category page, with titles shortened on screen and full in a title attribute.",
+      "method": "auto-detect",
+      "pagination": { "mode": "Single Page" },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": "article.product_pod",
+        "key": "Title",
+        "fields": [
+          { "name": "Title", "kind": "text", "selector": "h3 a", "attribute": "title" },
+          { "name": "Price", "kind": "number", "numberFormat": "us", "selector": ".price_color", "volatile": true }
+        ],
+        "pages": ["https://books.toscrape.com/catalogue/category/books/travel_2/index.html"]
+      },
+      "expectedSamples": [{ "Title": "It's Only the Himalayas" }]
+    },
+    {
+      "id": "quotes-home",
+      "url": "https://quotes.toscrape.com/",
+      "categories": ["Article listings", "Paginated pages"],
+      "permission": "Sandbox from the same project as books.toscrape.com, made for scraping practice.",
+      "structure": "Plain div cards with no list-like class, and a tag sidebar.",
+      "method": "auto-detect",
+      "pagination": { "mode": "Next Button", "maxPages": 3, "delayMs": 1000 },
+      "expectedPages": 3,
+      "truth": {
+        "recordSelector": ".quote",
+        "key": "Quote",
+        "fields": [
+          { "name": "Quote", "kind": "text", "selector": ".text" },
+          { "name": "Author", "kind": "text", "selector": ".author" }
+        ],
+        "pages": [
+          "https://quotes.toscrape.com/page/1/",
+          "https://quotes.toscrape.com/page/2/",
+          "https://quotes.toscrape.com/page/3/"
+        ]
+      },
+      "expectedSamples": [{ "Author": "Albert Einstein" }, { "Author": "J.K. Rowling" }]
+    },
+    {
+      "id": "quotes-js",
+      "url": "https://quotes.toscrape.com/js/",
+      "categories": ["Dynamic listings"],
+      "permission": "Sandbox from the same project, for practising JavaScript-rendered pages.",
+      "structure": "The same cards, built by a script after the page loads.",
+      "method": "auto-detect",
+      "pagination": { "mode": "Single Page" },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": ".quote",
+        "key": "Quote",
+        "fields": [
+          { "name": "Quote", "kind": "text", "selector": ".text" },
+          { "name": "Author", "kind": "text", "selector": ".author" }
+        ],
+        "pages": ["https://quotes.toscrape.com/js/"]
+      },
+      "expectedSamples": [{ "Author": "Albert Einstein" }]
+    },
+    {
+      "id": "quotes-scroll",
+      "url": "https://quotes.toscrape.com/scroll",
+      "categories": ["Dynamic listings"],
+      "permission": "Sandbox from the same project, for practising infinite scroll.",
+      "structure": "Cards added by a script as the page is scrolled.",
+      "method": "auto-detect",
+      "pagination": { "mode": "Infinite Scroll", "maxScrolls": 8, "scrollDelayMs": 1500 },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": ".quote",
+        "key": "Quote",
+        "readFromJobTab": true,
+        "fields": [
+          { "name": "Quote", "kind": "text", "selector": ".text" },
+          { "name": "Author", "kind": "text", "selector": ".author" }
+        ],
+        "pages": []
+      },
+      "expectedSamples": [{ "Author": "Albert Einstein" }]
+    },
+    {
+      "id": "countries",
+      "url": "https://www.scrapethissite.com/pages/simple/",
+      "categories": ["Business directory (closest available)"],
+      "permission": "Public sandbox for learning web scraping. robots.txt only disallows /lessons/ and /faq/.",
+      "structure": "A long directory of 250 entries, each with labelled values.",
+      "method": "auto-detect",
+      "pagination": { "mode": "Single Page" },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": ".country",
+        "key": "Name",
+        "fields": [
+          { "name": "Name", "kind": "text", "selector": ".country-name" },
+          { "name": "Capital", "kind": "text", "selector": ".country-capital" },
+          { "name": "Population", "kind": "number", "numberFormat": "plain", "selector": ".country-population", "volatile": true },
+          { "name": "Area", "kind": "number", "numberFormat": "plain", "selector": ".country-area", "volatile": true }
+        ],
+        "pages": ["https://www.scrapethissite.com/pages/simple/"]
+      },
+      "expectedSamples": [{ "Name": "Andorra", "Capital": "Andorra la Vella" }]
+    },
+    {
+      "id": "hockey-search",
+      "url": "https://www.scrapethissite.com/pages/forms/?q=boston",
+      "categories": ["Search results", "Tables"],
+      "permission": "Public sandbox for learning web scraping. robots.txt only disallows /lessons/ and /faq/.",
+      "structure": "Search results in a table with a header row and no thead.",
+      "method": "table",
+      "pagination": { "mode": "Single Page" },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": "tr.team",
+        "key": "Year",
+        "fields": [
+          { "name": "Year", "kind": "text", "selector": ".year" },
+          { "name": "Team", "kind": "text", "selector": ".name" },
+          { "name": "Wins", "kind": "text", "selector": ".wins" },
+          { "name": "Losses", "kind": "text", "selector": ".losses" }
+        ],
+        "pages": ["https://www.scrapethissite.com/pages/forms/?q=boston"]
+      },
+      "expectedColumns": ["Team Name", "Year", "Wins", "Losses"],
+      "expectedSamples": [{ "Team Name": "Boston Bruins", "Year": "1990", "Wins": "44" }]
+    },
+    {
+      "id": "fake-jobs",
+      "url": "https://realpython.github.io/fake-jobs/",
+      "categories": ["Job listings"],
+      "permission": "The page is titled: Fake Jobs for Your Web Scraping Journey. No robots.txt.",
+      "structure": "100 job cards with a title, company, location, date and links.",
+      "method": "auto-detect",
+      "pagination": { "mode": "Single Page" },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": ".card-content",
+        "key": "Link",
+        "fields": [
+          { "name": "Link", "kind": "url", "selector": "a.card-footer-item:last-of-type", "attribute": "href" },
+          { "name": "Title", "kind": "text", "selector": "h2.title" },
+          { "name": "Company", "kind": "text", "selector": "h3.company" },
+          { "name": "Location", "kind": "text", "selector": ".location" }
+        ],
+        "pages": ["https://realpython.github.io/fake-jobs/"]
+      },
+      "expectedSamples": [{ "Title": "Senior Python Developer", "Company": "Payne, Roberts and Davis" }]
+    },
+    {
+      "id": "internet-tables",
+      "url": "https://the-internet.herokuapp.com/tables",
+      "categories": ["Tables"],
+      "permission": "A practice site for browser automation from Elemental Selenium. robots.txt disallows nothing.",
+      "structure": "Two tables with thead and tbody on one page.",
+      "method": "table",
+      "pagination": { "mode": "Single Page" },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": "#table1 tbody tr",
+        "key": "Email",
+        "fields": [
+          { "name": "Last", "kind": "text", "selector": "td:nth-child(1)" },
+          { "name": "First", "kind": "text", "selector": "td:nth-child(2)" },
+          { "name": "Email", "kind": "text", "selector": "td:nth-child(3)" },
+          { "name": "Due", "kind": "text", "selector": "td:nth-child(4)" }
+        ],
+        "pages": ["https://the-internet.herokuapp.com/tables"]
+      },
+      "expectedColumns": ["Last Name", "First Name", "Email", "Due"],
+      "expectedSamples": [{ "Last Name": "Smith", "First Name": "John" }]
+    },
+    {
+      "id": "oxylabs-products",
+      "url": "https://sandbox.oxylabs.io/products",
+      "categories": ["E-commerce", "Lazy-loaded images", "Paginated pages"],
+      "permission": "The page says: This is a sandbox website used for web scraping. No robots.txt.",
+      "structure": "A client-side app with lazy images (a placeholder src and a srcset) and euro prices.",
+      "method": "auto-detect",
+      "pagination": { "mode": "Next Button", "maxPages": 2, "delayMs": 1500 },
+      "expectedPages": 2,
+      "truth": {
+        "recordSelector": ".product-card",
+        "key": "Title",
+        "fields": [
+          { "name": "Title", "kind": "text", "selector": "h4" },
+          { "name": "Price", "kind": "number", "numberFormat": "eu", "selector": ".price-wrapper", "volatile": true },
+          { "name": "Image", "kind": "srcset", "selector": "img[srcset]", "attribute": "srcset" }
+        ],
+        "pages": ["https://sandbox.oxylabs.io/products", "https://sandbox.oxylabs.io/products?page=2"]
+      },
+      "expectedSamples": [{ "Title": "The Legend of Zelda: Ocarina of Time" }]
+    },
+    {
+      "id": "web-scraping-dev",
+      "url": "https://web-scraping.dev/products",
+      "categories": ["E-commerce", "Paginated pages"],
+      "permission": "A testing playground. robots.txt disallows /robots-disallowed only and sets Crawl-delay: 2, which this entry respects.",
+      "structure": "Product rows, visited through a URL template.",
+      "method": "auto-detect",
+      "pagination": { "mode": "URL Template", "template": "https://web-scraping.dev/products?page={page}", "maxPages": 2, "delayMs": 2500 },
+      "expectedPages": 2,
+      "truth": {
+        "recordSelector": ".product",
+        "key": "Title",
+        "crawlDelayMs": 2500,
+        "fields": [
+          { "name": "Title", "kind": "text", "selector": "h3" },
+          { "name": "Link", "kind": "url", "selector": "h3 a", "attribute": "href" },
+          { "name": "Price", "kind": "number", "numberFormat": "us", "selector": ".price", "volatile": true }
+        ],
+        "pages": ["https://web-scraping.dev/products?page=1", "https://web-scraping.dev/products?page=2"]
+      },
+      "expectedSamples": [{ "Title": "Box of Chocolate Candy" }]
+    },
+    {
+      "id": "webscraper-static",
+      "url": "https://webscraper.io/test-sites/e-commerce/static/computers/laptops",
+      "categories": ["E-commerce", "Paginated pages"],
+      "permission": "A test site for web scrapers. robots.txt does not disallow /test-sites/e-commerce/.",
+      "structure": "Product cards with shortened titles, and numbered pagination.",
+      "method": "auto-detect",
+      "pagination": { "mode": "Next Button", "maxPages": 2, "delayMs": 1000 },
+      "expectedPages": 2,
+      "truth": {
+        "recordSelector": ".thumbnail",
+        "key": "Link",
+        "fields": [
+          { "name": "Link", "kind": "url", "selector": "a.title", "attribute": "href" },
+          { "name": "Title", "kind": "text", "selector": "a.title", "attribute": "title" },
+          { "name": "Price", "kind": "number", "numberFormat": "us", "selector": ".price", "volatile": true },
+          { "name": "Description", "kind": "text", "selector": ".description" }
+        ],
+        "pages": [
+          "https://webscraper.io/test-sites/e-commerce/static/computers/laptops",
+          "https://webscraper.io/test-sites/e-commerce/static/computers/laptops?page=2"
+        ]
+      },
+      "expectedSamples": [{ "Title": "Packard 255 G2" }]
+    },
+    {
+      "id": "webscraper-more",
+      "url": "https://webscraper.io/test-sites/e-commerce/more/computers/laptops",
+      "categories": ["E-commerce", "Dynamic listings"],
+      "permission": "A test site for web scrapers. robots.txt does not disallow /test-sites/e-commerce/.",
+      "structure": "Product cards added by a More button, with no page reload.",
+      "method": "auto-detect",
+      "pagination": { "mode": "Next Button", "maxPages": 3, "delayMs": 1500 },
+      "expectedPages": 3,
+      "truth": {
+        "recordSelector": ".thumbnail",
+        "key": "Link",
+        "readFromJobTab": true,
+        "fields": [
+          { "name": "Link", "kind": "url", "selector": "a.title", "attribute": "href" },
+          { "name": "Title", "kind": "text", "selector": "a.title", "attribute": "title" },
+          { "name": "Description", "kind": "text", "selector": ".description" }
+        ],
+        "pages": []
+      },
+      "expectedSamples": [{ "Title": "Asus VivoBook X441NA-GA190" }, { "Title": "Prestigio SmartBook 133S Dark Grey" }]
+    }
+  ]
+}

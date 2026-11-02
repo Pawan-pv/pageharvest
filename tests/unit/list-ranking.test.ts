@@ -98,6 +98,43 @@ describe('auto-detect ranks lists on evidence', () => {
     expect(best.credible).toBe(true);
   });
 
+  it('does not fail on a page with inline SVG, whose className is not a string', () => {
+    document.body.innerHTML = `<main><svg class="icons"><g><path d="M0"/></g><g><path d="M1"/></g><g><path d="M2"/></g></svg>
+      <div class="grid">${repeat(4, (i) => `<div class="item"><svg class="star"><path d="M0"/></svg><h3>Item ${i}</h3><span>$${i}.00</span></div>`)}</div></main>`;
+    // In a browser this is an SVGAnimatedString, not a string. jsdom does not model that.
+    document.querySelectorAll('svg, g, path').forEach((element) => {
+      Object.defineProperty(element, 'className', { value: { baseVal: 'star', animVal: 'star' } });
+    });
+
+    const lists = autoDetectLists(document);
+
+    expect(lists[0].itemCount).toBe(4);
+    expect(lists[0].sampleElements[0].previewText).toContain('Item 0');
+  });
+
+  it('does not fail when the repeated items are themselves SVG elements', () => {
+    document.body.innerHTML = `<main><div class="stars">${repeat(5, () => '<svg class="star"><path d="M0"/></svg>')}</div>
+      <div class="grid">${repeat(4, (i) => `<div class="item"><h3>Item ${i}</h3><span>$${i}.00</span></div>`)}</div></main>`;
+    document.querySelectorAll('svg').forEach((element) => {
+      Object.defineProperty(element, 'className', { value: { baseVal: 'star', animVal: 'star' } });
+    });
+
+    expect(() => autoDetectLists(document)).not.toThrow();
+  });
+
+  it('previews what a person sees, not styles or scripts inside an item', () => {
+    document.body.innerHTML = `<main>${repeat(
+      4,
+      (i) => `<div class="card"><style>.css-1{margin:0}</style><script>var hidden = 1;</script><h3>Game ${i}</h3><span>$${i}.00</span></div>`
+    )}</main>`;
+
+    const [best] = autoDetectLists(document);
+
+    expect(best.sampleElements[0].previewText).toContain('Game 0');
+    expect(best.sampleElements[0].previewText).not.toContain('margin');
+    expect(best.sampleElements[0].previewText).not.toContain('hidden');
+  });
+
   it('returns no candidates on a page with no repetition', () => {
     document.body.innerHTML = '<h1>Hello</h1><p>One paragraph.</p>';
 

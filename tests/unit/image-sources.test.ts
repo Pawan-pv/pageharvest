@@ -89,6 +89,27 @@ describe('normalizeImageUrl finds the real image', () => {
     expect(image('<img src="//cdn.example/pic.jpg">')).toBe('https://cdn.example/pic.jpg');
   });
 
+  it('reads the real image from a noscript fallback beside a placeholder', () => {
+    document.body.innerHTML = `<span><img src="${PIXEL}" alt="p"><noscript><img src="/real.jpg" alt="p"></noscript></span>`;
+
+    expect(normalizeImageUrl(document.querySelector('img'), BASE)).toBe('https://shop.example/real.jpg');
+  });
+
+  it('reads the largest image from a noscript srcset', () => {
+    document.body.innerHTML = `<span><img src="${PIXEL}"><noscript><img srcset="/s.jpg 100w, /l.jpg 900w" src="/m.jpg"></noscript></span>`;
+
+    expect(normalizeImageUrl(document.querySelector('img'), BASE)).toBe('https://shop.example/l.jpg');
+  });
+
+  it('reads a noscript fallback whose contents are plain text, as in a browser', () => {
+    document.body.innerHTML = `<span><img src="${PIXEL}"></span>`;
+    const noscript = document.createElement('noscript');
+    noscript.textContent = '<img src="/from-text.jpg" alt="p">';
+    document.querySelector('span')?.appendChild(noscript);
+
+    expect(normalizeImageUrl(document.querySelector('img'), BASE)).toBe('https://shop.example/from-text.jpg');
+  });
+
   it('never stores a placeholder when no real image exists', () => {
     expect(image(`<img src="${PIXEL}">`)).toBeNull();
     expect(image('<img src="/img/blank.gif">')).toBeNull();

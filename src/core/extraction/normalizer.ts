@@ -248,9 +248,29 @@ function realSourceOf(element: Element): { source: string | null; embedded: stri
 }
 
 /**
+ * Lazy-loading often leaves the real image in a noscript beside the placeholder. In a
+ * browser its contents are plain text; in other parsers they can be elements.
+ */
+function noscriptSource(element: Element): string | null {
+  const noscript = element.parentElement?.querySelector('noscript') ?? element.querySelector('noscript');
+  if (!noscript) return null;
+  const inner = noscript.querySelector('img');
+  if (inner) return realSourceOfSets(inner.getAttribute('srcset'), inner.getAttribute('src'));
+  const html = noscript.textContent ?? '';
+  const attribute = (name: string) => html.match(new RegExp(`\\s${name}=["']([^"']+)["']`, 'i'))?.[1] ?? null;
+  return realSourceOfSets(attribute('srcset'), attribute('src'));
+}
+
+function realSourceOfSets(srcset: string | null, src: string | null): string | null {
+  const largest = largestSrcsetCandidate(srcset);
+  if (largest && !isPlaceholderSource(largest)) return largest;
+  return src && !isPlaceholderSource(src) ? src : null;
+}
+
+/**
  * The real image of an element, in order: what the browser loaded, the src, the attributes
- * lazy-loading libraries use, the largest srcset candidate, then a background image. A
- * loading placeholder is never returned, so a row with no real image has no value.
+ * lazy-loading libraries use, the largest srcset candidate, a background image, then a noscript
+ * fallback. A loading placeholder is never returned, so a row with no real image has no value.
  */
 export function normalizeImageUrl(
   valOrElement: unknown,
@@ -270,6 +290,9 @@ export function normalizeImageUrl(
   const inner = element.tagName === 'IMG' ? null : element.querySelector('img');
   const nested = inner ? realSourceOf(inner) : null;
   if (nested?.source) return normalizeUrl(nested.source, baseUrl);
+
+  const fallback = noscriptSource(inner ?? element);
+  if (fallback) return normalizeUrl(fallback, baseUrl);
 
   const embedded = own.embedded ?? nested?.embedded ?? null;
   return embedded ? normalizeUrl(embedded, baseUrl) : null;

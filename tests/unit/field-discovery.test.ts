@@ -158,6 +158,154 @@ describe('field discovery looks at many records', () => {
   });
 });
 
+describe('field discovery offers what a record actually holds', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('offers labelled values in a directory, named after their class', () => {
+    document.body.innerHTML = repeat(
+      4,
+      (i) => `<div class="card"><h3 class="country-name">Land ${i}</h3><div class="country-info">
+        <strong>Capital:</strong> <span class="country-capital">City ${i}</span><br>
+        <strong>Population:</strong> <span class="country-population">${i}000</span></div></div>`
+    );
+
+    const rows = extract();
+
+    expect(discoverFieldsInCluster(items()).map((field) => field.name)).toEqual(
+      expect.arrayContaining(['Title', 'Country Capital', 'Country Population'])
+    );
+    expect(rows[2]['Country Capital']).toBe('City 2');
+    expect(rows[2]['Country Population']).toBe('2000');
+  });
+
+  it('offers a second heading, such as the company on a job card', () => {
+    document.body.innerHTML = repeat(
+      3,
+      (i) => `<div class="card"><h2 class="title is-5">Job ${i}</h2><h3 class="subtitle company">Firm ${i}</h3><p class="location">Town ${i}</p></div>`
+    );
+
+    const rows = extract();
+
+    expect(rows[1].Title).toBe('Job 1');
+    expect(rows[1].Company).toBe('Firm 1');
+    expect(rows[1].Location).toBe('Town 1');
+  });
+
+  it("offers a card's other links, named after what they say", () => {
+    document.body.innerHTML = repeat(
+      3,
+      (i) => `<div class="card"><h3>Job ${i}</h3><footer><a class="item" href="/learn">Learn</a><a class="item" href="/apply/${i}">Apply</a></footer></div>`
+    );
+
+    const rows = extract();
+
+    expect(rows[1].Link).toContain('/learn');
+    expect(rows[1]['Apply link']).toContain('/apply/1');
+  });
+
+  it('does not offer a second column for a second link to the same place', () => {
+    document.body.innerHTML = repeat(
+      3,
+      (i) => `<div class="card"><a href="/p/${i}"><img src="/${i}.jpg"></a><h3><a href="/p/${i}">Item ${i}</a></h3></div>`
+    );
+
+    expect(discoverFieldsInCluster(items()).filter((field) => field.type === 'link')).toHaveLength(1);
+  });
+
+  it('does not make a column of each tag in a list of tags', () => {
+    document.body.innerHTML = repeat(
+      3,
+      (i) => `<div class="card"><h3>Item ${i}</h3><div class="tags"><a class="tag" href="/t/a${i}">a</a><a class="tag" href="/t/b${i}">b</a><a class="tag" href="/t/c${i}">c</a></div></div>`
+    );
+
+    expect(discoverFieldsInCluster(items()).filter((field) => field.type === 'link').length).toBeLessThanOrEqual(1);
+  });
+
+  it('does not name columns after layout classes', () => {
+    document.body.innerHTML = repeat(
+      3,
+      (i) => `<div class="card"><h3>Item ${i}</h3><span class="text-muted mb-2">Made ${i}</span><span class="css-1x2y3z">Hashed ${i}</span><span class="eag3qlw2">Other ${i}</span></div>`
+    );
+
+    const names = discoverFieldsInCluster(items()).map((field) => field.name);
+
+    expect(names.join(' ')).not.toMatch(/Muted|Mb 2|Css|Eag3/);
+  });
+
+  it('keeps the main text of a card alongside its labelled values', () => {
+    document.body.innerHTML = repeat(
+      3,
+      (i) => `<div class="card"><span class="text">Saying number ${i} goes here.</span><small class="author">Writer ${i}</small></div>`
+    );
+
+    const rows = extract();
+
+    expect(rows[1].Text).toBe('Saying number 1 goes here.');
+    expect(rows[1].Author).toBe('Writer 1');
+  });
+
+  it('does not make columns from links that differ on every record, such as tags', () => {
+    const tags = [['love'], ['life', 'humor'], ['books'], ['truth', 'wisdom'], ['friends'], ['poetry', 'simile']];
+    document.body.innerHTML = tags
+      .map(
+        (names, i) =>
+          `<div class="card"><h3>Item ${i}</h3><div class="tags">${names
+            .map((name) => `<a class="tag" href="/tag/${name}">${name}</a>`)
+            .join('')}</div></div>`
+      )
+      .join('');
+
+    const links = discoverFieldsInCluster(items()).filter((field) => field.type === 'link');
+
+    expect(links.map((field) => field.name)).toEqual(['Link']);
+  });
+
+  it('does not take a price in a heading for the title', () => {
+    document.body.innerHTML = repeat(
+      3,
+      (i) => `<div class="card"><h4 class="price">$${i}.99</h4><h4><a class="title" href="/p/${i}" title="Laptop model ${i}">Laptop mod...</a></h4></div>`
+    );
+
+    const rows = extract();
+
+    expect(rows[1].Title).toBe('Laptop model 1');
+    expect(rows[1].Price).toBe(1.99);
+  });
+
+  it('recognizes a price written with the currency after it', () => {
+    document.body.innerHTML = repeat(
+      3,
+      (i) => `<div class="card"><h3>Item ${i}</h3><div class="price-wrapper">${i}1,99 €</div></div>`
+    );
+
+    const rows = extract();
+
+    expect(rows.map((row) => row.Price)).toEqual([1.99, 11.99, 21.99]);
+  });
+
+  it('does not stretch a named link over other links with the same class', () => {
+    document.body.innerHTML = repeat(
+      6,
+      (i) => `<div class="card"><h3>Item ${i}</h3><a href="/about/${i}">about</a><div class="tags"><a class="tag" href="/t/n${i}">name${i}</a></div></div>`
+    );
+
+    const links = discoverFieldsInCluster(items()).filter((field) => field.type === 'link');
+
+    expect(links.map((field) => field.name)).toEqual(['Link']);
+  });
+
+  it('does not repeat a value already in another column', () => {
+    document.body.innerHTML = repeat(
+      3,
+      (i) => `<div class="card"><h3 class="name"><span class="inner">Item ${i}</span></h3><p class="price">$${i}.00</p></div>`
+    );
+
+    expect(discoverFieldsInCluster(items()).map((field) => field.name)).toEqual(['Title', 'Price']);
+  });
+});
+
 describe('the content script uses multi-record discovery', () => {
   it('reports columns found after the first record, with their evidence', async () => {
     document.body.innerHTML = repeat(
