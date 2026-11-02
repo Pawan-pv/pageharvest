@@ -1,3 +1,4 @@
+import { CandidateKind } from '@/shared/contracts/message';
 import {
   ExtensionMessage,
   JobCommandResult,
@@ -177,21 +178,21 @@ class ExtensionMessagingService {
     });
   }
 
-  public async detectRepeatedElements(targetSelector?: string): Promise<void> {
+  public async detectRepeatedElements(targetSelector?: string, mode?: 'table' | 'links'): Promise<void> {
     await this.sendToActiveTab({
       id: generateId(),
       timestamp: Date.now(),
       type: 'DETECT_REPEATED_ELEMENTS',
-      payload: { targetSelector },
+      payload: { targetSelector, mode },
     });
   }
 
-  public async detectFields(containerSelector: string): Promise<void> {
+  public async detectFields(containerSelector: string, kind?: CandidateKind): Promise<void> {
     await this.sendToActiveTab({
       id: generateId(),
       timestamp: Date.now(),
       type: 'DETECT_FIELDS',
-      payload: { containerSelector },
+      payload: { containerSelector, kind },
     });
   }
 

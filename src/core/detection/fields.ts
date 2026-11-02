@@ -2,13 +2,14 @@ import {
   DetectedFieldSuggestion,
   DiscoveredField,
   DiscoveredFieldType,
+  FieldExtractorType,
   FieldDefinition,
   FieldHeuristicConfig,
 } from '@/types';
-import { filterMeaningfulClasses, generateRelativeSelector } from '@/utils/selector';
+import { escapeCss, filterMeaningfulClasses, generateRelativeSelector } from '@/utils/selector';
 import { normalizeText, resolveAbsoluteUrl, parseNumberValue } from '@/utils/dom';
 import { NumberParseResult, parseNumberDetailed } from '@/utils/number-parser';
-import { sampleElements } from './cache';
+import { normalizeImageUrl } from '@/core/extraction/normalizer';
 
 const TRUNCATED_TEXT_REGEX = /(?:\.{3}|…)$/;
 const MAX_PLAIN_TEXT_FIELDS = 4;
@@ -30,12 +31,14 @@ export interface InternalFieldCandidate {
   name: string;
   type: DiscoveredFieldType;
   selector: string;
-  extractor: 'text' | 'attribute' | 'href' | 'src' | 'html' | 'number' | 'regex';
+  extractor: FieldExtractorType;
   attributeName?: string;
   regexPattern?: string;
   regexGroup?: number;
   sampleValue: string;
   element: Element;
+  /** Text found only because the item had no recognized heading or description. */
+  plain?: boolean;
 }
 
 function describeNumber(parsed: NumberParseResult): string {
@@ -134,24 +137,20 @@ export function extractCandidatesFromElement(
 
   // 3. Image / Thumbnail
   const imgSelectors = heuristics?.images || [
-    'img[src]', 'img[data-src]', 'picture > source[srcset]', '[style*="background-image"]',
+    'img[src]', 'img[data-src]', 'img[data-lazy-src]', 'img[data-original]', 'img[data-lazy]',
+    'img[srcset]', 'img[data-srcset]', 'picture > source[srcset]', '[style*="background-image"]',
   ];
   const imgEl = container.querySelector(imgSelectors.join(', '));
   if (imgEl && !visitedElements.has(imgEl)) {
-    let src = imgEl.getAttribute('src') || imgEl.getAttribute('data-src');
-    if (!src && imgEl.hasAttribute('style')) {
-      const style = imgEl.getAttribute('style') || '';
-      const bgMatch = style.match(/url\(["']?([^"']+)["']?\)/i);
-      if (bgMatch) src = bgMatch[1];
-    }
-    if (src && !src.startsWith('data:image/svg')) {
+    const src = normalizeImageUrl(imgEl, imgEl.baseURI || undefined);
+    if (src) {
       visitedElements.add(imgEl);
       candidates.push({
         name: 'Image',
         type: 'image',
         selector: generateRelativeSelector(container, imgEl),
         extractor: 'src',
-        sampleValue: resolveAbsoluteUrl(src),
+        sampleValue: src,
         element: imgEl,
       });
     }
@@ -168,6 +167,8 @@ export function extractCandidatesFromElement(
     const text = el.textContent || '';
     if (priceRegex.test(text)) {
       const parsed = parseNumberDetailed(normalizeText(text));
+      // A wrapper around a sale price and an old price: the price is one of its children.
+      if (parsed.status === 'ambiguous' && el.children.length > 0) continue;
       if (parsed.status !== 'invalid') {
         visitedElements.add(el);
         candidates.push({
@@ -345,65 +346,179 @@ function plainTextCandidates(container: Element, visited: Set<Element>): Interna
       extractor: 'text',
       sampleValue: text.slice(0, 100),
       element,
+      plain: true,
     });
   }
   return candidates;
 }
 
+const DEFAULT_FIELD_SAMPLE = 12;
+/** A short label on few records is decoration, not a column most people want. */
+const LABEL_MIN_COVERAGE = 0.5;
+/** Unrecognized text must recur to be selected by default. */
+const PLAIN_TEXT_MIN_COVERAGE = 0.2;
+
+/** Evenly spread through the list, always including the first and the last. */
+function representativeSample(cluster: Element[], size: number): Element[] {
+  if (cluster.length <= size) return cluster;
+  const step = (cluster.length - 1) / (size - 1);
+  return Array.from({ length: size }, (_, index) => cluster[Math.round(index * step)]);
+}
+
+/** Ways to reach an element from its item, from most to least stable. */
+function selectorOptions(item: Element, element: Element, generated: string): string[] {
+  const options: string[] = [];
+  const tag = element.tagName.toLowerCase();
+  const classes = filterMeaningfulClasses(element.classList);
+  if (classes.length > 0) {
+    options.push(`${tag}.${classes.map(escapeCss).join('.')}`, `${tag}.${escapeCss(classes[0])}`);
+  } else {
+    options.push(`${tag}:not([class])`);
+  }
+  const parent = element.parentElement;
+  if (parent && parent !== item) {
+    const parentClasses = filterMeaningfulClasses(parent.classList);
+    if (parentClasses.length > 0) {
+      options.push(`${parent.tagName.toLowerCase()}.${escapeCss(parentClasses[0])} > ${tag}`);
+    }
+  }
+  options.push(tag, generated, `${tag}:last-of-type`);
+  return options.filter((option, index) => {
+    if (options.indexOf(option) !== index) return false;
+    if (option === '') return element === item;
+    try {
+      return item.querySelector(option) === element;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/** Whether an element holds the kind of value this field is for. */
+function holdsValue(element: Element, candidate: InternalFieldCandidate): boolean {
+  switch (candidate.type) {
+    case 'link':
+      return Boolean(element.getAttribute('href'));
+    case 'image':
+      return normalizeImageUrl(element, element.baseURI || undefined) !== null;
+    case 'price':
+      return DEFAULT_PRICE_REGEX.test(element.textContent ?? '');
+    default:
+      if (candidate.extractor === 'attribute' && candidate.attributeName) {
+        return Boolean(element.getAttribute(candidate.attributeName)?.trim());
+      }
+      return normalizeText(element.textContent).length > 0;
+  }
+}
+
+interface FieldEvidence {
+  candidate: InternalFieldCandidate;
+  options: string[];
+  elementByItem: Map<Element, Element>;
+}
+
+function scoreOption(option: string, evidence: FieldEvidence, sample: Element[]) {
+  let hits = 0;
+  let conflicts = 0;
+  for (const item of sample) {
+    let found: Element | null;
+    try {
+      found = option === '' ? item : item.querySelector(option);
+    } catch {
+      found = null;
+    }
+    if (!found) continue;
+    const expected = evidence.elementByItem.get(item);
+    if (holdsValue(found, evidence.candidate) && (!expected || expected === found)) {
+      hits += 1;
+    } else {
+      conflicts += 1;
+    }
+  }
+  return { hits, conflicts };
+}
+
+function isPositional(selector: string): boolean {
+  return /nth-child|nth-of-type/.test(selector);
+}
+
+function isSuggested(candidate: InternalFieldCandidate, coverage: number): boolean {
+  if (candidate.name === 'Category') return coverage >= LABEL_MIN_COVERAGE;
+  if (candidate.plain) return coverage >= PLAIN_TEXT_MIN_COVERAGE;
+  return true;
+}
+
 /**
- * Discovers fields across an entire cluster of repeated container items.
- * Uses bounded sampling for large containers to avoid expensive DOM queries.
+ * Discovers fields from a sample of the records, not just the first. A field found on any
+ * sampled record is offered. Its selector is the one that best finds the right kind of
+ * value across the whole sample, so a position that means different data in different
+ * records loses. Coverage and confidence report only what was actually observed.
  */
 export function discoverFieldsInCluster(
   cluster: Element[],
-  heuristics?: FieldHeuristicConfig
+  heuristics?: FieldHeuristicConfig,
+  options: { sampleSize?: number } = {}
 ): DiscoveredField[] {
   if (cluster.length === 0) return [];
 
-  const repItem = cluster[0];
-  const repCandidates = extractCandidatesFromElement(repItem, heuristics);
+  const sample = representativeSample(cluster, options.sampleSize ?? DEFAULT_FIELD_SAMPLE);
+  const merged = new Map<string, FieldEvidence>();
 
-  // Bounded sampling: test field coverage on up to 8 elements for maximum responsiveness
-  const testSample = cluster.length <= 16 ? cluster : sampleElements(cluster, 8);
-  const discovered: DiscoveredField[] = [];
-
-  for (let idx = 0; idx < repCandidates.length; idx++) {
-    const cand = repCandidates[idx];
-    let sampleOccurrences = 0;
-
-    for (const item of testSample) {
-      try {
-        const found = cand.selector === '' ? item : item.querySelector(cand.selector);
-        if (found) sampleOccurrences++;
-      } catch {
-        // Invalid selector fallback
+  for (const item of sample) {
+    for (const candidate of extractCandidatesFromElement(item, heuristics)) {
+      const key = `${candidate.type}|${candidate.name}`;
+      const evidence: FieldEvidence = merged.get(key) ?? { candidate, options: [], elementByItem: new Map() };
+      evidence.elementByItem.set(item, candidate.element);
+      for (const option of selectorOptions(item, candidate.element, candidate.selector)) {
+        if (!evidence.options.includes(option)) evidence.options.push(option);
       }
-    }
-
-    const coverage = Math.round((sampleOccurrences / testSample.length) * 100) / 100;
-    const estimatedTotalOccurrences = Math.round(coverage * cluster.length);
-
-    // Keep field if it occurs in at least 25% of items or at least 2 items
-    if (estimatedTotalOccurrences >= 2 || cluster.length === 1) {
-      discovered.push({
-        id: `field_${cand.type}_${idx + 1}`,
-        name: cand.name,
-        selector: cand.selector,
-        extractor: cand.extractor,
-        attributeName: cand.attributeName,
-        sampleValue: cand.sampleValue,
-        type: cand.type,
-        confidence: Math.round(coverage * 100) / 100,
-        occurrences: estimatedTotalOccurrences,
-        coverage,
-        // Discovering a field never makes it required. Requiring a value is an
-        // explicit filtering choice the user makes when configuring the field.
-        required: false,
-      });
+      merged.set(key, evidence);
     }
   }
 
-  return discovered;
+  const discovered: DiscoveredField[] = [];
+  for (const evidence of merged.values()) {
+    let best: { selector: string; hits: number; conflicts: number } | null = null;
+    for (const option of evidence.options) {
+      const { hits, conflicts } = scoreOption(option, evidence, sample);
+      const net = hits - conflicts;
+      const bestNet = best ? best.hits - best.conflicts : -Infinity;
+      const isBetter =
+        net > bestNet ||
+        (net === bestNet && best !== null && isPositional(best.selector) && !isPositional(option));
+      if (isBetter) best = { selector: option, hits, conflicts };
+    }
+    if (!best || best.hits === 0) continue;
+
+    const coverage = Math.round((best.hits / sample.length) * 100) / 100;
+    const agreement = best.hits / (best.hits + best.conflicts);
+    const { candidate } = evidence;
+    discovered.push({
+      id: `field_${candidate.type}_${discovered.length + 1}`,
+      name: candidate.name,
+      selector: best.selector,
+      extractor: candidate.extractor,
+      attributeName: candidate.attributeName,
+      sampleValue: candidate.sampleValue,
+      type: candidate.type,
+      confidence: Math.round(coverage * agreement * 100) / 100,
+      occurrences: Math.round((best.hits / sample.length) * cluster.length),
+      coverage,
+      sampleSize: sample.length,
+      suggested: isSuggested(candidate, coverage),
+      // Discovering a field never makes it required. Requiring a value is an
+      // explicit filtering choice the user makes when configuring the field.
+      required: false,
+    });
+  }
+
+  // Text picked up from records with no heading is noise once a real heading column exists.
+  const hasRealText = discovered.some(
+    (field) => field.type === 'text' && field.name !== 'Category' && !merged.get(`text|${field.name}`)?.candidate.plain && field.coverage >= 0.5
+  );
+  return hasRealText
+    ? discovered.filter((field) => !merged.get(`${field.type}|${field.name}`)?.candidate.plain)
+    : discovered;
 }
 
 /**
@@ -434,5 +549,17 @@ export function suggestionsToFieldDefinitions(
     extractor: s.extractor,
     attributeName: s.attributeName,
     required: false,
+    ...('coverage' in s
+      ? {
+          discovery: {
+            coverage: s.coverage,
+            confidence: s.confidence,
+            sampleSize: s.sampleSize,
+            occurrences: s.occurrences,
+            suggested: s.suggested,
+            sampleValue: s.sampleValue,
+          },
+        }
+      : {}),
   }));
 }

@@ -174,7 +174,8 @@ describe('ExtractionEngine & Data Normalization Suite', () => {
       expect(normalizeImageUrl(lazyImg, base)).toBe('https://example.com/images/lazy.jpg');
 
       const srcSetImg = card.querySelector('.img-srcset')!;
-      expect(normalizeImageUrl(srcSetImg, base)).toBe('https://example.com/images/small.jpg');
+      // Deliberately the largest candidate, not the first: see ADR-025.
+      expect(normalizeImageUrl(srcSetImg, base)).toBe('https://example.com/images/large.jpg');
 
       const bgImg = card.querySelector('.img-bg')!;
       expect(normalizeImageUrl(bgImg, base)).toBe('https://example.com/images/bg-banner.jpg');

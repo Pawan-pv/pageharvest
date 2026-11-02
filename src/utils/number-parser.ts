@@ -191,7 +191,7 @@ function isNegative(text: string, index: number, end: number, hasCurrency: boole
 
 export function parseNumberDetailed(input: unknown, options: NumberParseOptions = {}): NumberParseResult {
   const raw = input === null || input === undefined ? '' : String(input);
-  const text = raw.replace(/[    ]/g, ' ').replace(/−/g, '-').trim();
+  const text = raw.replace(/[\u00a0\u2007\u2009\u202f]/g, ' ').replace(/\u2212/g, '-').trim();
   const invalid: NumberParseResult = { raw, status: 'invalid', value: null };
   if (!text) return invalid;
 

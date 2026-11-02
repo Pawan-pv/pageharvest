@@ -6,6 +6,8 @@ import { ExtractionField, ExtractionSchema, FieldTransform } from '@/shared/cont
  */
 export type ExtendedFieldExtractorType =
   | 'text'
+  | 'table_cell'
+  | 'link_text'
   | 'link'
   | 'links'
   | 'href'
@@ -39,6 +41,7 @@ export interface ExtractionFieldConfig {
   defaultValue?: string;
   required?: boolean;
   transform?: FieldTransform;
+  columnIndex?: number;
 }
 
 /**

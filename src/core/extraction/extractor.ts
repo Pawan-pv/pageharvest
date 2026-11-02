@@ -2,6 +2,7 @@ import { ExtractionRecipe, ExtractedRecord, FieldDefinition } from '@/types';
 import { ExtractionField, ExtractionSchema } from '@/shared/contracts';
 import { normalizeFieldValue, normalizeText, pageLocaleOf } from './normalizer';
 import { parseNumberDetailed, NumberParseResult } from '@/utils/number-parser';
+import { readTableCell } from './table-extractor';
 import { DuplicateDetector, generateRecordSignature } from './duplicate-detector';
 import { validateExtractionInput, validateRecord, isValidCssSelector } from './validator';
 import {
@@ -40,6 +41,8 @@ function normalizeExtractor(value: string): ExtendedFieldExtractorType {
     case 'html':
     case 'number':
     case 'regex':
+    case 'table_cell':
+    case 'link_text':
       return value;
     default:
       return 'text';
@@ -130,6 +133,21 @@ export function extractFieldValue(
   let rawValue: unknown;
   const extractor = (field.extractor || 'text').toLowerCase();
 
+  if (extractor === 'table_cell') {
+    return readTableCell(targetEl, field.columnIndex ?? 0) ?? field.defaultValue ?? null;
+  }
+  if (extractor === 'link_text') {
+    const text = normalizeText(targetEl.textContent);
+    return (
+      text ||
+      normalizeText(targetEl.getAttribute('aria-label')) ||
+      normalizeText(targetEl.querySelector('img[alt]')?.getAttribute('alt')) ||
+      normalizeText(targetEl.getAttribute('title')) ||
+      field.defaultValue ||
+      null
+    );
+  }
+
   switch (extractor) {
     case 'text':
       rawValue = (targetEl as HTMLElement).innerText || targetEl.textContent;
@@ -187,8 +205,11 @@ export function extractFieldValue(
       rawValue = targetEl.textContent;
   }
 
+  // A <base> tag changes what relative URLs mean, and only the element knows about it.
+  const hasBaseTag = targetEl.ownerDocument?.querySelector('base[href]') != null;
+
   return normalizeFieldValue(rawValue, field.extractor as ExtendedFieldExtractorType, {
-    baseUrl,
+    baseUrl: hasBaseTag ? targetEl.baseURI : baseUrl,
     regexPattern: field.regexPattern,
     regexGroup: field.regexGroup,
     defaultValue: field.defaultValue,
@@ -239,6 +260,7 @@ function resolveFieldDefinitions(input: ExtractionInput): ResolvedFieldDefinitio
         defaultValue: f.defaultValue,
         required: f.required ?? false,
         transform: getFieldTransform(f),
+        columnIndex: f.columnIndex,
       });
     }
   }
@@ -258,6 +280,7 @@ function resolveFieldDefinitions(input: ExtractionInput): ResolvedFieldDefinitio
         defaultValue: f.defaultValue !== undefined ? f.defaultValue : existing?.defaultValue,
         required: f.required !== undefined ? f.required : (existing?.required ?? false),
         transform: f.transform || existing?.transform || 'trim',
+        columnIndex: f.columnIndex ?? existing?.columnIndex,
       });
     }
   }

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Lazy scroll - PageHarvest Fixture</title>
+</head>
+<body>
+<h1>Images that load when scrolled to</h1>
+<div class="stream" id="stream">
+  <article class="entry" style="height:500px"><h3>Entry 0</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/0.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 1</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/1.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 2</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/2.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 3</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/3.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 4</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/4.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 5</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/5.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 6</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/6.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 7</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/7.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 8</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/8.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 9</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/9.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 10</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/10.jpg"></article>
+  <article class="entry" style="height:500px"><h3>Entry 11</h3><img class="lazy" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="e" data-pending="/loaded/11.jpg"></article>
+</div>
+<script>
+  // Moves the real address into src only when the image comes into view, and removes the
+  // attribute, as lazy-loading libraries do.
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        entry.target.src = entry.target.dataset.pending;
+        entry.target.removeAttribute('data-pending');
+        observer.unobserve(entry.target);
+      }
+    }
+  });
+  document.querySelectorAll('img.lazy').forEach((image) => observer.observe(image));
+</script>
+</body>
+</html>

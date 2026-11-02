@@ -13,6 +13,17 @@ export interface FieldEditorRowProps {
   onRemove: () => void;
 }
 
+/** Why a pattern cannot be used, or an empty string if it can. */
+export function regexProblem(pattern: string): string {
+  if (!pattern.trim()) return 'A regex field needs a pattern.';
+  try {
+    new RegExp(pattern);
+    return '';
+  } catch {
+    return `"${pattern}" is not a valid regular expression.`;
+  }
+}
+
 export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
   field,
   isSelected,
@@ -26,6 +37,9 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
   const [editExtractor, setEditExtractor] = useState<FieldExtractorType>(field.extractor);
   const [editAttr, setEditAttr] = useState(field.attributeName || '');
   const [editRequired, setEditRequired] = useState(field.required === true);
+  const [editRegex, setEditRegex] = useState(field.regexPattern || '');
+  const [editRegexGroup, setEditRegexGroup] = useState(String(field.regexGroup ?? 0));
+  const [editError, setEditError] = useState('');
 
   const extractorOptions: { value: FieldExtractorType; label: string }[] = [
     { value: 'text', label: 'Text content' },
@@ -35,14 +49,26 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
     { value: 'html', label: 'Raw HTML' },
     { value: 'attribute', label: 'HTML Attribute' },
     { value: 'regex', label: 'Regex Pattern' },
+    ...(field.extractor === 'table_cell' ? [{ value: 'table_cell' as const, label: 'Table column' }] : []),
+    ...(field.extractor === 'link_text' ? [{ value: 'link_text' as const, label: 'Link text' }] : []),
   ];
 
   const handleSave = () => {
+    if (editExtractor === 'regex') {
+      const problem = regexProblem(editRegex);
+      if (problem) {
+        setEditError(problem);
+        return;
+      }
+    }
+    setEditError('');
     onUpdate({
       name: editName.trim() || field.name,
       selector: editSelector.trim() || field.selector,
       extractor: editExtractor,
       attributeName: editExtractor === 'attribute' ? editAttr.trim() : undefined,
+      regexPattern: editExtractor === 'regex' ? editRegex : undefined,
+      regexGroup: editExtractor === 'regex' ? Number(editRegexGroup) || 0 : undefined,
       required: editRequired,
     });
     setIsEditing(false);
@@ -54,6 +80,9 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
     setEditExtractor(field.extractor);
     setEditAttr(field.attributeName || '');
     setEditRequired(field.required === true);
+    setEditRegex(field.regexPattern || '');
+    setEditRegexGroup(String(field.regexGroup ?? 0));
+    setEditError('');
     setIsEditing(false);
   };
 
@@ -65,6 +94,8 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
     html: 'warning',
     attribute: 'neutral',
     regex: 'danger',
+    table_cell: 'neutral',
+    link_text: 'neutral',
   };
 
   return (
@@ -105,6 +136,13 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
               <div className="text-[11px] text-slate-400 font-mono truncate mt-0.5" title={field.selector}>
                 {field.selector}
               </div>
+              {field.discovery && (
+                <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                  Found in {Math.round(field.discovery.coverage * field.discovery.sampleSize)} of{' '}
+                  {field.discovery.sampleSize} sampled items
+                  {field.discovery.sampleValue ? `, such as "${field.discovery.sampleValue}"` : ''}
+                </div>
+              )}
             </div>
           </div>
 
@@ -178,6 +216,30 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
               onChange={(e) => setEditAttr(e.target.value)}
               placeholder="e.g. data-asin or aria-label"
             />
+          )}
+
+          {editExtractor === 'regex' && (
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                label="Regex Pattern"
+                value={editRegex}
+                onChange={(e) => setEditRegex(e.target.value)}
+                placeholder="e.g. SKU-(\\d+)"
+              />
+              <Input
+                type="number"
+                min={0}
+                label="Capture Group"
+                value={editRegexGroup}
+                onChange={(e) => setEditRegexGroup(e.target.value)}
+              />
+            </div>
+          )}
+
+          {editError && (
+            <p role="alert" className="text-[11px] text-rose-600">
+              {editError}
+            </p>
           )}
 
           <label className="flex items-start gap-2 cursor-pointer">

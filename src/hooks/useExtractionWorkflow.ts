@@ -1,3 +1,4 @@
+import { CandidateKind, ListCandidate } from '@/shared/contracts/message';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { messagingService, TabInfo } from '@/services/messaging';
 import {
@@ -47,6 +48,12 @@ export interface DetectedList {
   containerSelector: string;
   matchCount: number;
   sampleSnippets: string[];
+  /** Everything on the page the user could choose instead, best first. */
+  candidates?: ListCandidate[];
+  /** False when nothing on the page looks like data. */
+  credible?: boolean;
+  kind?: CandidateKind;
+  dedupeFields?: string[];
 }
 
 export interface ExtractionStats {
@@ -307,19 +314,28 @@ export function useExtractionWorkflow(tab: TabInfo) {
         }
 
         case 'REPEATED_ELEMENTS_DETECTED': {
-          const { containerSelector, matchCount, sampleSnippets } = message.payload;
+          const { containerSelector, matchCount, sampleSnippets, candidates, credible } = message.payload;
           setOperationError(null);
-          setDetectedList({ containerSelector, matchCount, sampleSnippets });
+          setDetectedList({
+            containerSelector,
+            matchCount,
+            sampleSnippets,
+            candidates,
+            credible,
+            kind: candidates?.[0]?.kind,
+            dedupeFields: candidates?.[0]?.dedupeFields,
+          });
           setView('review_list');
           break;
         }
 
         case 'FIELDS_DETECTED': {
           const { suggestedFields } = message.payload;
-          if (suggestedFields && suggestedFields.length > 0) {
-            setFields(suggestedFields);
-            setSelectedFieldIds(new Set(suggestedFields.map((f) => f.id)));
-          }
+          // Replaced even when empty, so columns of a previous list cannot carry over.
+          setFields(suggestedFields);
+          setSelectedFieldIds(
+            new Set(suggestedFields.filter((f) => f.discovery?.suggested !== false).map((f) => f.id))
+          );
           break;
         }
 
@@ -396,13 +412,24 @@ export function useExtractionWorkflow(tab: TabInfo) {
     }
   }, [handleOperationError]);
 
+  const selectListCandidate = useCallback((candidate: ListCandidate) => {
+    setDetectedList((current) => ({
+      ...(current ?? {}),
+      containerSelector: candidate.containerSelector,
+      matchCount: candidate.matchCount,
+      sampleSnippets: candidate.sampleSnippets,
+      kind: candidate.kind,
+      dedupeFields: candidate.dedupeFields,
+    }));
+  }, []);
+
   const startPresetDetection = useCallback(
-    async (targetSelector: string) => {
+    async (mode: 'table' | 'links') => {
       try {
         setOperationError(null);
         setActiveRecipeId(undefined);
         setView('inspecting');
-        await messagingService.detectRepeatedElements(targetSelector);
+        await messagingService.detectRepeatedElements(undefined, mode);
       } catch (err) {
         handleOperationError(err, 'dashboard');
       }
@@ -426,7 +453,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       void loadProjects();
 
       try {
-        await messagingService.detectFields(candidate.containerSelector);
+        await messagingService.detectFields(candidate.containerSelector, candidate.kind);
       } catch (err) {
         setFields([]);
         setSelectedFieldIds(new Set());
@@ -480,6 +507,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         containerSelector: detectedList.containerSelector,
         fields: fields.filter((f) => selectedFieldIds.has(f.id)),
         pagination,
+        dedupeFields: detectedList.dedupeFields,
         projectId: selectedProjectId,
         createdAt: now,
         updatedAt: now,
@@ -727,12 +755,14 @@ export function useExtractionWorkflow(tab: TabInfo) {
       fields: FieldDefinition[];
       pagination?: ExtractionPaginationConfig;
       projectId?: string;
+      dedupeFields?: string[];
     }) => {
       setOperationError(null);
       setDetectedList({
         containerSelector: config.containerSelector,
         matchCount: 0,
         sampleSnippets: [],
+        dedupeFields: config.dedupeFields,
       });
       setFields(config.fields);
       setSelectedFieldIds(new Set(config.fields.map((f) => f.id)));
@@ -787,6 +817,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
     cancelVisualPicker,
     autoDetectLists,
     startPresetDetection,
+    selectListCandidate,
     confirmListCandidate,
     toggleFieldSelection,
     updateField,

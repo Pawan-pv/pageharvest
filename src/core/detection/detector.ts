@@ -147,12 +147,17 @@ export function detectListFromSelection(
       const repeatedSelector = generateRepeatedSelector(candidateParent, candidateItem);
       let matchedElements: Element[] = targetCluster;
 
-      // Only search document if the local cluster has very few items and parent is small
+      // The rows of one grid are one list. The same selector elsewhere on the page is
+      // not: that is how a site menu or a recommendations block gets mixed in.
       if (targetCluster.length < 5 && candidateParent.children.length < 50) {
         try {
-          const docMatches = Array.from(document.querySelectorAll(repeatedSelector));
-          if (docMatches.length >= targetCluster.length) {
-            matchedElements = docMatches;
+          const rows = Array.from(document.querySelectorAll(repeatedSelector)).filter(
+            (element) =>
+              element.parentElement?.parentElement === candidateParent.parentElement &&
+              candidateParent.parentElement !== null
+          );
+          if (rows.length >= targetCluster.length && rows.includes(candidateItem)) {
+            matchedElements = rows;
           }
         } catch {
           matchedElements = targetCluster;
@@ -209,28 +214,39 @@ export function detectListFromSelection(
   evaluations.sort((a, b) => b.score - a.score);
   const best = evaluations[0];
 
-  const listName = inferListName(best.matchedElements, best.parent, best.fields);
-  const samples: CandidateSample[] = sampleElements(best.matchedElements, sampleLimit).map(
+  // What is shown and what is extracted come from one selector, so they cannot differ.
+  const searchRoot = targetElement.ownerDocument ?? document;
+  const itemSelector = scopeItemSelector(
+    { parent: best.parent, items: best.matchedElements, required: minItems },
+    searchRoot
+  );
+  const matchedElements = Array.from(searchRoot.querySelectorAll(itemSelector));
+  const listName = inferListName(matchedElements, best.parent, best.fields);
+  const samples: CandidateSample[] = sampleElements(matchedElements, sampleLimit).map(
     createCandidateSample
   );
 
   return {
     name: listName,
-    containerSelector: best.containerSelector,
+    containerSelector: itemSelector,
     parentSelector: best.parentSelector,
-    itemSelector: best.itemSelector,
-    itemCount: best.matchedElements.length,
+    itemSelector,
+    itemCount: matchedElements.length,
     confidence: best.confidence,
     confidencePercent: best.confidencePercent,
     confidenceFactors: best.factors,
     availableFields: best.fields,
     sampleElements: samples,
-    matchedElements: best.matchedElements,
+    matchedElements,
+    credible: true,
+    evidence: ['chosen on the page'],
   };
 }
 
 /**
- * Auto-detects all repeated lists across the document, ranked by confidence and size.
+ * Finds the lists on a page, best first. The confidence is an assessment of whether a list
+ * is data, built only from the observations listed in its evidence: see assessGroup. The
+ * caller shows the alternatives, because the best guess can still be wrong.
  */
 export function autoDetectLists(
   root: Document | Element = document,
@@ -242,25 +258,29 @@ export function autoDetectLists(
 
   const groups = findRepeatedGroups(root, minItems);
   const allParents = groups.filter((group) => group.items.length >= 3).map((group) => group.parent);
+  const hasMain = root.querySelector('main, [role="main"]') !== null;
 
   const ranked = groups
     .map((group) => {
-      const fields = discoverFieldsInCluster(group.items, options?.heuristics);
-      const { confidence, confidencePercent, factors } = calculateConfidence({
+      const fields = discoverFieldsInCluster(group.items, options?.heuristics, {
+        sampleSize: RANKING_FIELD_SAMPLE,
+      });
+      const { confidence: structural, factors } = calculateConfidence({
         items: group.items,
         parent: group.parent,
         discoveredFields: fields,
         totalSiblingCount: group.parent.children.length,
       });
-      const score =
-        confidence *
-        Math.log2(group.items.length + 1) *
-        contentWeight(group.items, fields) *
-        (isInNavigationRegion(group.parent) ? NAVIGATION_WEIGHT : 1) *
-        (wrapsAnotherGroup(group.items, allParents) ? WRAPPER_WEIGHT : 1);
-      return { group, fields, confidence, confidencePercent, factors, score };
+      const assessment = assessGroup(group, fields, structural, allParents, hasMain);
+      return {
+        group,
+        factors,
+        structural,
+        ...assessment,
+        score: assessment.confidence * Math.log2(group.items.length + 1),
+      };
     })
-    .filter((candidate) => candidate.confidence >= minConfidence)
+    .filter((candidate) => candidate.structural >= minConfidence)
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_AUTO_DETECTED_LISTS);
 
@@ -277,18 +297,21 @@ export function autoDetectLists(
     const matchedElements = Array.from(root.querySelectorAll(itemSelector));
     if (matchedElements.length < minItems) continue;
 
+    const fields = discoverFieldsInCluster(matchedElements, options?.heuristics);
     results.push({
-      name: inferListName(matchedElements, group.parent, candidate.fields),
+      name: inferListName(matchedElements, group.parent, fields),
       containerSelector: itemSelector,
       parentSelector: getFastParentSelector(group.parent),
       itemSelector,
       itemCount: matchedElements.length,
       confidence: candidate.confidence,
-      confidencePercent: candidate.confidencePercent,
+      confidencePercent: Math.round(candidate.confidence * 100),
       confidenceFactors: candidate.factors,
-      availableFields: candidate.fields,
+      availableFields: fields,
       sampleElements: sampleElements(matchedElements, sampleLimit).map(createCandidateSample),
       matchedElements,
+      credible: candidate.credible,
+      evidence: candidate.evidence,
     });
   }
 
@@ -315,13 +338,24 @@ const NON_RECORD_TAGS = new Set([
 ]);
 const SKIPPED_PARENT_TAGS = new Set(['HEAD', 'SCRIPT', 'STYLE', 'SELECT', 'NOSCRIPT', 'TEMPLATE']);
 
+/** What a block calling itself one of these is saying: this is not the page's main list. */
+const SECONDARY_CONTENT =
+  /(?:^|[\s_-])(?:carousel|slider|swiper|recommend(?:ed|ations?)?|related|sponsored|promo(?:tions?|ted)?|similar|upsell|cross-?sell|trending|ads?|adverts?|advertisements?)(?:$|[\s_-])/i;
+const SECONDARY_HEADING = /you (?:may|might) also|recommended|related|similar|sponsored|people also|customers also/i;
+
 const MAX_SCANNED_ELEMENTS = 20000;
 const MAX_EVALUATED_GROUPS = 150;
 const MAX_AUTO_DETECTED_LISTS = 8;
 const MIN_ITEMS_OUTSIDE_LIST_CONTAINER = 3;
 const MAX_SCOPE_DEPTH = 6;
+const RANKING_FIELD_SAMPLE = 4;
 const NAVIGATION_WEIGHT = 0.2;
 const WRAPPER_WEIGHT = 0.5;
+const SECONDARY_WEIGHT = 0.45;
+const OUTSIDE_MAIN_WEIGHT = 0.75;
+const ONLY_LINKS_WEIGHT = 0.6;
+/** Below this a list is shown only as a low-ranked alternative. */
+const MIN_CREDIBLE_CONFIDENCE = 0.2;
 
 /**
  * Every parent on the page with repeated children is a candidate. Class names are not
@@ -376,23 +410,74 @@ function wrapsAnotherGroup(items: Element[], parents: Element[]): boolean {
   return parents.some((parent) => items.some((item) => item !== parent && item.contains(parent)));
 }
 
+function isSecondaryContent(element: Element): boolean {
+  let current: Element | null = element;
+  for (let depth = 0; current && depth < 4 && current.tagName !== 'BODY'; depth++) {
+    const label = [current.getAttribute('class'), current.id, current.getAttribute('aria-label')].join(' ');
+    if (SECONDARY_CONTENT.test(label)) return true;
+    const heading = current.previousElementSibling;
+    if (heading && /^H[1-6]$/.test(heading.tagName) && SECONDARY_HEADING.test(heading.textContent ?? '')) {
+      return true;
+    }
+    current = current.parentElement;
+  }
+  return false;
+}
+
 /**
- * How much the items look like records: several kinds of value, and more than a link each.
+ * How likely a repeated group is to be data the user wants. It starts from how alike the
+ * items are, and each observation below adjusts it and is recorded as evidence.
  */
-function contentWeight(items: Element[], fields: DiscoveredField[]): number {
-  const kinds = new Set(fields.filter((field) => (field.coverage ?? 0) >= 0.5).map((field) => field.type)).size;
-  const richness = kinds >= 3 ? 1 : kinds === 2 ? 0.8 : kinds === 1 ? 0.5 : 0.3;
+function assessGroup(
+  group: RepeatedGroup,
+  fields: DiscoveredField[],
+  structural: number,
+  allParents: Element[],
+  hasMain: boolean
+): { confidence: number; credible: boolean; evidence: string[] } {
+  const evidence = [`${group.items.length} similar items`];
+  const kinds = new Set(fields.filter((field) => field.coverage >= 0.5).map((field) => field.type)).size;
+  const columns = fields.filter((field) => field.coverage >= 0.5).length;
+  let weight = kinds >= 3 || columns >= 3 ? 1 : kinds === 2 || columns === 2 ? 0.8 : kinds === 1 ? 0.5 : 0.3;
+  evidence.push(`${columns} consistent ${columns === 1 ? 'value' : 'values'} per item`);
 
   let textLength = 0;
   let linkTextLength = 0;
-  for (const item of sampleElements(items, 8)) {
+  for (const item of sampleElements(group.items, 8)) {
     textLength += (item.textContent ?? '').trim().length;
     for (const link of Array.from(item.querySelectorAll('a'))) {
       linkTextLength += (link.textContent ?? '').trim().length;
     }
   }
-  const onlyLinks = textLength > 0 && linkTextLength / textLength >= 0.9 && kinds <= 1;
-  return onlyLinks ? richness * 0.4 : richness;
+  if (textLength > 0 && linkTextLength / textLength >= 0.9 && kinds <= 1) {
+    weight *= ONLY_LINKS_WEIGHT;
+    evidence.push('each item is only a link');
+  }
+
+  const inNavigation = isInNavigationRegion(group.parent);
+  if (inNavigation) {
+    weight *= NAVIGATION_WEIGHT;
+    evidence.push('inside navigation, a sidebar or a footer');
+  }
+  if (isSecondaryContent(group.parent)) {
+    weight *= SECONDARY_WEIGHT;
+    evidence.push('labelled as recommendations or promotions');
+  }
+  if (wrapsAnotherGroup(group.items, allParents)) {
+    weight *= WRAPPER_WEIGHT;
+    evidence.push('each item contains another list');
+  }
+  if (hasMain) {
+    if (group.parent.closest('main, [role="main"]')) {
+      evidence.push('in the main content');
+    } else {
+      weight *= OUTSIDE_MAIN_WEIGHT;
+      evidence.push('outside the main content');
+    }
+  }
+
+  const confidence = Math.round(structural * weight * 100) / 100;
+  return { confidence, credible: !inNavigation && confidence >= MIN_CREDIBLE_CONFIDENCE, evidence };
 }
 
 function matchesExactly(selector: string, root: Document | Element, items: Element[]): boolean {

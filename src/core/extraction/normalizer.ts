@@ -168,8 +168,89 @@ export function normalizeUrl(
   }
 }
 
+const LAZY_IMAGE_ATTRIBUTES = [
+  'data-src',
+  'data-lazy-src',
+  'data-original',
+  'data-lazy',
+  'data-url',
+  'data-image',
+  'data-img',
+  'data-full-src',
+  'data-hi-res-src',
+];
+const SRCSET_ATTRIBUTES = ['srcset', 'data-srcset', 'data-lazy-srcset'];
+const PLACEHOLDER_FILE =
+  /(?:^|[/_-])(?:blank|spacer|placeholder|transparent|pixel|empty|loading|loader|lazy[-_]?load(?:er|ing)?|1x1)(?:[-_.][^/]*)?\.(?:gif|png|svg|jpe?g|webp)(?:[?#].*)?$/i;
+/** Below this an embedded image is a loading pixel or icon. Above it, it is the picture. */
+const REAL_DATA_URI_LENGTH = 2000;
+
+function isDataUri(source: string): boolean {
+  return /^data:/i.test(source);
+}
+
+function isPlaceholderSource(source: string): boolean {
+  if (isDataUri(source)) return source.length < REAL_DATA_URI_LENGTH || /^data:image\/svg/i.test(source);
+  return PLACEHOLDER_FILE.test(source);
+}
+
+/** The largest image a srcset offers. URLs can contain commas, so it cannot just be split. */
+function largestSrcsetCandidate(srcset: string | null | undefined): string | null {
+  if (!srcset) return null;
+  let best: { url: string; size: number } | null = null;
+  for (const match of srcset.matchAll(/(\S*[^\s,])(?:\s+(\d+(?:\.\d+)?)[wxh])?\s*(?:,|$)/g)) {
+    const size = match[2] ? Number(match[2]) : 1;
+    if (!best || size > best.size) best = { url: match[1], size };
+  }
+  return best?.url ?? null;
+}
+
+function realSourceOf(element: Element): { source: string | null; embedded: string | null } {
+  let embedded: string | null = null;
+  const consider = (value: string | null | undefined): string | null => {
+    const source = value?.trim();
+    if (!source) return null;
+    if (!isPlaceholderSource(source)) {
+      if (isDataUri(source)) {
+        embedded = embedded ?? source;
+        return null;
+      }
+      return source;
+    }
+    return null;
+  };
+
+  const found = (() => {
+    const current = consider((element as HTMLImageElement).currentSrc);
+    if (current) return current;
+    const src = consider(element.getAttribute('src'));
+    if (src) return src;
+    for (const attribute of LAZY_IMAGE_ATTRIBUTES) {
+      const lazy = consider(element.getAttribute(attribute));
+      if (lazy) return lazy;
+    }
+    for (const attribute of SRCSET_ATTRIBUTES) {
+      const fromSet = consider(largestSrcsetCandidate(element.getAttribute(attribute)));
+      if (fromSet) return fromSet;
+    }
+    const picture = element.parentElement?.tagName === 'PICTURE' ? element.parentElement : null;
+    for (const source of Array.from(picture?.querySelectorAll('source') ?? [])) {
+      for (const attribute of SRCSET_ATTRIBUTES) {
+        const fromSet = consider(largestSrcsetCandidate(source.getAttribute(attribute)));
+        if (fromSet) return fromSet;
+      }
+    }
+    const background = element.getAttribute('style')?.match(/background(?:-image)?:[^;]*url\(['"]?([^'")]+)['"]?\)/i);
+    return consider(background?.[1]);
+  })();
+
+  return { source: found, embedded };
+}
+
 /**
- * Resolves image URLs from image elements, background styles, or srcset candidates.
+ * The real image of an element, in order: what the browser loaded, the src, the attributes
+ * lazy-loading libraries use, the largest srcset candidate, then a background image. A
+ * loading placeholder is never returned, so a row with no real image has no value.
  */
 export function normalizeImageUrl(
   valOrElement: unknown,
@@ -177,49 +258,21 @@ export function normalizeImageUrl(
 ): string | null {
   if (!valOrElement) return null;
 
-  let candidateUrl: string | null = null;
-
-  // Check if valOrElement is a DOM Element
-  if (typeof (valOrElement as Element).getAttribute === 'function') {
-    const el = valOrElement as Element;
-
-    // 1. Direct src
-    candidateUrl = el.getAttribute('src');
-
-    // 2. Data attributes commonly used for lazy loading
-    if (!candidateUrl) {
-      candidateUrl =
-        el.getAttribute('data-src') ||
-        el.getAttribute('data-lazy-src') ||
-        el.getAttribute('data-original') ||
-        el.getAttribute('data-url');
-    }
-
-    // 3. srcset attribute
-    if (!candidateUrl) {
-      const srcset = el.getAttribute('srcset');
-      if (srcset) {
-        // e.g. "/img/small.jpg 300w, /img/large.jpg 1000w"
-        const firstCandidate = srcset.split(',')[0].trim().split(/\s+/)[0];
-        if (firstCandidate) candidateUrl = firstCandidate;
-      }
-    }
-
-    // 4. Background-image CSS property
-    if (!candidateUrl) {
-      const style = el.getAttribute('style');
-      if (style) {
-        const bgMatch = style.match(/background(?:-image)?:\s*url\(['"]?([^'")]+)['"]?\)/i);
-        if (bgMatch && bgMatch[1]) {
-          candidateUrl = bgMatch[1];
-        }
-      }
-    }
-  } else if (typeof valOrElement === 'string') {
-    candidateUrl = valOrElement;
+  if (typeof (valOrElement as Element).getAttribute !== 'function') {
+    return typeof valOrElement === 'string' ? normalizeUrl(valOrElement, baseUrl) : null;
   }
 
-  return normalizeUrl(candidateUrl, baseUrl);
+  const element = valOrElement as Element;
+  const own = realSourceOf(element);
+  if (own.source) return normalizeUrl(own.source, baseUrl);
+
+  // A link or picture selected as the field holds the image inside it.
+  const inner = element.tagName === 'IMG' ? null : element.querySelector('img');
+  const nested = inner ? realSourceOf(inner) : null;
+  if (nested?.source) return normalizeUrl(nested.source, baseUrl);
+
+  const embedded = own.embedded ?? nested?.embedded ?? null;
+  return embedded ? normalizeUrl(embedded, baseUrl) : null;
 }
 
 /**

@@ -212,8 +212,8 @@ export const App: React.FC = () => {
             isDatasetsLoading={isDatasetsLoading}
             onSelectElements={workflow.startVisualPicker}
             onAutoDetectLists={workflow.autoDetectLists}
-            onExtractTable={() => workflow.startPresetDetection('table tr, table tbody tr')}
-            onExtractLinks={() => workflow.startPresetDetection('a[href]')}
+            onExtractTable={() => workflow.startPresetDetection('table')}
+            onExtractLinks={() => workflow.startPresetDetection('links')}
             onViewDataset={handleViewDataset}
             onViewAllHistory={() => handleNavChange('datasets')}
           />
@@ -238,6 +238,7 @@ export const App: React.FC = () => {
         {workflow.view === 'review_list' && workflow.detectedList && (
           <DetectedListPreview
             detectedList={workflow.detectedList}
+            onSelectCandidate={workflow.selectListCandidate}
             onConfirm={() => workflow.confirmListCandidate(workflow.detectedList!)}
             onPickAgain={workflow.startVisualPicker}
             onCancel={workflow.resetToDashboard}

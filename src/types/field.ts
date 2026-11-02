@@ -5,7 +5,9 @@ export type FieldExtractorType =
   | 'src'
   | 'html'
   | 'number'
-  | 'regex';
+  | 'regex'
+  | 'table_cell'
+  | 'link_text';
 
 export interface FieldDefinition {
   id: string;
@@ -18,6 +20,15 @@ export interface FieldDefinition {
   defaultValue?: string;
   required?: boolean;
   transform?: 'none' | 'trim' | 'lowercase' | 'uppercase' | 'capitalize';
+  columnIndex?: number;
+  discovery?: {
+    coverage: number;
+    confidence: number;
+    sampleSize: number;
+    occurrences: number;
+    suggested: boolean;
+    sampleValue?: string;
+  };
 }
 
 export interface DetectedFieldSuggestion {

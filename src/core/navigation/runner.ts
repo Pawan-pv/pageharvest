@@ -101,6 +101,7 @@ function asFields(recipe: ExtractionSchema): FieldDefinition[] {
     attributeName: field.attributeName,
     regexPattern: field.regexPattern,
     regexGroup: field.regexGroup,
+    columnIndex: field.columnIndex,
     defaultValue: field.defaultValue,
     required: field.required,
     transform: field.transform,
@@ -129,8 +130,11 @@ async function runSinglePageJob(options: NavigationJobOptions): Promise<Navigati
     fields: asFields(recipe),
     pageNumber: resume.page,
     baseUrl: url,
-    // Every matched element on a single page is its own row.
-    deduplication: { enabled: false },
+    // Every matched element on a single page is its own row, unless the recipe says one
+    // value of a field is one record, as with links.
+    deduplication: recipe.dedupeFields?.length
+      ? { enabled: true, fields: recipe.dedupeFields }
+      : { enabled: false },
   });
 
   await commitBatch({

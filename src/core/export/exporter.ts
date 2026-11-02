@@ -141,6 +141,86 @@ function resolveColumns(
   return columnNames;
 }
 
+interface StoredValueNote {
+  raw?: string;
+  status?: string;
+  currency?: string;
+  currencySymbol?: string;
+  min?: number;
+  max?: number;
+}
+
+function readValueNotes(record: ExtractedRecord): Record<string, StoredValueNote> {
+  const stored = record._valueNotes;
+  if (typeof stored !== 'string') return {};
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, StoredValueNote>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Values kept as text because they could not be read as one number with certainty. */
+export function countValuesNeedingReview(records: ExtractedRecord[]): number {
+  let count = 0;
+  for (const record of records) {
+    for (const note of Object.values(readValueNotes(record))) {
+      if (note.status === 'ambiguous') count += 1;
+    }
+  }
+  return count;
+}
+
+/**
+ * Adds how each number was read as extra columns: the original text, its status, the
+ * currency and the two ends of a range. Rows keep their values; nothing is replaced.
+ */
+export function withValueDetails(
+  records: ExtractedRecord[],
+  fields: FieldDefinition[] | undefined
+): { records: ExtractedRecord[]; fields: FieldDefinition[] | undefined; detailColumns: string[] } {
+  const notedFields = new Set<string>();
+  const notesByRecord = records.map((record) => {
+    const notes = readValueNotes(record);
+    Object.keys(notes).forEach((name) => notedFields.add(name));
+    return notes;
+  });
+  if (notedFields.size === 0) return { records, fields, detailColumns: [] };
+
+  const columnsOf = (name: string) =>
+    ['original', 'status', 'currency', 'min', 'max'].map((detail) => `${name} (${detail})`);
+  const expanded = records.map((record, index) => {
+    const copy: ExtractedRecord = { ...record };
+    for (const name of notedFields) {
+      const note = notesByRecord[index][name];
+      const [original, status, currency, min, max] = columnsOf(name);
+      copy[original] = note?.raw ?? null;
+      copy[status] = note?.status ?? null;
+      copy[currency] = note?.currency ?? note?.currencySymbol ?? null;
+      copy[min] = note?.min ?? null;
+      copy[max] = note?.max ?? null;
+    }
+    return copy;
+  });
+
+  const detailColumns = Array.from(notedFields).flatMap(columnsOf);
+  const expandedFields = fields?.flatMap((field) =>
+    notedFields.has(field.name)
+      ? [
+          field,
+          ...columnsOf(field.name).map((name) => ({
+            id: name,
+            name,
+            selector: '',
+            extractor: 'text' as const,
+          })),
+        ]
+      : [field]
+  );
+  return { records: expanded, fields: expandedFields, detailColumns };
+}
+
 /**
  * Generator producing CSV content in chunks to support very large datasets.
  */
