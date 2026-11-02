@@ -145,7 +145,7 @@ async function runSinglePageJob(options: NavigationJobOptions): Promise<Navigati
       missingFields: output.statistics.missingFieldRecordsCount,
       filtered: output.statistics.filteredRecordsCount,
       failed: output.statistics.erroredRecordsCount,
-      duplicates: 0,
+      duplicates: output.statistics.duplicatesCount,
     },
     navigation: {
       nextPage: resume.page + 1,
@@ -211,7 +211,7 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
       missingFields: output.statistics.missingFieldRecordsCount,
       filtered: output.statistics.filteredRecordsCount,
       failed: output.statistics.erroredRecordsCount,
-      duplicates: 0,
+      duplicates: output.statistics.duplicatesCount,
     },
     navigation: {
       nextPage: step + 1,

@@ -522,7 +522,15 @@ export class JobCoordinator {
       prepared = await Promise.all(
         payload.records.map(async (record, index) => {
           const canonical = canonicalizeRecord(record);
-          return { record, index, canonical, hash: await this.hash(canonical) };
+          const supersedes = record._supersedes;
+          return {
+            record,
+            index,
+            canonical,
+            hash: await this.hash(canonical),
+            supersedes,
+            supersededHash: supersedes ? await this.hash(supersedes) : undefined,
+          };
         })
       );
     } catch (error: unknown) {
@@ -594,8 +602,38 @@ export class JobCoordinator {
     }
 
     const rows: RecordEntity[] = [];
+    const filledIn: RecordEntity[] = [];
+    let missingResolved = 0;
     let duplicates = 0;
     for (const item of prepared) {
+      // Remove the marker: it describes this batch and is never part of a stored row.
+      const { _supersedes: _marker, ...recordData } = item.record;
+
+      if (item.supersededHash) {
+        const stored = (
+          await this.db.records.where('[datasetId+_hash]').equals([datasetId, item.supersededHash]).toArray()
+        ).find((row) => canonicalizeRecord(row) === item.supersedes);
+        if (stored) {
+          filledIn.push({
+            ...recordData,
+            _id: stored._id,
+            _order: stored._order,
+            _page: stored._page,
+            _hash: item.hash,
+            _jobId: identity.jobId,
+            _projectId: identity.projectId,
+            _runId: identity.runId,
+            _sourceUrl: stored._sourceUrl,
+            datasetId,
+          });
+          if (stored._missingFields) missingResolved++;
+          const known = knownByHash.get(item.hash) ?? [];
+          known.push(item.canonical);
+          knownByHash.set(item.hash, known);
+          continue;
+        }
+      }
+
       if (shouldDedupe) {
         const known = knownByHash.get(item.hash) ?? [];
         if (known.includes(item.canonical)) {
@@ -606,7 +644,7 @@ export class JobCoordinator {
         knownByHash.set(item.hash, known);
       }
       rows.push({
-        ...item.record,
+        ...recordData,
         _id: `${identity.jobId}:${sequence}:${item.index}`,
         _order: sequence * RECORD_ORDER_STRIDE + item.index,
         _page: page,
@@ -621,13 +659,17 @@ export class JobCoordinator {
     if (rows.length > 0) {
       await this.db.saveExtractedBatch(datasetId, rows);
     }
+    if (filledIn.length > 0) {
+      await this.db.records.bulkPut(filledIn);
+    }
 
     const machine = ExtractionStateMachine.fromJob(job);
     machine.transition({
       type: 'RECORDS_EXTRACTED',
       count: rows.length,
       duplicates: duplicates + stats.duplicates,
-      ignoreEmpty: navigation.isCatchUp === true,
+      // A step that only filled in values still made progress.
+      ignoreEmpty: navigation.isCatchUp === true || filledIn.length > 0,
     });
     const context = machine.getContext();
 
@@ -641,7 +683,7 @@ export class JobCoordinator {
       pagesVisited: Math.max(job.pagesVisited, page),
       scrollsCompleted: Math.max(job.scrollsCompleted, navigation.scrollsCompleted),
       recordsDetected: job.recordsDetected + stats.detected,
-      recordsWithMissingFields: job.recordsWithMissingFields + stats.missingFields,
+      recordsWithMissingFields: Math.max(0, job.recordsWithMissingFields + stats.missingFields - missingResolved),
       recordsFiltered: job.recordsFiltered + stats.filtered,
       recordsFailed: job.recordsFailed + stats.failed,
       updatedAt: now,
@@ -1319,6 +1361,9 @@ interface PreparedRecord {
   index: number;
   canonical: string;
   hash: string;
+  /** The canonical form of an earlier read of this row, which this one fills in. */
+  supersedes?: string;
+  supersededHash?: string;
 }
 
 interface CommitOutcome {

@@ -302,6 +302,20 @@ interface ExtractFromElementsOptions {
   elementMemory?: WeakMap<Element, string>;
 }
 
+/**
+ * Whether a later read of an element only added values to an earlier read. If any value
+ * changed, the element now holds something else, as a recycled row in a long list does.
+ */
+function fillsInValues(previous: string, current: string): boolean {
+  try {
+    const before = JSON.parse(previous) as Array<[string, unknown]>;
+    const after = new Map(JSON.parse(current) as Array<[string, unknown]>);
+    return after.size > before.length && before.every(([key, value]) => after.get(key) === value);
+  } catch {
+    return false;
+  }
+}
+
 function isEmptyValue(value: unknown): boolean {
   return value === null || value === undefined || value === '';
 }
@@ -369,11 +383,14 @@ function extractFromElements(
       }
 
       const signature = generateRecordSignature(record);
-      if (elementMemory?.get(container) === signature) {
+      const previous = elementMemory?.get(container);
+      if (previous === signature) {
         continue;
       }
       elementMemory?.set(container, signature);
-      totalParsed++;
+      // An image or price that loaded late is the same row, not another one.
+      const supersedes = previous !== undefined && fillsInValues(previous, signature) ? previous : undefined;
+      if (!supersedes) totalParsed++;
 
       const validation = validateRecord(record, fields, i);
       if (!validation.isValid) {
@@ -397,6 +414,7 @@ function extractFromElements(
         ...(record as Record<string, ExtractedRecord[string]>),
         ...(missing.length > 0 ? { _missingFields: missing.join(', ') } : {}),
         ...(Object.keys(valueNotes).length > 0 ? { _valueNotes: JSON.stringify(valueNotes) } : {}),
+        ...(supersedes ? { _supersedes: supersedes } : {}),
       });
     } catch (error: unknown) {
       totalParsed++;

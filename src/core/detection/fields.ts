@@ -355,8 +355,8 @@ function plainTextCandidates(container: Element, visited: Set<Element>): Interna
 const DEFAULT_FIELD_SAMPLE = 12;
 /** A short label on few records is decoration, not a column most people want. */
 const LABEL_MIN_COVERAGE = 0.5;
-/** Unrecognized text must recur to be selected by default. */
-const PLAIN_TEXT_MIN_COVERAGE = 0.2;
+/** A column on fewer records than this is offered, but not selected by default. */
+const MIN_SUGGESTED_COVERAGE = 0.2;
 
 /** Evenly spread through the list, always including the first and the last. */
 function representativeSample(cluster: Element[], size: number): Element[] {
@@ -382,7 +382,10 @@ function selectorOptions(item: Element, element: Element, generated: string): st
       options.push(`${parent.tagName.toLowerCase()}.${escapeCss(parentClasses[0])} > ${tag}`);
     }
   }
-  options.push(tag, generated, `${tag}:last-of-type`);
+  // An element with a class is identified by it. Dropping the class would let a badge on
+  // one record claim whatever the same tag holds on all the others.
+  if (classes.length === 0) options.push(tag, `${tag}:last-of-type`);
+  options.push(generated);
   return options.filter((option, index) => {
     if (options.indexOf(option) !== index) return false;
     if (option === '') return element === item;
@@ -417,7 +420,12 @@ interface FieldEvidence {
   elementByItem: Map<Element, Element>;
 }
 
-function scoreOption(option: string, evidence: FieldEvidence, sample: Element[]) {
+function scoreOption(
+  option: string,
+  evidence: FieldEvidence,
+  sample: Element[],
+  claimedElements: Map<Element, FieldEvidence>
+) {
   let hits = 0;
   let conflicts = 0;
   for (const item of sample) {
@@ -429,7 +437,9 @@ function scoreOption(option: string, evidence: FieldEvidence, sample: Element[])
     }
     if (!found) continue;
     const expected = evidence.elementByItem.get(item);
-    if (holdsValue(found, evidence.candidate) && (!expected || expected === found)) {
+    const owner = claimedElements.get(found);
+    const ownedByAnother = owner !== undefined && owner !== evidence;
+    if (!ownedByAnother && holdsValue(found, evidence.candidate) && (!expected || expected === found)) {
       hits += 1;
     } else {
       conflicts += 1;
@@ -444,8 +454,7 @@ function isPositional(selector: string): boolean {
 
 function isSuggested(candidate: InternalFieldCandidate, coverage: number): boolean {
   if (candidate.name === 'Category') return coverage >= LABEL_MIN_COVERAGE;
-  if (candidate.plain) return coverage >= PLAIN_TEXT_MIN_COVERAGE;
-  return true;
+  return coverage >= MIN_SUGGESTED_COVERAGE;
 }
 
 /**
@@ -476,11 +485,19 @@ export function discoverFieldsInCluster(
     }
   }
 
+  // On each record, every element belongs to the field that recognized it there.
+  const claimedElements = new Map<Element, FieldEvidence>();
+  for (const evidence of merged.values()) {
+    for (const element of evidence.elementByItem.values()) {
+      claimedElements.set(element, evidence);
+    }
+  }
+
   const discovered: DiscoveredField[] = [];
   for (const evidence of merged.values()) {
     let best: { selector: string; hits: number; conflicts: number } | null = null;
     for (const option of evidence.options) {
-      const { hits, conflicts } = scoreOption(option, evidence, sample);
+      const { hits, conflicts } = scoreOption(option, evidence, sample, claimedElements);
       const net = hits - conflicts;
       const bestNet = best ? best.hits - best.conflicts : -Infinity;
       const isBetter =

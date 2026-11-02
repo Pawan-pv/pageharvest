@@ -229,9 +229,9 @@ test.describe('field discovery', () => {
     await detect(panel);
     await chooseFields(panel);
 
-    await expect(panel.getByLabel('Price')).toBeChecked();
-    await expect(panel.getByLabel('Link')).toBeChecked();
-    await expect(panel.getByLabel('Category')).not.toBeChecked();
+    await expect(panel.getByRole('checkbox', { name: 'Price' })).toBeChecked();
+    await expect(panel.getByRole('checkbox', { name: 'Link' })).toBeChecked();
+    await expect(panel.getByRole('checkbox', { name: 'Category' })).not.toBeChecked();
     await expect(panel.getByText(/Found in 7 of 8 sampled items/).first()).toBeVisible();
 
     await start(panel);
@@ -285,7 +285,7 @@ test.describe('Extract Tables', () => {
     await expect(panel.getByText('4 items detected')).toBeVisible();
     await chooseFields(panel);
     for (const name of ['Team', 'City', 'Score', 'Score 2']) {
-      await expect(panel.getByLabel(name, { exact: true })).toBeChecked();
+      await expect(panel.getByRole('checkbox', { name, exact: true })).toBeChecked();
     }
     await start(panel);
 
@@ -474,16 +474,16 @@ test.describe('working with results', () => {
   });
 
   test('Copy puts the table on the clipboard as CSV', async () => {
-    const { panel } = await extractWithDefaults('accuracy-clean.html');
-    await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
-      origin: `chrome-extension://${extensionId}`,
-    });
+    const { panel, target } = await extractWithDefaults('accuracy-clean.html');
     await panel.bringToFront();
 
     await panel.getByRole('button', { name: 'Copy', exact: true }).click();
     await expect(panel.getByRole('button', { name: 'Copied!' })).toBeVisible();
 
-    const copied = await panel.evaluate(() => navigator.clipboard.readText());
+    // The clipboard belongs to the system, so a web page can read what the panel wrote.
+    await context.grantPermissions(['clipboard-read'], { origin: FIXTURES });
+    await target.bringToFront();
+    const copied = await target.evaluate(() => navigator.clipboard.readText());
     expect(copied).toContain('Title');
     expect(copied).toContain('Keep Carrot');
   });
@@ -566,7 +566,7 @@ test.describe('the library', () => {
 
     await panel.getByRole('button', { name: 'Rename project Competitor pricing' }).click();
     await panel.getByLabel('Project Name').fill('Renamed project');
-    await panel.getByRole('button', { name: /^Save/ }).click();
+    await panel.getByRole('button', { name: 'Save Project' }).click();
     await expect(panel.getByText('Renamed project')).toBeVisible();
 
     await panel.getByRole('button', { name: 'Delete project Renamed project' }).click();
