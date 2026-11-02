@@ -34,6 +34,7 @@ This matrix maps every functional requirement and architectural subsystem to its
 | **Live Extension Workflow** | PRD-FR-1.1 to 3.5 | `tests/e2e/extension-lifecycle.spec.ts` | - Worker, panel and content script<br>- Real jobs on fixture pages | `pnpm build; pnpm exec playwright test tests/e2e/extension-lifecycle.spec.ts` |
 | **Release Workflow UI** | PRD-FR-1.1 to 7.4 | `tests/e2e/release-workflows.spec.ts` | - Twenty-record run through the UI<br>- Exports<br>- Picker<br>- Different page structures | `pnpm build; pnpm exec playwright test tests/e2e/release-workflows.spec.ts` |
 | **Browser Diagnostics** | NFR-Resilience | `tests/e2e/release-test.ts`, `playwright.config.ts` | - Console errors, page errors, failed requests, trace, screenshot, video | `pnpm test:release:e2e` |
+| **Native Side Panel** | PRD-FR-1.1 | `scripts/release-testing/native-chrome.mjs`, `tests/unit/release-report.test.ts` | - Real mouse click on the toolbar<br>- Browser reports a `SIDE_PANEL` context<br>- Rows saved through the panel survive closing and reopening<br>- No evidence means no pass | `pnpm test:release:chrome` |
 | **Release Gate & Report** | NFR-Resilience | `scripts/release-testing/run-release.mjs`, `tests/unit/release-report.test.ts` | - Layered commands, PASS/FAIL/BLOCKED<br>- JSON and Markdown reports<br>- Exit codes `0`, `1`, `3` | `pnpm test:release` |
 
 ---

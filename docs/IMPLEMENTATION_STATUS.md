@@ -15,8 +15,8 @@ This document serves as the master tracking status for all features, modules, an
 | ZIP package | NOT RE-RUN | Run `pnpm zip` before uploading |
 | Browser extension | PASS | `pnpm test:e2e`: 33 of 33 on Windows and Linux |
 | Public practice sites | PASS | Two sites, five scenarios; see the plan |
-| Complete release gate as one run | PASS | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41360888220); native Chrome BLOCKED on CI |
-| Native toolbar and side panel | BLOCKED | No desktop automation tool; manual procedure not run |
+| Complete release gate | PASS, as two jobs | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028) |
+| Native toolbar and side panel | PASS in Chrome for Testing | `native-side-panel` job, 3 of 3 runs; branded Chrome is manual |
 
 Assessment: **FUNCTIONAL MVP**. See the plan for what a release candidate still needs.
 
