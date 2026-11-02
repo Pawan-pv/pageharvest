@@ -1,3 +1,4 @@
+/* global URL */
 /**
  * Scoring for the real-site benchmark. Pure, so the scoring itself can be tested: a bug here
  * could otherwise make the results look better than they are.
