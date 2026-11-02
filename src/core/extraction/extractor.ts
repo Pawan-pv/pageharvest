@@ -1,6 +1,7 @@
 import { ExtractionRecipe, ExtractedRecord, FieldDefinition } from '@/types';
 import { ExtractionField, ExtractionSchema } from '@/shared/contracts';
-import { normalizeFieldValue } from './normalizer';
+import { normalizeFieldValue, normalizeText, pageLocaleOf } from './normalizer';
+import { parseNumberDetailed, NumberParseResult } from '@/utils/number-parser';
 import { DuplicateDetector, generateRecordSignature } from './duplicate-detector';
 import { validateExtractionInput, validateRecord, isValidCssSelector } from './validator';
 import {
@@ -67,6 +68,46 @@ export interface ExtractionResult {
   metadata?: ExtractionMetadata;
 }
 
+function resolveFieldTarget(
+  element: Element,
+  field: FieldDefinition | ExtractionField | ExtractionFieldConfig
+): Element | null {
+  const sel = field.selector ? field.selector.trim() : '';
+  if (!sel || sel === '.' || sel === ':scope') return element;
+  try {
+    return element.matches && element.matches(sel) ? element : element.querySelector(sel);
+  } catch {
+    return null;
+  }
+}
+
+function isNumberField(field: FieldDefinition | ExtractionField | ExtractionFieldConfig): boolean {
+  const extractor = (field.extractor || 'text').toLowerCase();
+  return extractor === 'number' || extractor === 'numeric';
+}
+
+/**
+ * Reads a number field once, returning the value and how it was read. The note is stored
+ * with the row, so the original text, the currency and anything uncertain are never lost
+ * when the cell holds only a number.
+ */
+function readNumberField(
+  container: Element,
+  field: FieldDefinition | ExtractionField | ExtractionFieldConfig
+): { value: string | number | boolean | null; note: NumberParseResult | null } {
+  const fallback = field.defaultValue !== undefined ? field.defaultValue : null;
+  const target = resolveFieldTarget(container, field);
+  if (!target) return { value: fallback, note: null };
+
+  const text = normalizeText((target as HTMLElement).innerText || target.textContent);
+  if (!text) return { value: fallback, note: null };
+
+  const note = parseNumberDetailed(text, { locale: pageLocaleOf(target) });
+  // A range or an uncertain value stays as its text. It is never replaced by a guess.
+  const value = note.status === 'ok' ? note.value : note.status === 'invalid' ? fallback : text;
+  return { value, note };
+}
+
 /**
  * Extracts a single field value from a container or target DOM element.
  * Safely handles invalid CSS selectors and missing elements without crashing.
@@ -80,18 +121,7 @@ export function extractFieldValue(
     return field.defaultValue !== undefined ? field.defaultValue : null;
   }
 
-  const sel = field.selector ? field.selector.trim() : '';
-  const targetEl = !sel || sel === '.' || sel === ':scope'
-    ? element
-    : (() => {
-      try {
-        return element.matches && element.matches(sel)
-          ? element
-          : element.querySelector(sel);
-      } catch {
-        return null;
-      }
-    })();
+  const targetEl = resolveFieldTarget(element, field);
 
   if (!targetEl) {
     return field.defaultValue !== undefined ? field.defaultValue : null;
@@ -283,6 +313,7 @@ function extractFromElements(
     try {
       const record: Record<string, unknown> = {};
       const missing: string[] = [];
+      const valueNotes: Record<string, NumberParseResult> = {};
 
       for (const field of fields) {
         if (field.selector && !isValidCssSelector(field.selector)) {
@@ -298,7 +329,13 @@ function extractFromElements(
           });
           record[field.name] = field.defaultValue !== undefined ? field.defaultValue : null;
         } else {
-          record[field.name] = extractFieldValue(container, field, baseUrl);
+          if (isNumberField(field)) {
+            const { value, note } = readNumberField(container, field);
+            record[field.name] = value;
+            if (note) valueNotes[field.name] = note;
+          } else {
+            record[field.name] = extractFieldValue(container, field, baseUrl);
+          }
         }
 
         if (isEmptyValue(record[field.name])) {
@@ -336,6 +373,7 @@ function extractFromElements(
         _extractedAt: Date.now(),
         ...(record as Record<string, ExtractedRecord[string]>),
         ...(missing.length > 0 ? { _missingFields: missing.join(', ') } : {}),
+        ...(Object.keys(valueNotes).length > 0 ? { _valueNotes: JSON.stringify(valueNotes) } : {}),
       });
     } catch (error: unknown) {
       totalParsed++;

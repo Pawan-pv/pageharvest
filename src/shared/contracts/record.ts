@@ -28,6 +28,7 @@ export const ExtractionRecordSchema = z.object({
   _sourceUrl: z.string().optional(),
   _hash: z.string().optional(), // SHA-256 of the canonical record, see core/extraction/record-identity
   _missingFields: z.string().optional(), // Names of selected fields with no value in this record
+  _valueNotes: z.string().optional(), // JSON of how number fields were read, see utils/number-parser
 }).catchall(RecordValueSchema);
 
 export type ExtractionRecord = z.infer<typeof ExtractionRecordSchema>;

@@ -378,7 +378,8 @@ export function normalizeValues(
     switch (normalizationType) {
       case 'number':
         if (typeof val === 'string') {
-          newVal = parseNumberValue(val);
+          // A value that is not certainly one number stays as it is, rather than being lost.
+          newVal = parseNumberValue(val) ?? val;
         }
         break;
 

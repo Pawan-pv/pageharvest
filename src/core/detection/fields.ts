@@ -7,6 +7,7 @@ import {
 } from '@/types';
 import { filterMeaningfulClasses, generateRelativeSelector } from '@/utils/selector';
 import { normalizeText, resolveAbsoluteUrl, parseNumberValue } from '@/utils/dom';
+import { NumberParseResult, parseNumberDetailed } from '@/utils/number-parser';
 import { sampleElements } from './cache';
 
 const TRUNCATED_TEXT_REGEX = /(?:\.{3}|…)$/;
@@ -35,6 +36,12 @@ export interface InternalFieldCandidate {
   regexGroup?: number;
   sampleValue: string;
   element: Element;
+}
+
+function describeNumber(parsed: NumberParseResult): string {
+  if (parsed.status === 'ok') return String(parsed.value);
+  if (parsed.status === 'range') return `${parsed.min} - ${parsed.max}`;
+  return normalizeText(parsed.raw);
 }
 
 /**
@@ -160,15 +167,15 @@ export function extractCandidatesFromElement(
     if (el.children.length > 2) continue;
     const text = el.textContent || '';
     if (priceRegex.test(text)) {
-      const priceNum = parseNumberValue(text);
-      if (priceNum !== null) {
+      const parsed = parseNumberDetailed(normalizeText(text));
+      if (parsed.status !== 'invalid') {
         visitedElements.add(el);
         candidates.push({
           name: 'Price',
           type: 'price',
           selector: generateRelativeSelector(container, el),
           extractor: 'number',
-          sampleValue: String(priceNum),
+          sampleValue: describeNumber(parsed),
           element: el,
         });
         break;

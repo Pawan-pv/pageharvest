@@ -1,3 +1,5 @@
+import { parseNumberDetailed } from './number-parser';
+
 /**
  * DOM Value Extraction and Normalization Utilities
  */
@@ -32,15 +34,9 @@ export function resolveAbsoluteUrl(relativeUrl: string | null | undefined, baseU
 }
 
 /**
- * Parses numbers, prices, and percentages from text.
- * e.g. "$1,299.99" -> 1299.99
- * " -45.50 %" -> -45.5
+ * Reads one number from text, or null if the text has none or is not certain.
+ * Use parseNumberDetailed to learn why, and to keep ranges and the original text.
  */
 export function parseNumberValue(text: string | null | undefined): number | null {
-  if (!text) return null;
-  const cleaned = text.replace(/,/g, '').trim();
-  const match = cleaned.match(/[-+]?\d*\.?\d+/);
-  if (!match) return null;
-  const num = parseFloat(match[0]);
-  return isNaN(num) ? null : num;
+  return parseNumberDetailed(text).value;
 }

@@ -1,5 +1,6 @@
 import { ExtendedFieldExtractorType } from './types';
 import { FieldExtractorType } from '@/types';
+import { parseNumberDetailed } from '@/utils/number-parser';
 
 /**
  * Standard mapping of common HTML named entities to their unicode characters.
@@ -78,54 +79,21 @@ export function normalizeText(val: unknown): string {
 }
 
 /**
- * Normalizes and extracts numeric values from string text (e.g. "$1,299.99", "€ 49,99", "4.8 out of 5").
- * Handles currency symbols, international thousand separators, decimal commas/dots,
- * ratings, negative signs, and discounts.
+ * Reads one number, or null if the text has none or cannot be read with certainty.
+ * See utils/number-parser for what counts as certain.
  */
 export function normalizeNumber(val: unknown): number | null {
   if (typeof val === 'number') {
     return isNaN(val) ? null : val;
   }
   if (val === null || val === undefined) return null;
+  return parseNumberDetailed(decodeHtmlEntities(String(val))).value;
+}
 
-  const raw = String(val).trim();
-  if (raw.length === 0) return null;
-
-  const decoded = decodeHtmlEntities(raw);
-
-  // Check for Free / Gratis
-  if (/^(free|gratis|complimentary)/i.test(decoded)) {
-    return 0;
-  }
-
-  // Check for rating pattern (e.g. "4.8 out of 5" or "4.8 / 5" or "Rating: 4.8")
-  const ratingMatch = decoded.match(/(\d+(?:\.\d+)?)\s*(?:out of|\/)\s*\d+/i);
-  if (ratingMatch) {
-    const r = parseFloat(ratingMatch[1]);
-    return isNaN(r) ? null : r;
-  }
-
-  // Remove currency words/symbols and whitespace around them
-  let normalized = decoded
-    .replace(/\b(?:USD|EUR|GBP|CAD|AUD|JPY|INR|CHF)\b/gi, '')
-    .replace(/[$€£¥₹₩₽₺]/g, '')
-    .trim();
-
-  // Handle European decimal comma (e.g. "49,99" or "1.299,99" or "1 299,99") vs American ("1,299.99")
-  if (/,\d{1,2}$/.test(normalized) && !/\.\d{1,2}$/.test(normalized)) {
-    // Comma at end is decimal separator
-    normalized = normalized.replace(/[\s.]/g, '').replace(/,/g, '.');
-  } else {
-    // Dot is decimal separator or no decimal; remove thousand commas & spaces
-    normalized = normalized.replace(/[\s,]/g, '');
-  }
-
-  // Extract match of optional minus sign, digits, and optional decimal portion
-  const match = normalized.match(/-?\d+(?:\.\d+)?/);
-  if (!match) return null;
-
-  const parsed = parseFloat(match[0]);
-  return isNaN(parsed) ? null : parsed;
+/** The language of the page an element is on, which can settle an ambiguous separator. */
+export function pageLocaleOf(element: Element | null | undefined): string | undefined {
+  const lang = element?.ownerDocument?.documentElement?.getAttribute('lang')?.trim();
+  return lang || undefined;
 }
 
 /**
@@ -391,9 +359,18 @@ export function normalizeFieldValue(
       break;
 
     case 'number':
-    case 'numeric':
-      result = normalizeNumber(rawValue);
+    case 'numeric': {
+      if (typeof rawValue === 'number') {
+        result = isNaN(rawValue) ? null : rawValue;
+        break;
+      }
+      const parsed = parseNumberDetailed(decodeHtmlEntities(String(rawValue ?? '')), {
+        locale: pageLocaleOf(options.element),
+      });
+      // A range or an uncertain value stays as its text. It is never replaced by a guess.
+      result = parsed.status === 'ok' ? parsed.value : parsed.status === 'invalid' ? null : normalizeText(parsed.raw);
       break;
+    }
 
     case 'price':
     case 'prices':
