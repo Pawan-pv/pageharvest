@@ -46,6 +46,17 @@ jobs:
             cat artifacts/release-test-report.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # Reported, not enforced: there is no agreed target yet, only a baseline.
+      - name: Measure test coverage
+        if: always() && github.event_name != 'push'
+        run: |
+          pnpm exec vitest run --coverage --coverage.reporter=json-summary --coverage.reporter=text-summary --coverage.reportsDirectory=artifacts/coverage
+          node -e "const t=require('./artifacts/coverage/coverage-summary.json').total;console.log(JSON.stringify(t,null,1))"
+
+      - name: Measure performance
+        if: always() && github.event_name != 'push'
+        run: pnpm benchmark:performance
+
       - name: Upload the report and failure evidence
         if: always()
         uses: actions/upload-artifact@v4

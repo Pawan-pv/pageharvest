@@ -123,6 +123,46 @@ describe('normalizeImageUrl finds the real image', () => {
   });
 });
 
+describe('a base tag changes what relative URLs mean', () => {
+  it('resolves links and images against it', () => {
+    const base = document.createElement('base');
+    base.href = 'https://cdn.example/assets/';
+    document.head.appendChild(base);
+    document.body.innerHTML = '<div class="c"><a href="page.html">Open</a><img src="pic.jpg"></div>';
+
+    const { records } = extractRecordsFromContainers(
+      Array.from(document.querySelectorAll('.c')),
+      [
+        { id: 'l', name: 'Link', selector: 'a', extractor: 'href', required: false, transform: 'trim' },
+        { id: 'i', name: 'Image', selector: 'img', extractor: 'src', required: false, transform: 'trim' },
+      ],
+      1,
+      undefined,
+      BASE
+    );
+    base.remove();
+
+    expect(records[0]).toMatchObject({
+      Link: 'https://cdn.example/assets/page.html',
+      Image: 'https://cdn.example/assets/pic.jpg',
+    });
+  });
+
+  it('uses the page URL when there is no base tag', () => {
+    document.body.innerHTML = '<div class="c"><a href="page.html">Open</a></div>';
+
+    const { records } = extractRecordsFromContainers(
+      Array.from(document.querySelectorAll('.c')),
+      [{ id: 'l', name: 'Link', selector: 'a', extractor: 'href', required: false, transform: 'trim' }],
+      1,
+      undefined,
+      BASE
+    );
+
+    expect(records[0].Link).toBe('https://shop.example/catalog/page.html');
+  });
+});
+
 describe('image fields in a real extraction', () => {
   it('offers an image column for images that are only lazily loaded, and reads the real URL', () => {
     document.body.innerHTML = [0, 1, 2]

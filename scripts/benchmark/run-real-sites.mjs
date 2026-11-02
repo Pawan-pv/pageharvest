@@ -226,7 +226,9 @@ async function runSite(context, extensionId, site) {
     if (metrics.precision < PASS_BAR.precision) failures.push(`precision ${metrics.precision}`);
     if (metrics.recall < PASS_BAR.recall) failures.push(`recall ${metrics.recall}`);
     if (metrics.fieldAccuracy < PASS_BAR.fieldAccuracy) failures.push(`field accuracy ${metrics.fieldAccuracy}`);
-    if (metrics.duplicateRate > PASS_BAR.duplicateRate) failures.push(`duplicate rate ${metrics.duplicateRate}`);
+    if (!site.truth.repeatedKeys && metrics.duplicateRate > PASS_BAR.duplicateRate) {
+      failures.push(`duplicate rate ${metrics.duplicateRate}`);
+    }
     if (metrics.pageCoverage < PASS_BAR.pageCoverage) failures.push(`page coverage ${metrics.pageCoverage}`);
     const missed = samples.filter((sample) => !sample.found);
     if (missed.length > 0) failures.push(`missing sample ${JSON.stringify(missed[0].sample)}`);

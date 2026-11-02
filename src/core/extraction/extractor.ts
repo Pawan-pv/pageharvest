@@ -205,8 +205,9 @@ export function extractFieldValue(
       rawValue = targetEl.textContent;
   }
 
-  // A <base> tag changes what relative URLs mean, and only the element knows about it.
-  const hasBaseTag = targetEl.ownerDocument?.querySelector('base[href]') != null;
+  // A <base> tag changes what relative URLs mean, and only the element knows about it. This
+  // runs for every field of every row, so it must not search the document.
+  const hasBaseTag = targetEl.ownerDocument !== null && targetEl.baseURI !== targetEl.ownerDocument.URL;
 
   return normalizeFieldValue(rawValue, field.extractor as ExtendedFieldExtractorType, {
     baseUrl: hasBaseTag ? targetEl.baseURI : baseUrl,
