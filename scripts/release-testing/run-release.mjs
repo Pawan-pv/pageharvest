@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildReleaseReport, formatReleaseReportMarkdown } from './release-report.mjs';
+import { buildReleaseReport, formatReleaseReportMarkdown, scopeLayers } from './release-report.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const reportJsonPath = join(repositoryRoot, 'artifacts/release-test-report.json');
@@ -109,18 +109,20 @@ async function runScope(scope) {
     }
   }
 
-  if (scope === 'unit' || scope === 'all') {
+  const layers = scopeLayers(scope);
+
+  if (layers.unit) {
     checks.push(await runCommand('typecheck', ['typecheck'], runDirectory));
     checks.push(await runCommand('lint', ['lint'], runDirectory));
     checks.push(await runCommand('unit-integration', ['test', '--', '--reporter=dot'], runDirectory));
   }
 
-  if (scope === 'e2e' || scope === 'all') {
+  if (layers.e2e) {
     checks.push(await runCommand('build', ['build'], runDirectory));
     checks.push(await runCommand('chromium-e2e', ['test:e2e'], runDirectory));
   }
 
-  if (scope === 'chrome' || scope === 'all') {
+  if (layers.native) {
     const nativeCommand = process.platform === 'win32' ? process.execPath : process.execPath;
     const nativeProcess = spawnSync(nativeCommand, ['scripts/release-testing/native-chrome.mjs'], {
       cwd: repositoryRoot,
@@ -154,8 +156,7 @@ async function runScope(scope) {
 }
 
 const requestedScope = process.argv.find((argument) => argument.startsWith('--scope='))?.split('=')[1] ?? 'all';
-const validScopes = new Set(['unit', 'e2e', 'chrome', 'report', 'all']);
-if (!validScopes.has(requestedScope)) {
+if (requestedScope !== 'report' && !scopeLayers(requestedScope)) {
   console.error(`Unknown release-test scope: ${requestedScope}`);
   process.exitCode = 1;
 } else {

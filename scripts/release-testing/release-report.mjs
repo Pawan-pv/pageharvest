@@ -35,6 +35,49 @@ export function summarizeChecks(checks) {
   );
 }
 
+const SCOPE_LAYERS = {
+  unit: { unit: true, e2e: false, native: false },
+  e2e: { unit: false, e2e: true, native: false },
+  chrome: { unit: false, e2e: false, native: true },
+  // For machines that cannot click a browser toolbar. The native check runs elsewhere.
+  automated: { unit: true, e2e: true, native: false },
+  all: { unit: true, e2e: true, native: true },
+};
+
+/** Which layers a scope runs, or null for a scope that does not exist. */
+export function scopeLayers(scope) {
+  return Object.hasOwn(SCOPE_LAYERS, scope) ? SCOPE_LAYERS[scope] : null;
+}
+
+/**
+ * Turns what the native check observed into its result. A step with no evidence is a
+ * failure, so PASS can only come from a complete run.
+ */
+export function decideNativeStatus(evidence) {
+  if (evidence.error) return { status: 'FAIL', details: evidence.error };
+  if (!evidence.automationAvailable) {
+    return { status: 'BLOCKED', details: evidence.blockedReason ?? 'The toolbar automation cannot run here.' };
+  }
+
+  const { expectedRows } = evidence;
+  const fail = (details) => ({ status: 'FAIL', details });
+  if (evidence.extensionLoaded !== true) return fail('The unpacked extension did not load in the browser.');
+  if (evidence.toolbarClicked !== true) return fail('The extension could not be clicked in the toolbar.');
+  if (evidence.panelOpened !== true) return fail('Clicking the toolbar did not open the side panel.');
+  if (evidence.rowsSaved !== expectedRows) {
+    return fail(`The side panel saved ${evidence.rowsSaved ?? 'no'} of ${expectedRows} rows.`);
+  }
+  if (evidence.panelReopened !== true) return fail('The side panel did not close and reopen from the toolbar.');
+  if (evidence.rowsAfterReopen !== expectedRows) {
+    return fail(`After reopening the side panel, ${evidence.rowsAfterReopen ?? 'no'} of ${expectedRows} rows remained.`);
+  }
+
+  return {
+    status: 'PASS',
+    details: `A toolbar click opened the side panel, ${expectedRows} rows were saved, and they were still there after closing and reopening it.`,
+  };
+}
+
 export function formatReleaseReportMarkdown(report) {
   const lines = [
     '# PageHarvest Release Test Report',

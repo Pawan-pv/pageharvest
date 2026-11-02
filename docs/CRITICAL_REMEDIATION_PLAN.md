@@ -6,9 +6,8 @@ Date: 2026-11-02. Baseline commit: `b0cf556`. The remediation is in `7f532cc` an
 
 Every P0, P1 and P2 finding below is fixed and tested on the production path, including in real Chromium. It is not called a release candidate yet, because these are still open:
 
-1. The native toolbar and real side panel have not been exercised (BLOCKED, see Remaining issues).
-2. Verification was done by the same author as the fixes, so it is not the independent verification the release bar asks for.
-3. Real-website evidence covers two public scraping practice sites only, not commercial sites.
+1. Verification was done by the same author as the fixes, so it is not the independent verification the release bar asks for.
+2. Real-website evidence covers two public scraping practice sites only, not commercial sites.
 
 ## Findings
 
@@ -38,6 +37,7 @@ Priority: P0 data loss or cross-job corruption. P1 extraction correctness or bro
 | 18 | P2 | Modules used only by tests | Read | See ADR-020 for the decision on each | See ADR-020 | `production-wiring.test.ts` | PASS |
 | 20 | P0 | Auto-detect extracts the navigation instead of the data | Reproduced on real sites: 0 of 60 books, 0 of 30 quotes, job still COMPLETED | Ranked by size alone; only scanned list-like class names; `ul > li` also matched the menu | `detection/detector.ts`, `detection/fields.ts` | `detection-real-pages.test.ts`; real-site trial | PASS |
 | 21 | P1 | A healthy job marked interrupted while starting | Reproduced on CI: 0 rows, "The page stopped responding" | The panel's check could ask the page before the page had been told to run the job, and a slow transaction made the job look quiet | `background/job-coordinator.ts` | `job-recovery.test.ts`; E2E I on CI | PASS |
+| 22 | P1 | The native side panel check could never pass | Read, then reproduced on a Windows runner | It launched a browser and stopped, opened a fixture that no longer exists, and used branded Chrome, which did not load the extension | `scripts/release-testing/native-chrome.mjs`, `click-toolbar.py`, `release-report.mjs`, `release-gate.yml` | `release-report.test.ts`; `native-side-panel` job | PASS |
 | 19 | P2 | Two message protocols | Read | `BrowserMessage` was documented, `ExtensionMessage` was used | `shared/contracts/message.ts`, `contracts/messages.ts` | `canonical-contracts.spec.ts`, `messages.test.ts` | PASS |
 
 Finding 20 was found by the real-site trial after every fixture test had passed. Finding 21 was found by the first release gate run on GitHub Actions, and depends on database timing. Findings 3, 4, 5, 14, 20 and 21 were not in the requested list. They came from the earlier reproduction and are included because they lose or corrupt data.
@@ -74,8 +74,8 @@ See [storage-schema.md](architecture/storage-schema.md), section 2.
 | Playwright in real Chromium | PASS | 33 of 33 on Windows and on Linux under `xvfb`, including tests A to K |
 | Public practice sites | PASS | See the trial below |
 | Actual installation | PASS | Unpacked load in Chromium with manifest and icon checks |
-| Complete release gate as one run | PASS except the native check | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41360888220) on Linux, commit `5888574`: 5 checks passed, native Chrome BLOCKED |
-| Native toolbar side panel | BLOCKED | No desktop automation tool (pywinauto or AutoHotkey) is installed, and the manual procedure has not been run |
+| Complete release gate | PASS, as two jobs | The Linux job runs the automated layers. The Windows job runs the native check. [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028) |
+| Native toolbar side panel | PASS in Chrome for Testing | Real mouse clicks on a Windows runner, 3 of 3 runs: the browser reported a `SIDE_PANEL` context, 20 rows saved, and 20 still there after closing and reopening. With the panel behaviour deliberately broken, [the job failed](https://github.com/Pawan-pv/pageharvest/actions/runs/41364264985). Not run in branded Chrome. |
 
 ## Real-site trial
 
@@ -149,11 +149,11 @@ Also removed: `vitest.setup.ts`, which nothing referenced.
 
 **Blocking a release candidate**
 
-- The native toolbar and real side panel are untested. Follow `docs/TEST_RUNBOOK.md`, section 10.
 - Independent review, and a trial on real commercial websites.
 
 **Known limitations**
 
+- The native check runs in Chrome for Testing, because branded Chrome did not load the unpacked extension. Try the manual steps in `docs/FEATURE_AUDIT.md` once in branded Chrome before a store release.
 - The panel follows one job at a time. Another running job continues, and its results appear in Datasets, but there is no switcher.
 - A recovered infinite-scroll job scrolls again from the top, because the feed reloads.
 - An HTTP 404 page with HTML is treated as an empty page, so the job completes with `empty_page` rather than failing.

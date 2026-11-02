@@ -162,7 +162,7 @@ Artifacts are written to:
 - `artifacts/release-test-report.json` and `artifacts/release-test-report.md` — latest aggregate result.
 - `artifacts/release-testing/<run>/logs/` — command logs.
 - `artifacts/release-testing/playwright/` — browser traces, screenshots, videos, diagnostics, and export evidence.
-- `artifacts/release-testing/<run>/native-chrome-diagnostics.json` — isolated Chrome launch evidence.
+- `artifacts/release-testing/<run>/native-chrome-diagnostics.json` — what the native check observed at each step, with `native-side-panel.png` and the toolbar control trees beside it.
 
 Run `pnpm build` before a standalone `pnpm test:e2e`; do not run build and browser tests concurrently.
 
@@ -197,7 +197,7 @@ node scripts/generate-icons.mjs
 
 `.github/workflows/release-gate.yml` runs the complete gate on every push and pull request to `main`, and on demand. It has its own memory, and it runs the browser tests on a virtual display with `xvfb-run`. The report is on the run's summary page, and the report and failure evidence are in its `release-report` artifact.
 
-The run passes with a warning when the only open item is the native Chrome check, because CI cannot click the toolbar. A green run does not mean the native side panel was verified.
+The `release-gate` job runs on Linux with `pnpm test:release:automated`. The `native-side-panel` job runs on Windows with `pnpm test:release:chrome`, clicks the real toolbar, and uploads a screenshot and its evidence. BLOCKED fails that job, so a green run means the toolbar was verified, in Chrome for Testing.
 
 ### Low memory
 
@@ -211,6 +211,19 @@ pnpm test:release:e2e
 A layered run is not the same evidence as one complete gate, so report it as such.
 
 ## 10. Native Chrome side-panel verification
+
+On Windows, this runs the real toolbar click locally. It takes over the mouse while it runs:
+
+```powershell
+pip install pywinauto==0.6.8 pillow==10.4.0
+pnpm exec playwright install chromium
+pnpm build
+pnpm test:release:chrome
+```
+
+Without pywinauto, or off Windows, it reports BLOCKED. Set `PAGEHARVEST_CHROME_PATH` to test another build; branded Chrome did not load the unpacked extension.
+
+The manual steps remain for branded Chrome.
 
 Playwright opens the extension page directly and cannot reliably click the browser toolbar action. Do not treat that E2E as native user-gesture evidence. For the actual side-panel API path:
 

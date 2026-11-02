@@ -33,6 +33,27 @@ export interface ReleaseReportInput extends Omit<ReleaseReport, 'status' | 'summ
   summary?: ReleaseSummary;
 }
 
+export interface NativeEvidence {
+  automationAvailable: boolean;
+  blockedReason?: string;
+  error?: string;
+  expectedRows: number;
+  extensionLoaded?: boolean;
+  toolbarClicked?: boolean;
+  panelOpened?: boolean;
+  rowsSaved?: number;
+  panelReopened?: boolean;
+  rowsAfterReopen?: number;
+}
+
+export interface ScopeLayers {
+  unit: boolean;
+  e2e: boolean;
+  native: boolean;
+}
+
+export function scopeLayers(scope: string): ScopeLayers | null;
+export function decideNativeStatus(evidence: NativeEvidence): { status: ReleaseStatus; details: string };
 export function summarizeChecks(checks: ReleaseCheck[]): ReleaseSummary;
 export function buildReleaseReport(input: ReleaseReportInput): ReleaseReport;
 export function formatReleaseReportMarkdown(report: ReleaseReport): string;

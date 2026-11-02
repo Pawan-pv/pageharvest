@@ -4,7 +4,7 @@ PageHarvest is a local-first Manifest V3 Chrome extension for selecting repeated
 
 ## Current validation
 
-Status: **functional MVP**. Extraction, pagination across real page loads, recovery and export are tested through the production path, including in real Chromium. It is not yet a release candidate: the native toolbar and side panel are unverified, no independent review has happened, and real-website testing covers only two scraping practice sites. The release gate runs on GitHub Actions. See [CRITICAL_REMEDIATION_PLAN.md](docs/CRITICAL_REMEDIATION_PLAN.md) for evidence and open items.
+Status: **functional MVP**. Extraction, pagination across real page loads, recovery and export are tested through the production path, including in real Chromium. The real toolbar and side panel are verified automatically in Chrome for Testing. It is not yet a release candidate: no independent review has happened, and real-website testing covers only two scraping practice sites. The release gate runs on GitHub Actions. See [CRITICAL_REMEDIATION_PLAN.md](docs/CRITICAL_REMEDIATION_PLAN.md) for evidence and open items.
 
 ## Development commands
 
@@ -21,7 +21,7 @@ pnpm test:e2e
 pnpm test:release
 ```
 
-The fixture server used by browser tests is started automatically by Playwright. The native Chrome toolbar side-panel procedure is documented in [FEATURE_AUDIT.md](docs/FEATURE_AUDIT.md); Playwright intentionally does not claim toolbar user-gesture coverage.
+The fixture server used by browser tests is started automatically by Playwright. Playwright intentionally does not claim toolbar coverage: `pnpm test:release:chrome` clicks the real toolbar on Windows, and the manual procedure for branded Chrome is in [FEATURE_AUDIT.md](docs/FEATURE_AUDIT.md).
 
 `pnpm test:release` runs typecheck, lint, unit/integration tests, the production build, headed Chromium unpacked-extension workflows, and the isolated native-Chrome probe. Use `pnpm test:release:unit`, `pnpm test:release:e2e`, or `pnpm test:release:chrome` for one layer. Reports are written to [artifacts/release-test-report.md](artifacts/release-test-report.md) and [artifacts/release-test-report.json](artifacts/release-test-report.json), with detailed logs and browser diagnostics under `artifacts/release-testing/`. Exit code `0` means PASS, `1` means FAIL, and `3` means BLOCKED.
 

@@ -23,10 +23,12 @@ Assessment: **functional MVP**.
 | Picker and closed Shadow DOM | PASS | `overlay-closed-shadow.test.ts`, E2E "picker" | |
 | Production wiring | PASS | `production-wiring.test.ts` | Fails if a module is unreachable from an entry point |
 | Auto-detect on real page layouts | PASS | `detection-real-pages.test.ts`, trial on two scraping practice sites | Commercial sites not tried |
-| Native toolbar and real side panel | BLOCKED | | Manual procedure below has not been run |
-| Complete release gate as one run | PASS | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41360888220) | Native Chrome stays BLOCKED on CI; see below |
+| Native toolbar and real side panel | PASS in Chrome for Testing | `native-side-panel` job, [3 of 3 runs](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028); [fails when broken](https://github.com/Pawan-pv/pageharvest/actions/runs/41364264985) | Branded Chrome is manual, below |
+| Complete release gate | PASS, as two jobs | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028) | Linux runs the automated layers, Windows the native check |
 
 ## Native Chrome Side Panel manual verification
+
+The `native-side-panel` job does this automatically in Chrome for Testing. Use these steps for branded Chrome, or if the job cannot run.
 
 1. Run `pnpm build` and open `chrome://extensions` in a headed Chrome profile.
 2. Enable Developer mode, choose **Load unpacked**, and select `C:\myProject\extension\.output\chrome-mv3`.
