@@ -172,6 +172,36 @@ describe('Scroll and page limits are independent', () => {
     expect(result.stopReason).toBe('max_records_reached');
   });
 
+  it('does not wait for new containers when an existing row changes after scrolling', async () => {
+    const lateFields: FieldDefinition[] = [
+      { id: 't', name: 'Title', selector: '.title', extractor: 'text' },
+      { id: 'p', name: 'Picture', selector: 'img', extractor: 'src' },
+    ];
+    document.body.innerHTML = `
+      <div id="feed">
+        <div class="card"><h3 class="title">Post 1</h3><img></div>
+      </div>
+    `;
+    const scrollBy = vi.fn(() => {
+      document.querySelector('img')?.setAttribute('src', '/loaded.jpg');
+    });
+    window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
+
+    const startedAt = Date.now();
+    const result = await runMultiPageExtraction({
+      strategy: 'infinite_scroll',
+      containerSelector: '.card',
+      fields: lateFields,
+      maxScrolls: 1,
+      scrollDelayMs: 1,
+      pageTimeoutMs: 200,
+    });
+
+    expect(scrollBy).toHaveBeenCalledTimes(1);
+    expect(result.pages.at(-1)?.records[0]?.Picture).toBe('http://localhost:3000/loaded.jpg');
+    expect(Date.now() - startedAt).toBeLessThan(450);
+  });
+
   it('stops promptly when cancelled during a scroll delay', async () => {
     const scrollBy = renderScrollFeed();
     window.scrollBy = scrollBy as unknown as typeof window.scrollBy;

@@ -176,7 +176,14 @@ Last checked: 2026-11-02. "Volatile" fields are compared only with the live page
 | holdout-internet-challenging | A table on a page built to be awkward to automate, with generated ids. | A practice site for browser automation from Elemental Selenium. robots.txt disallows nothing. |
 | holdout-internet-sortable | A very large page with a large table and a large nested list. | A practice site for browser automation from Elemental Selenium. robots.txt disallows nothing. |
 
-## Verification procedure
+## Live verification: TestingURL.dev (2026-11-03)
+
+In addition to the practice-site benchmark above, the extension was exercised end-to-end on `https://testingurl.dev` through the real Chrome side panel (native toolbar click via `trigger_extension_action`):
+
+- List auto-detect: 10 items, 75% confidence; fields Link (href) and Category (text).
+- Table extraction: 60 rows x 6 columns, 60 detected / 60 kept.
+- Durable persistence: dataset survived side-panel close/reopen in PageHarvestDB; CSV export triggered.
+- Quality gates: 75 files, 928 unit/integration tests passing; typecheck, lint, and production build clean.
 
 1. Read the raw page source and write `truth.recordSelector` and field selectors by hand, without using the extension.
 2. Check `robots.txt` and the site's own statement about automated access, and record both.

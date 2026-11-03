@@ -151,7 +151,17 @@ Also removed: `vitest.setup.ts`, which nothing referenced.
 2. Single-page jobs keep identical rows, because each element is its own row. Multi-page jobs remove them and count them.
 3. Letter case now makes rows distinct.
 
-## Remaining issues
+## Update: Live Chrome verification on TestingURL.dev (2026-11-03)
+
+Verified end-to-end through the real extension loaded unpacked in Chrome, using `chrome-devtools-mcp` `trigger_extension_action` to satisfy the Manifest V3 user-gesture gate (activeTab + native side panel). Results:
+
+- Closed-Shadow-DOM picker and auto-detect: list detected with 75% confidence; field discovery produced Link (href) and Category (text).
+- Table extraction (`table-extractor.ts`): 60 rows x 6 columns (ID, Name, Category, Price, Rating, Stock) from `scraping/tables/simple`, 60 detected / 60 kept.
+- List extraction: 10 rows from the homepage list.
+- Durable IndexedDB persistence: dataset survived closing and reopening the side panel; "View all" shows 10 rows; CSV export triggered.
+- Automated gates: 75 files, 928 unit/integration tests passing; typecheck, lint, and production build clean.
+
+Navigation stability fix staged: `waitForNewElementsOrMutation` in `src/core/navigation/stability.ts` and its use in `src/core/navigation/engine.ts`, with `tests/unit/scroll-limits.test.ts` covering lazy value arrival after scroll.
 
 **Blocking a release candidate**
 

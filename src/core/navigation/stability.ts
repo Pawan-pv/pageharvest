@@ -174,6 +174,112 @@ export async function waitForNewElements(
 }
 
 /**
+ * Waits for either new matching containers or a mutation inside an existing one.
+ * Infinite-scroll feeds can populate values such as lazy images without adding a
+ * container, so waiting only for the selector count would unnecessarily consume
+ * the whole timeout on every scroll.
+ */
+export function waitForNewElementsOrMutation(
+  containerSelector: string,
+  initialCount: number,
+  options: WaitForNewElementsOptions = {},
+  root: Document | Element = document
+): Promise<{ success: boolean; newCount: number; diff: number; mutated: boolean; timedOut: boolean }> {
+  const {
+    timeoutMs = 5000,
+    minNewCount = 1,
+    pollIntervalMs = 50,
+  } = options;
+
+  const readMatches = (): Element[] => {
+    try {
+      return Array.from(root.querySelectorAll(containerSelector));
+    } catch {
+      return [];
+    }
+  };
+
+  const mutationTouchesMatch = (mutation: MutationRecord, matches: Element[]): boolean => {
+    const target = mutation.target;
+    if (target instanceof Element && matches.some((element) => element === target || element.contains(target))) {
+      return true;
+    }
+
+    if (mutation.type !== 'childList') return false;
+    return Array.from(mutation.addedNodes).some((node) => {
+      if (!(node instanceof Element)) return false;
+      try {
+        return node.matches(containerSelector) || node.querySelector(containerSelector) !== null;
+      } catch {
+        return false;
+      }
+    });
+  };
+
+  const initialMatches = readMatches();
+  const initialLength = Math.max(initialCount, initialMatches.length);
+  const immediateDiff = initialMatches.length - initialCount;
+  if (immediateDiff >= minNewCount) {
+    return Promise.resolve({
+      success: true,
+      newCount: initialMatches.length,
+      diff: immediateDiff,
+      mutated: false,
+      timedOut: false,
+    });
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let observer: MutationObserver | null = null;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    let pollHandle: ReturnType<typeof setInterval> | null = null;
+
+    const cleanup = () => {
+      observer?.disconnect();
+      observer = null;
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (pollHandle) clearInterval(pollHandle);
+    };
+
+    const finish = (mutated: boolean, timedOut: boolean) => {
+      if (settled) return;
+      settled = true;
+      const newCount = readMatches().length;
+      cleanup();
+      resolve({
+        success: newCount - initialCount >= minNewCount,
+        newCount,
+        diff: newCount - initialCount,
+        mutated,
+        timedOut,
+      });
+    };
+
+    const observeRoot = root instanceof Document ? root.documentElement ?? root : root;
+    if (typeof MutationObserver !== 'undefined' && observeRoot) {
+      observer = new MutationObserver((mutations) => {
+        const matches = readMatches();
+        if (matches.length - initialCount >= minNewCount || mutations.some((mutation) => mutationTouchesMatch(mutation, matches))) {
+          finish(true, false);
+        }
+      });
+      observer.observe(observeRoot, {
+        attributes: true,
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
+
+    pollHandle = setInterval(() => {
+      if (readMatches().length - initialLength >= minNewCount) finish(false, false);
+    }, pollIntervalMs);
+    timeoutHandle = setTimeout(() => finish(false, true), timeoutMs);
+  });
+}
+
+/**
  * Waits for a URL change compared to initialUrl.
  */
 export async function waitForUrlChange(

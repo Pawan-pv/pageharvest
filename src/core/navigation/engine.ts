@@ -8,6 +8,7 @@ import {
 import {
   waitForDOMStability,
   waitForNewElements,
+  waitForNewElementsOrMutation,
   waitForUrlChange,
 } from './stability';
 import {
@@ -337,6 +338,12 @@ export async function runMultiPageExtraction(
       }
 
       const initialCount = documentRoot.querySelectorAll(containerSelector).length;
+      const scrollActivity = waitForNewElementsOrMutation(
+        containerSelector,
+        initialCount,
+        { timeoutMs: Math.min(pageTimeoutMs, 2000), minNewCount: 1, pollIntervalMs: 50 },
+        documentRoot
+      );
       performScrollStep({
         distancePx: scrollDistancePx,
         containerSelector: scrollContainerSelector,
@@ -353,12 +360,7 @@ export async function runMultiPageExtraction(
       }
 
       // Wait for dynamic items to be appended or DOM stability
-      await waitForNewElements(
-        containerSelector,
-        initialCount,
-        { timeoutMs: Math.min(pageTimeoutMs, 2000), minNewCount: 1, pollIntervalMs: 50 },
-        documentRoot
-      );
+      await scrollActivity;
 
       currentPage++;
       continue;

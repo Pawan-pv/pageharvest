@@ -8,7 +8,7 @@ This document serves as the master tracking status for all features, modules, an
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
-| Unit and integration | PASS | `pnpm test`: 64 files, 685 tests on `main` |
+| Unit and integration | PASS | `pnpm test`: 75 files, 928 tests on `feat/trustworthy-extraction` |
 | TypeScript | PASS | `pnpm typecheck` |
 | ESLint | PASS | `pnpm lint` |
 | Production build | PASS | `pnpm build` on the final code |
@@ -18,7 +18,7 @@ This document serves as the master tracking status for all features, modules, an
 | Complete release gate | PASS, as two jobs | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028) |
 | Native toolbar and side panel | PASS in Chrome for Testing | `native-side-panel` job, 3 of 3 runs; branded Chrome is manual |
 
-Branch `feat/trustworthy-extraction` adds the extraction milestone: 919 unit and integration tests, 58 browser tests, and a real-site benchmark. See [REAL_WORLD_TEST_BENCHMARK.md](REAL_WORLD_TEST_BENCHMARK.md) and [PERFORMANCE_AND_COVERAGE.md](PERFORMANCE_AND_COVERAGE.md).
+Branch `feat/trustworthy-extraction` adds the extraction milestone: 928 unit and integration tests (75 files), 58 browser tests, and a real-site benchmark. Live Chrome verification on TestingURL.dev (via chrome-devtools-mcp `trigger_extension_action`) confirmed closed-Shadow-DOM picking, table extraction (60 rows), list extraction (10 rows), durable IndexedDB persistence across panel close/reopen, and CSV export. See [REAL_WORLD_TEST_BENCHMARK.md](REAL_WORLD_TEST_BENCHMARK.md) and [PERFORMANCE_AND_COVERAGE.md](PERFORMANCE_AND_COVERAGE.md).
 
 Assessment: **FUNCTIONAL MVP**. See the plan for what a release candidate still needs.
 
