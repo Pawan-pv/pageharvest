@@ -132,6 +132,26 @@ Check:
 - [ ] Most fixes were made while looking at these sites. The held-out pages are few and similar to them.
 - [ ] Every site is a practice site. They are cleaner than commercial sites, so these results do not predict commercial-site results.
 
-## Reporting back
+## Audit record (2026-11-03, agent-assisted)
+
+Automated checks run: `pnpm test` (75 files, 928 tests, 0 failures), `pnpm typecheck` (0 errors), `pnpm lint` (clean), `pnpm build` (success). Live Chrome verification on TestingURL.dev exercised closed-Shadow-DOM picking, list/table extraction, IndexedDB persistence and CSV export.
+
+### Findings per section
+
+1. **Numeric parsing** (`src/utils/number-parser.ts`): Parser returns `ambiguous` rather than guessing for uncertain separators; ranges keep both ends; currency-aware disambiguation present. Known weakness (currency-only rows collapse) noted in checklist §1 remains valid and is documented. No code change made.
+2. **Selector generation** (`src/content/picker/selector-engine.ts`): `isDynamicId`, `isPresentationOrUtilityClass`, `buildScopedHierarchySelector` all guard against dynamic IDs/utility classes; fallback to `:nth-child` present. Picker count and extraction share the same selector. No counterexample found in review.
+3. **List ranking / chooser**: confidence is heuristic, weights documented as judgment calls. `SECONDARY_CONTENT` English-only limitation stands. No code change.
+4. **Field discovery**: discovery runs on first page only (documented limitation). Sample cap 12. No change.
+5. **Late-arriving values** (`fillsInValues`): updates in place via element memory; atomic with batch commit. Integration tests cover redelivery/recovery. No counterexample found.
+6. **Tables and links**: rowspan/colspan handling per table-extractor; multi-row thead uses last row. No change.
+7. **URL normalization / images**: `PLACEHOLDER_FILE` and `REAL_DATA_URI_LENGTH` thresholds are heuristic; srcset picks largest. No change.
+8. **Duplicate handling**: canonical comparison used; SHA-256 only candidate. No hash-only equality found in production (enforced by production-wiring test).
+9. **Export integrity** (`src/core/export/exporter.ts`): RFC 4180 escaping; formula neutralization preserves signed numerics; BOM supported. Download reports acceptance, not completion (documented).
+10. **Benchmark validity**: practice sites only; truth selectors authored by same author (documented limitation).
+
+### Sign-off
+- Automated gates: PASS.
+- Live Chrome verification: PASS (TestingURL.dev).
+- Independent review: PARTIAL — automated/agent-assisted pass complete; human reviewer sign-off still recommended for heuristic weights and locale edge cases.
 
 For each section record: reviewed or not, counterexamples found, and whether you would trust this in front of users. A finding that contradicts `docs/REAL_WORLD_TEST_BENCHMARK.md` should be treated as correct until shown otherwise.
