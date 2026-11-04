@@ -10,7 +10,10 @@ export default defineConfig({
     }
   },
   vite: () => ({
-    plugins: [react()]
+    plugins: [react()],
+    build: {
+      chunkSizeWarningLimit: 550
+    }
   }),
   manifest: {
     name: 'PageHarvest',

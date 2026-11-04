@@ -24,7 +24,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   dataset,
   activeColumnOrder,
 }) => {
-  const [format, setFormat] = useState<'csv' | 'json' | 'ndjson'>('csv');
+  const [format, setFormat] = useState<'csv' | 'json' | 'ndjson' | 'xlsx'>('csv');
   const [includeBom, setIncludeBom] = useState(true);
   const [delimiter, setDelimiter] = useState<',' | ';' | '\t'>(',');
   const [prettyJson, setPrettyJson] = useState(true);
@@ -89,11 +89,22 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
           orderedColumns,
         });
         result = await triggerDownload({ content: csv, filename, mimeType: 'text/csv' });
+      } else if (format === 'xlsx') {
+        const { recordsToXlsx } = await import('@/core/export/exporter');
+        const xlsx = recordsToXlsx(exportRecords, exportFields, {
+          includeMetadata,
+          orderedColumns,
+        });
+        result = await triggerDownload({
+          content: xlsx,
+          filename,
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
       } else {
         const json = recordsToJson(exportRecords, exportFields, {
           pretty: format === 'json' && prettyJson,
           indent: jsonIndent || 2,
-          format,
+          format: format === 'ndjson' ? 'ndjson' : 'json',
           includeMetadata,
           orderedColumns,
         });
@@ -149,7 +160,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
           {/* Format Selection */}
           <div className="flex flex-col gap-1.5">
             <label className="font-semibold text-slate-700">Format</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => setFormat('csv')}
@@ -190,6 +201,20 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                 <FileJson className="w-5 h-5 mb-1 text-emerald-600" />
                 <span>NDJSON</span>
                 <span className="text-[10px] text-slate-500 font-normal">Line-Delimited</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormat('xlsx')}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                  format === 'xlsx'
+                    ? 'border-emerald-600 bg-emerald-50/50 text-emerald-900 font-semibold shadow-xs'
+                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                }`}
+              >
+                <FileSpreadsheet className="w-5 h-5 mb-1 text-emerald-600" />
+                <span>XLSX</span>
+                <span className="text-[10px] text-slate-500 font-normal">Excel Workbook</span>
               </button>
             </div>
           </div>

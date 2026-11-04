@@ -10,7 +10,7 @@ export const CURRENT_SETTINGS_VERSION = 2;
 export const UserSettingsSchema = z.object({
   id: z.string().default('current'),
   schemaVersion: z.number().int().default(CURRENT_SETTINGS_VERSION),
-  defaultExportFormat: z.enum(['csv', 'json', 'ndjson']).default('csv'),
+  defaultExportFormat: z.enum(['csv', 'json', 'ndjson', 'xlsx']).default('csv'),
   csvDelimiter: z.enum([',', ';', '\t']).default(','),
   csvIncludeBom: z.boolean().default(true),
   jsonIndent: z.number().int().min(0).max(8).default(2),
