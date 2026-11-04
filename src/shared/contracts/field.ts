@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MultiAnchorSelectorSchema } from './selector';
 
 /**
  * Extraction field extraction methods.
@@ -60,6 +61,8 @@ export const ExtractionFieldSchema = z.object({
   transform: FieldTransformSchema.default('trim'),
   columnIndex: z.number().int().min(0).optional(), // Required by 'table_cell'
   discovery: FieldDiscoverySchema.optional(),
+  /** Multi-anchor fallback ladder; every recipe without one keeps working. */
+  anchor: MultiAnchorSelectorSchema.optional(),
 }).refine(
   (data) => {
     if (data.extractor === 'attribute') {

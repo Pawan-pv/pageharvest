@@ -21,6 +21,8 @@ export interface FieldDefinition {
   required?: boolean;
   transform?: 'none' | 'trim' | 'lowercase' | 'uppercase' | 'capitalize';
   columnIndex?: number;
+  /** Multi-tier fallback ladder + element fingerprint for self-healing. */
+  anchor?: import('@/shared/contracts/selector').MultiAnchorSelector;
   discovery?: {
     coverage: number;
     confidence: number;

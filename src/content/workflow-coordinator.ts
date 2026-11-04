@@ -17,6 +17,7 @@ import {
   discoverFieldsInCluster,
   detectListFromSelection,
   suggestionsToFieldDefinitions,
+  attachFieldAnchors,
 } from '@/core/detection';
 import {
   CommitOutcome,
@@ -88,6 +89,7 @@ interface ActiveRun {
 function listCandidateOf(list: DetectedListResult): ListCandidate {
   return {
     containerSelector: list.containerSelector,
+    containerAnchor: list.containerAnchor,
     matchCount: list.itemCount,
     sampleSnippets: list.sampleElements.map((sample) => sample.previewText),
     name: list.name,
@@ -303,6 +305,7 @@ export function createContentWorkflowCoordinator(
         timestamp: Date.now(),
         payload: {
           containerSelector: best.containerSelector,
+          containerAnchor: best.containerAnchor,
           matchCount: best.matchCount,
           sampleSnippets: best.sampleSnippets,
           candidates,
@@ -325,7 +328,11 @@ export function createContentWorkflowCoordinator(
           ? tableFields(containerSelector, root)
           : kind === 'links'
             ? linkFields(containerSelector, root)
-            : suggestionsToFieldDefinitions(discoverFieldsInCluster(containers));
+            : suggestionsToFieldDefinitions(
+                // Anchors attach here, on the final discovery result — the
+                // detection hot path itself stays fingerprint-free.
+                attachFieldAnchors(discoverFieldsInCluster(containers), containers[0])
+              );
       const suggestions = definitions.map((field) => fieldDefinitionSchema.parse(field));
       return publish({
         id: messageId('fields'),

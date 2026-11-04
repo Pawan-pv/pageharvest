@@ -1,4 +1,5 @@
 import { CandidateKind, ListCandidate } from '@/shared/contracts/message';
+import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { messagingService, TabInfo } from '@/services/messaging';
 import {
@@ -46,6 +47,8 @@ export interface InspectedElement {
 
 export interface DetectedList {
   containerSelector: string;
+  /** Multi-tier fallback ladder of the detected repeating item selector. */
+  containerAnchor?: MultiAnchorSelector;
   matchCount: number;
   sampleSnippets: string[];
   /** Everything on the page the user could choose instead, best first. */
@@ -314,10 +317,12 @@ export function useExtractionWorkflow(tab: TabInfo) {
         }
 
         case 'REPEATED_ELEMENTS_DETECTED': {
-          const { containerSelector, matchCount, sampleSnippets, candidates, credible } = message.payload;
+          const { containerSelector, containerAnchor, matchCount, sampleSnippets, candidates, credible } =
+            message.payload;
           setOperationError(null);
           setDetectedList({
             containerSelector,
+            containerAnchor,
             matchCount,
             sampleSnippets,
             candidates,
@@ -416,6 +421,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
     setDetectedList((current) => ({
       ...(current ?? {}),
       containerSelector: candidate.containerSelector,
+      containerAnchor: candidate.containerAnchor,
       matchCount: candidate.matchCount,
       sampleSnippets: candidate.sampleSnippets,
       kind: candidate.kind,
@@ -505,6 +511,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         name,
         urlPattern: tab.url,
         containerSelector: detectedList.containerSelector,
+        containerAnchor: detectedList.containerAnchor,
         fields: fields.filter((f) => selectedFieldIds.has(f.id)),
         pagination,
         dedupeFields: detectedList.dedupeFields,

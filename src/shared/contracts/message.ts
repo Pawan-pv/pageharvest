@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HarvestErrorSchema } from './error';
+import { MultiAnchorSelectorSchema } from './selector';
 import { ExtractionFieldSchema } from './field';
 import { JobIdentitySchema } from './job';
 import { ExtractionProgressSchema } from './progress';
@@ -104,6 +105,7 @@ export type CandidateKind = z.infer<typeof CandidateKindSchema>;
 /** One thing on the page the user could extract, with the evidence for choosing it. */
 export const ListCandidateSchema = z.object({
   containerSelector: z.string(),
+  containerAnchor: MultiAnchorSelectorSchema.optional(),
   matchCount: z.number(),
   sampleSnippets: z.array(z.string()),
   name: z.string(),
@@ -130,6 +132,8 @@ export const repeatedElementsDetectedMessageSchema = baseMessageSchema.extend({
   type: z.literal('REPEATED_ELEMENTS_DETECTED'),
   payload: z.object({
     containerSelector: z.string(),
+    /** Multi-tier fallback ladder of the best candidate's repeating item. */
+    containerAnchor: MultiAnchorSelectorSchema.optional(),
     matchCount: z.number(),
     sampleSnippets: z.array(z.string()),
     candidates: z.array(ListCandidateSchema).optional(),
