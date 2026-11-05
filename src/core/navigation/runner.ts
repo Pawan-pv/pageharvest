@@ -59,9 +59,14 @@ export interface NavigationJobOptions {
   commitCheckpoint: (navigation: JobNavigationState) => Promise<void>;
   /** Starts leaving this document for the given URL. Nothing after it is guaranteed to run. */
   navigateTo: (url: string) => void | Promise<void>;
+  /** Announces what the runner is currently doing, for the on-page neon scan HUD. */
+  onProgressAction?: (action: NavigationProgressAction) => void;
   /** Overrides engine timing, for tests. */
   engineOverrides?: { pageTimeoutMs?: number; navigationTimeoutMs?: number };
 }
+
+/** What the visual overlay HUD announces while a run moves. */
+export type NavigationProgressAction = 'scanning' | 'scrolling' | 'navigating' | 'complete';
 
 export type NavigationJobOutcome =
   | { kind: 'finished'; stopReason: string }
@@ -120,6 +125,7 @@ function assertValidContainer(recipe: ExtractionSchema, root: Document): void {
 
 async function runSinglePageJob(options: NavigationJobOptions): Promise<NavigationJobOutcome> {
   const { recipe, resume, root, signal, getCurrentUrl, waitWhilePaused, commitBatch } = options;
+  options.onProgressAction?.('scanning');
   await waitWhilePaused();
   if (signal.aborted) return { kind: 'cancelled' };
 
@@ -165,6 +171,7 @@ async function runSinglePageJob(options: NavigationJobOptions): Promise<Navigati
  */
 async function runUrlTemplateJob(options: NavigationJobOptions): Promise<NavigationJobOutcome> {
   const { recipe, resume, root, signal, getCurrentUrl, waitWhilePaused, commitBatch, navigateTo } = options;
+  options.onProgressAction?.('scanning');
   const pagination = recipe.pagination;
   const sequence = {
     template: pagination.urlTemplate ?? '',
@@ -232,6 +239,7 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
   await waitWhilePaused();
   if (signal.aborted) return { kind: 'cancelled' };
 
+  options.onProgressAction?.('navigating');
   await navigateTo(nextUrl);
   return { kind: 'navigating' };
 }
@@ -246,6 +254,7 @@ function resolveClickStrategy(root: Document, selector?: string): NavigationStra
 
 async function runEngineJob(options: NavigationJobOptions): Promise<NavigationJobOutcome> {
   const { recipe, resume, root, signal, getCurrentUrl, waitWhilePaused, commitBatch, commitCheckpoint } = options;
+  options.onProgressAction?.('scanning');
   const pagination = recipe.pagination;
   const isScroll = pagination.type === 'infinite_scroll';
   const strategy: NavigationStrategy = isScroll
@@ -271,6 +280,14 @@ async function runEngineJob(options: NavigationJobOptions): Promise<NavigationJo
     waitWhilePaused,
     allowedOrigin: new URL(resume.startUrl).origin,
     ...options.engineOverrides,
+    onProgress: (progress) => {
+      // Feed the neon HUD: infinite scroll harvests by scrolling, every other
+      // engine strategy moves to the next document.
+      if (progress.status !== 'running') return;
+      options.onProgressAction?.(
+        progress.strategy === 'infinite_scroll' ? 'scrolling' : 'navigating'
+      );
+    },
     initialSessionState: {
       strategy,
       currentPage: resume.page - 1,

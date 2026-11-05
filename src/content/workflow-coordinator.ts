@@ -28,6 +28,7 @@ import {
 } from '@/core/navigation/runner';
 import { errorReporter } from '@/core/resilience/error-reporter';
 import { JobIdentity } from '@/shared/contracts/job';
+import { getVisualOverlay } from '@/content/extraction-visual-overlay';
 
 type DetectRepeatedElementsMessage = Extract<ExtensionMessage, { type: 'DETECT_REPEATED_ELEMENTS' }>;
 type DetectFieldsMessage = Extract<ExtensionMessage, { type: 'DETECT_FIELDS' }>;
@@ -79,6 +80,7 @@ const RETRYABLE_REJECTIONS = new Set(['persist_failed']);
 
 interface ActiveRun {
   identity: JobIdentity;
+  containerSelector: string;
   controller: AbortController;
   paused: boolean;
   resumeWaiters: Array<() => void>;
@@ -133,6 +135,8 @@ export function createContentWorkflowCoordinator(
   const abortRun = (run: ActiveRun): void => {
     run.controller.abort();
     releasePause(run);
+    // The neon scan indicators only belong to a live run in this document.
+    getVisualOverlay().destroy();
   };
 
   /**
@@ -195,6 +199,13 @@ export function createContentWorkflowCoordinator(
       })
     );
     run.nextSequence = sequence + 1;
+    // Visual progress comes after the ack: nothing is celebrated before the
+    // transaction has actually committed in storage.
+    if (ack.inserted > 0) {
+      const overlay = getVisualOverlay();
+      overlay.addRows(ack.inserted);
+      overlay.pulseSelector(run.containerSelector, batch.records.length);
+    }
     return { inserted: ack.inserted, shouldStop: ack.shouldStop === true };
   };
 
@@ -224,12 +235,21 @@ export function createContentWorkflowCoordinator(
         commitBatch: (batch) => commitBatch(run, batch),
         commitCheckpoint: (navigation) => commitCheckpoint(run, navigation),
         navigateTo,
+        onProgressAction: (action) => getVisualOverlay().setAction(action),
         engineOverrides: options.engineOverrides,
       });
 
-      if (outcome.kind !== 'finished' || run.controller.signal.aborted) return;
+      if (outcome.kind !== 'finished') {
+        // The document is being replaced; the next document mounts its own overlay.
+        getVisualOverlay().destroy();
+        return;
+      }
+      if (run.controller.signal.aborted) return;
       // The background already ended the job when it told the run to stop.
-      if (outcome.stopReason === 'stopped_by_coordinator') return;
+      if (outcome.stopReason === 'stopped_by_coordinator') {
+        getVisualOverlay().destroy();
+        return;
+      }
 
       await deliver(run, () =>
         createContentWorkflowMessage({
@@ -243,7 +263,9 @@ export function createContentWorkflowCoordinator(
           },
         })
       );
+      getVisualOverlay().complete();
     } catch (error: unknown) {
+      getVisualOverlay().destroy();
       if (error instanceof JobRejectedError || run.controller.signal.aborted) return;
 
       const text = error instanceof Error ? error.message : String(error);
@@ -349,8 +371,13 @@ export function createContentWorkflowCoordinator(
       // A new generation supersedes anything still running in this document.
       if (activeRun) abortRun(activeRun);
 
+      // The neon scan overlay mounts at once, before the first batch is delivered,
+      // so the page shows harvesting state from the first moment.
+      getVisualOverlay().start();
+
       const run: ActiveRun = {
         identity: message.payload.identity,
+        containerSelector: message.payload.recipe.containerSelector,
         controller: new AbortController(),
         paused: false,
         resumeWaiters: [],
