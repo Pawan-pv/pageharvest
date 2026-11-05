@@ -39,8 +39,27 @@ describe('parseNumberDetailed', () => {
     });
   });
 
-  describe('negative values', () => {
-    it.each<[string, number]>([
+  describe('trailing EUR takes precedence over page locale', () => {
+    it('"1.234 \u20ac" on a lang="en" page parses as 1234, not 1.234', () => {
+      const result = parseNumberDetailed('1.234 \u20ac', { locale: 'en' });
+      expect(result.status).toBe('ok');
+      expect(result.value).toBe(1234);
+    });
+
+    it('"1.234 \u20ac" with no locale still parses as 1234', () => {
+      const result = parseNumberDetailed('1.234 \u20ac');
+      expect(result.status).toBe('ok');
+      expect(result.value).toBe(1234);
+    });
+
+    it('"1.234" without currency still uses locale ("en" yields 1.234)', () => {
+      const result = parseNumberDetailed('1.234', { locale: 'en' });
+      expect(result.status).toBe('ok');
+      expect(result.value).toBe(1.234);
+    });
+  });
+
+  describe('negative values', () => {    it.each<[string, number]>([
       ['-5', -5],
       ['−5', -5],
       ['– 5', -5],

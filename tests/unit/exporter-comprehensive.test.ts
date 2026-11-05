@@ -163,6 +163,29 @@ describe('Exporter Engine - Comprehensive (Escaping, Unicode, Filenames, Large D
     });
   });
 
+  describe('CSV Chunk-to-Blob Streaming', () => {
+    it('produces chunks that start with BOM when requested', () => {
+      const records: ExtractedRecord[] = [
+        { _id: '1', _page: 1, _extractedAt: 100, Name: 'Product A', Price: 25.5, Details: 'Good', Category: 'Tech' },
+      ];
+
+      const chunks = Array.from(recordsToCsvChunks(records, fields, { useBom: true }));
+      expect(chunks.length).toBeGreaterThan(0);
+      expect(chunks[0].charCodeAt(0)).toBe(0xfeff); // UTF-8 BOM
+    });
+
+    it('produces chunks whose concatenation equals recordsToCsv output', () => {
+      const records: ExtractedRecord[] = [
+        { _id: '1', _page: 1, _extractedAt: 100, Name: 'Product A', Price: 25.5, Details: 'Good', Category: 'Tech' },
+        { _id: '2', _page: 1, _extractedAt: 200, Name: 'Product B', Price: 49.99, Details: 'Better', Category: 'Tech' },
+      ];
+
+      const chunks = Array.from(recordsToCsvChunks(records, fields, { useBom: true, delimiter: ',' }));
+      const fullCsv = chunks.join('');
+      expect(fullCsv).toBe(recordsToCsv(records, fields, { useBom: true, delimiter: ',' }));
+    });
+  });
+
   describe('Export Integrity & Round-Trip', () => {
     it('preserves exact cell values during round-trip', () => {
       const records: ExtractedRecord[] = [

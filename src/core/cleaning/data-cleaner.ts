@@ -436,15 +436,60 @@ export function normalizeValues(
 /**
  * Undo / Redo History Manager for reversible data cleaning operations.
  */
+/** Default maximum number of undo snapshots retained in memory. */
+export const DEFAULT_HISTORY_CAP = 20;
+/** Reduced history cap when the dataset is large, to bound memory usage. */
+export const LARGE_DATASET_HISTORY_CAP = 5;
+/** Record count above which the reduced history cap applies. */
+export const LARGE_DATASET_RECORD_THRESHOLD = 5000;
+
+/**
+ * Undo / Redo History Manager for reversible data cleaning operations.
+ *
+ * The undo stack is capped to prevent unbounded memory growth in the Side Panel.
+ * When the dataset exceeds LARGE_DATASET_RECORD_THRESHOLD rows, a smaller cap
+ * applies. The oldest snapshot is evicted (undoStack.shift()) when the cap is
+ * exceeded. The cap is checked both at construction and on every recordOperation
+ * so that datasets that grow past the threshold mid-session are handled too.
+ */
 export class DataCleaningHistory {
   private undoStack: CleaningOperationSnapshot[] = [];
   private redoStack: CleaningOperationSnapshot[] = [];
   public currentRecords: ExtractedRecord[];
   public currentFields: FieldDefinition[];
+  private historyCap: number;
+  private readonly explicitCap: boolean;
 
-  constructor(initialRecords: ExtractedRecord[], initialFields: FieldDefinition[]) {
+  constructor(
+    initialRecords: ExtractedRecord[],
+    initialFields: FieldDefinition[],
+    historyCap?: number
+  ) {
     this.currentRecords = [...initialRecords];
     this.currentFields = [...initialFields];
+    this.explicitCap = historyCap !== undefined;
+    // Dynamically lower the cap for large datasets to bound memory.
+    this.historyCap = historyCap ?? this.computeCap(initialRecords.length);
+  }
+
+  /** Computes the effective cap for a given record count. */
+  private computeCap(recordCount: number): number {
+    return recordCount > LARGE_DATASET_RECORD_THRESHOLD
+      ? LARGE_DATASET_HISTORY_CAP
+      : DEFAULT_HISTORY_CAP;
+  }
+
+  /** Re-evaluates the cap based on current record count and trims the stack if needed. */
+  private maybeAdjustCap(recordCount: number): void {
+    if (!this.explicitCap) {
+      const newCap = this.computeCap(recordCount);
+      if (newCap !== this.historyCap) {
+        this.historyCap = newCap;
+      }
+    }
+    while (this.undoStack.length > this.historyCap) {
+      this.undoStack.shift();
+    }
   }
 
   public recordOperation(operation: {
@@ -466,6 +511,10 @@ export class DataCleaningHistory {
     };
 
     this.undoStack.push(snapshot);
+    // Dynamically re-check the cap against the records being written. If no
+    // explicit cap was provided, lower it for large datasets and evict oldest
+    // snapshots as needed.
+    this.maybeAdjustCap(operation.nextRecords.length);
     this.redoStack = []; // Clears redo on new action
     this.currentRecords = [...operation.nextRecords];
     this.currentFields = [...operation.nextFields];

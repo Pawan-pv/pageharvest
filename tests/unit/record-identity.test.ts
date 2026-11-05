@@ -42,6 +42,45 @@ describe('Canonical record identity', () => {
   it('can limit identity to selected fields', () => {
     expect(canonicalizeRecord({ a: 1, b: 2 }, ['a'])).toBe(canonicalizeRecord({ a: 1, b: 3 }, ['a']));
   });
+
+  it('distinguishes numeric values with different currencies in canonical form', () => {
+    const usdRecord = {
+      _id: 'r1', _page: 1, _extractedAt: 100,
+      price: 5,
+      _valueNotes: JSON.stringify({ price: { status: 'ok', value: 5, currency: 'USD' } }),
+    };
+    const eurRecord = {
+      _id: 'r2', _page: 1, _extractedAt: 200,
+      price: 5,
+      _valueNotes: JSON.stringify({ price: { status: 'ok', value: 5, currency: 'EUR' } }),
+    };
+
+    const usdCanonical = canonicalizeRecord(usdRecord);
+    const eurCanonical = canonicalizeRecord(eurRecord);
+
+    expect(usdCanonical).not.toBe(eurCanonical);
+    expect(usdCanonical).toContain('USD');
+    expect(eurCanonical).toContain('EUR');
+  });
+
+  it('does not break when _valueNotes has no currency for a numeric field', () => {
+    const record = {
+      _id: 'r1', _page: 1, _extractedAt: 100,
+      price: 5,
+      _valueNotes: JSON.stringify({ price: { status: 'ok', value: 5 } }),
+    };
+    expect(canonicalizeRecord(record)).toBe('[["price",5]]');
+  });
+
+  it('ignores _valueNotes for non-numeric values', () => {
+    const record = {
+      _id: 'r1', _page: 1, _extractedAt: 100,
+      name: 'Widget',
+      _valueNotes: JSON.stringify({ name: { status: 'ok', value: 'Widget', currency: 'USD' } }),
+    };
+    // name is a string, so currency should not be appended
+    expect(canonicalizeRecord(record)).toBe('[["name","Widget"]]');
+  });
 });
 
 describe('SHA-256 fingerprints', () => {
@@ -66,5 +105,41 @@ describe('SHA-256 fingerprints', () => {
   it('uses an injected hash when one is supplied', async () => {
     const result = await fingerprintRecord({ a: 1 }, async () => 'fixed');
     expect(result.hash).toBe('fixed');
+  });
+
+  it('produces different SHA-256 fingerprints for $5 vs €5', async () => {
+    const usdRecord = {
+      _id: 'r1', _page: 1, _extractedAt: 100,
+      price: 5,
+      _valueNotes: JSON.stringify({ price: { status: 'ok', value: 5, currency: 'USD' } }),
+    };
+    const eurRecord = {
+      _id: 'r2', _page: 1, _extractedAt: 200,
+      price: 5,
+      _valueNotes: JSON.stringify({ price: { status: 'ok', value: 5, currency: 'EUR' } }),
+    };
+
+    const usdFp = await fingerprintRecord(usdRecord);
+    const eurFp = await fingerprintRecord(eurRecord);
+
+    expect(usdFp.hash).not.toBe(eurFp.hash);
+  });
+
+  it('produces the same SHA-256 fingerprint for same currency and value', async () => {
+    const usdRecord1 = {
+      _id: 'r1', _page: 1, _extractedAt: 100,
+      price: 5,
+      _valueNotes: JSON.stringify({ price: { status: 'ok', value: 5, currency: 'USD' } }),
+    };
+    const usdRecord2 = {
+      _id: 'r2', _page: 1, _extractedAt: 200,
+      price: 5,
+      _valueNotes: JSON.stringify({ price: { status: 'ok', value: 5, currency: 'USD' } }),
+    };
+
+    const fp1 = await fingerprintRecord(usdRecord1);
+    const fp2 = await fingerprintRecord(usdRecord2);
+
+    expect(fp1.hash).toBe(fp2.hash);
   });
 });

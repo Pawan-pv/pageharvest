@@ -1,6 +1,6 @@
 export interface DownloadOptions {
   filename: string;
-  content: string | Uint8Array | ArrayBuffer | Blob;
+  content: string | string[] | Uint8Array | ArrayBuffer | Blob;
   mimeType: string;
 }
 
@@ -51,13 +51,20 @@ export async function triggerDownload(options: DownloadOptions): Promise<Downloa
     let url: string;
 
     if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
-      const isText = typeof options.content === 'string';
-      const blob = isText
-        ? new Blob([options.content as string], { type: `${options.mimeType};charset=utf-8` })
-        : new Blob([options.content as unknown as BlobPart], { type: options.mimeType });
+      const blobParts: BlobPart[] = Array.isArray(options.content)
+        ? options.content
+        : [options.content as unknown as BlobPart];
+      const blob = new Blob(blobParts, {
+        type: `${options.mimeType};charset=utf-8`,
+      });
       url = URL.createObjectURL(blob);
     } else if (typeof options.content === 'string') {
       const encoded = encodeURIComponent(options.content);
+      url = `data:${options.mimeType};charset=utf-8,${encoded}`;
+    } else if (Array.isArray(options.content)) {
+      // Fallback when URL.createObjectURL is unavailable (e.g. jsdom test env):
+      // join string chunks into a single data URL.
+      const encoded = encodeURIComponent(options.content.join(''));
       url = `data:${options.mimeType};charset=utf-8,${encoded}`;
     } else {
       return { success: false, error: 'Binary downloads require URL.createObjectURL support.' };

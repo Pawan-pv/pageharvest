@@ -273,5 +273,112 @@ describe('Data Cleaning & Normalization Engine', () => {
       const nonDestructive = history.isOperationDestructive('TRIM_WHITESPACE');
       expect(nonDestructive).toBe(false);
     });
+
+    it('evicts oldest snapshots when the default cap (20) is reached', () => {
+      const initialRecords: ExtractedRecord[] = [
+        { _id: '1', _page: 1, _extractedAt: 100, title: 'Item 1' },
+      ];
+      const history = new DataCleaningHistory(initialRecords, sampleFields);
+
+      // Perform 25 operations (default cap is 20)
+      for (let i = 0; i < 25; i++) {
+        const nextRecords = [...history.currentRecords, { _id: `new-${i}`, _page: 1, _extractedAt: 200 + i, title: `Item ${i}` }];
+        history.recordOperation({
+          description: `Op ${i}`,
+          previousRecords: history.currentRecords,
+          previousFields: history.currentFields,
+          nextRecords,
+          nextFields: history.currentFields,
+        });
+      }
+
+      // Should have at most 20 snapshots
+      expect(history.getUndoHistory().length).toBeLessThanOrEqual(20);
+      // Oldest (Op 0) should have been evicted
+      expect(history.getUndoHistory()[0].description).not.toBe('Op 0');
+      // Most recent should be present
+      expect(history.getUndoHistory()[history.getUndoHistory().length - 1].description).toBe('Op 24');
+    });
+
+    it('uses a smaller cap (5) for datasets over 5,000 records', () => {
+      const largeRecords: ExtractedRecord[] = [];
+      for (let i = 0; i < 6000; i++) {
+        largeRecords.push({ _id: `r${i}`, _page: 1, _extractedAt: 100, title: `Item ${i}` });
+      }
+      const history = new DataCleaningHistory(largeRecords, sampleFields);
+
+      // Cap should be 5 for large datasets
+      for (let i = 0; i < 10; i++) {
+        const nextRecords = [...history.currentRecords];
+        history.recordOperation({
+          description: `Op ${i}`,
+          previousRecords: history.currentRecords,
+          previousFields: history.currentFields,
+          nextRecords,
+          nextFields: history.currentFields,
+        });
+      }
+
+      expect(history.getUndoHistory().length).toBeLessThanOrEqual(5);
+    });
+
+    it('dynamically lowers the cap mid-session when records grow past 5,000', () => {
+      // Start small: default cap is 20
+      const initialRecords: ExtractedRecord[] = [
+        { _id: '1', _page: 1, _extractedAt: 100, title: 'Item 1' },
+      ];
+      const history = new DataCleaningHistory(initialRecords, sampleFields);
+
+      // Perform 25 operations with small records — cap stays at 20
+      for (let i = 0; i < 25; i++) {
+        const nextRecords = [...history.currentRecords, { _id: `new-${i}`, _page: 1, _extractedAt: 200 + i, title: `Item ${i}` }];
+        history.recordOperation({
+          description: `small-op-${i}`,
+          previousRecords: history.currentRecords,
+          previousFields: history.currentFields,
+          nextRecords,
+          nextFields: history.currentFields,
+        });
+      }
+      expect(history.getUndoHistory().length).toBeLessThanOrEqual(20);
+
+      // Now grow the dataset past 5,000 records in one operation
+      const manyRecords: ExtractedRecord[] = [];
+      for (let i = 0; i < 6000; i++) {
+        manyRecords.push({ _id: `big-${i}`, _page: 1, _extractedAt: 300, title: `Big Item ${i}` });
+      }
+      history.recordOperation({
+        description: 'grow-to-large',
+        previousRecords: history.currentRecords,
+        previousFields: history.currentFields,
+        nextRecords: manyRecords,
+        nextFields: history.currentFields,
+      });
+
+      // Cap should now drop to 5 and the stack should be trimmed
+      expect(history.getUndoHistory().length).toBeLessThanOrEqual(5);
+      // The most recent operation (grow-to-large) should be present
+      expect(history.getUndoHistory()[history.getUndoHistory().length - 1].description).toBe('grow-to-large');
+    });
+
+    it('allows a custom history cap to be passed', () => {
+      const initialRecords: ExtractedRecord[] = [
+        { _id: '1', _page: 1, _extractedAt: 100, title: 'Item 1' },
+      ];
+      const history = new DataCleaningHistory(initialRecords, sampleFields, 3);
+
+      for (let i = 0; i < 5; i++) {
+        const nextRecords = [...history.currentRecords, { _id: `new-${i}`, _page: 1, _extractedAt: 200 + i, title: `Item ${i}` }];
+        history.recordOperation({
+          description: `Op ${i}`,
+          previousRecords: history.currentRecords,
+          previousFields: history.currentFields,
+          nextRecords,
+          nextFields: history.currentFields,
+        });
+      }
+
+      expect(history.getUndoHistory().length).toBeLessThanOrEqual(3);
+    });
   });
 });

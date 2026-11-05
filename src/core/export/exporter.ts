@@ -330,6 +330,9 @@ export function recordsToJson(
 
 function escapeXml(value: unknown): string {
   return String(value)
+    // Strip invalid XML 1.0 control characters before escaping entities.
+    // eslint-disable-next-line no-control-regex -- control chars intentionally stripped
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFE\uFFFF]/g, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

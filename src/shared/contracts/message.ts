@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { HarvestErrorSchema } from './error';
-import { MultiAnchorSelectorSchema } from './selector';
+import { MultiAnchorSelectorSchema, HealedFieldSummarySchema } from './selector';
 import { ExtractionFieldSchema } from './field';
 import { JobIdentitySchema } from './job';
 import { ExtractionProgressSchema } from './progress';
@@ -243,6 +243,34 @@ export const queryJobRunMessageSchema = baseMessageSchema.extend({
 });
 
 // ---------------------------------------------------------------------------
+// Schema healing commands: side panel -> background
+// ---------------------------------------------------------------------------
+/**
+ * Applies a re-picked field selector to a paused job's schema in place. The
+ * selector and anchor are relative to the job's containerSelector, so the
+ * update never disturbs the other fields or their column order.
+ */
+export const updateJobSchemaMessageSchema = baseMessageSchema.extend({
+  type: z.literal('UPDATE_JOB_SCHEMA'),
+  payload: z.object({
+    jobId: z.string().min(1),
+    fieldUpdate: z.object({
+      fieldId: z.string().min(1),
+      selector: z.string(),
+      anchor: MultiAnchorSelectorSchema.optional(),
+    }),
+    /** Drop the staged drift batch (the Re-Pick path never commits degraded rows). */
+    discardStagedBatch: z.boolean().default(false),
+  }),
+});
+
+/** Accepts the staged drift batch ("Accept Auto-Healed Preview / Continue"). */
+export const acceptSelectorDriftMessageSchema = baseMessageSchema.extend({
+  type: z.literal('ACCEPT_SELECTOR_DRIFT'),
+  payload: z.object({ jobId: z.string().min(1) }),
+});
+
+// ---------------------------------------------------------------------------
 // Job execution: content script -> background
 // ---------------------------------------------------------------------------
 export const BatchStatsSchema = z.object({
@@ -251,6 +279,14 @@ export const BatchStatsSchema = z.object({
   filtered: z.number().int().min(0),
   failed: z.number().int().min(0),
   duplicates: z.number().int().min(0),
+  /** Field name -> records of this batch that carry a value. Drives the drift gate. */
+  fillHits: z.record(z.string(), z.number().int().min(0)).optional(),
+  /** Containers examined on the page, after recovery was attempted. */
+  containerCount: z.number().int().min(0).optional(),
+  /** True when the batch came from the container fallback ladder, not the primary selector. */
+  containerRecovered: z.boolean().optional(),
+  /** Fields a heal tier carried on this batch. */
+  healedFields: z.array(HealedFieldSummarySchema).optional(),
 });
 
 export type BatchStats = z.infer<typeof BatchStatsSchema>;
@@ -353,6 +389,8 @@ export const BrowserMessageSchema = z.discriminatedUnion('type', [
   jobFailedMessageSchema,
   jobUpdatedMessageSchema,
   extractionErrorMessageSchema,
+  updateJobSchemaMessageSchema,
+  acceptSelectorDriftMessageSchema,
 ]);
 
 export type BrowserMessage = z.infer<typeof BrowserMessageSchema>;
@@ -369,6 +407,8 @@ export const BatchRejectionReasonSchema = z.enum([
   'wrong_tab',
   'out_of_order',
   'persist_failed',
+  /** Batch held for review by the drift gate; the job is paused with it staged. */
+  'selector_drift',
 ]);
 
 export type BatchRejectionReason = z.infer<typeof BatchRejectionReasonSchema>;

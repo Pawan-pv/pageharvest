@@ -3,7 +3,7 @@ import { FileSpreadsheet, FileJson, Download, X } from 'lucide-react';
 import { Alert } from '@/components/common/Alert';
 import { Button } from '@/components/common/Button';
 import { ExtractedRecord, FieldDefinition, Dataset } from '@/types';
-import { recordsToCsv, recordsToJson, generateExportFilename, withValueDetails } from '@/core/export/exporter';
+import { recordsToCsvChunks, recordsToJson, generateExportFilename, withValueDetails } from '@/core/export/exporter';
 import { triggerDownload } from '@/platform/downloads';
 import { SettingsRepository } from '@/storage/repositories/settings-repository';
 
@@ -82,13 +82,22 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
         : activeColumnOrder;
       let result;
       if (format === 'csv') {
-        const csv = recordsToCsv(exportRecords, exportFields, {
-          useBom: includeBom,
-          delimiter,
-          includeMetadata,
-          orderedColumns,
+        // Stream chunks directly into the Blob instead of concatenating one
+        // giant in-memory string, keeping memory usage proportional to chunk
+        // size rather than total export size.
+        const csvChunks: string[] = Array.from(
+          recordsToCsvChunks(exportRecords, exportFields, {
+            useBom: includeBom,
+            delimiter,
+            includeMetadata,
+            orderedColumns,
+          })
+        );
+        result = await triggerDownload({
+          content: csvChunks,
+          filename,
+          mimeType: 'text/csv',
         });
-        result = await triggerDownload({ content: csv, filename, mimeType: 'text/csv' });
       } else if (format === 'xlsx') {
         const { recordsToXlsx } = await import('@/core/export/exporter');
         const xlsx = recordsToXlsx(exportRecords, exportFields, {

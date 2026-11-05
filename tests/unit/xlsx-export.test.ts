@@ -57,4 +57,23 @@ describe('XLSX export', () => {
     const blob = recordsToXlsxBlob(sampleRecords, fields);
     expect(blob.type).toContain('spreadsheetml');
   });
+
+  it('strips invalid XML 1.0 control characters from cell values', async () => {
+    const recordsWithControlChars: ExtractedRecord[] = [
+      { _id: '1', _page: 1, _extractedAt: 100, 'Product Name': 'Widget\x00Null', Price: 5 },
+      { _id: '2', _page: 1, _extractedAt: 200, 'Product Name': 'Gadget\x0BVerticalTab', Price: 10 },
+      { _id: '3', _page: 1, _extractedAt: 300, 'Product Name': 'Thing\x1FUnitSeparator', Price: 15 },
+    ];
+    const bytes = recordsToXlsx(recordsWithControlChars, fields);
+    const zip = await JSZip.loadAsync(bytes);
+    const sheet = await zip.file('xl/worksheets/sheet1.xml')!.async('string');
+    // Control characters must not appear in the XML output
+    expect(sheet).not.toContain('\x00');
+    expect(sheet).not.toContain('\x0B');
+    expect(sheet).not.toContain('\x1F');
+    // The visible text content must still be present
+    expect(sheet).toContain('Widget');
+    expect(sheet).toContain('Gadget');
+    expect(sheet).toContain('Thing');
+  });
 });

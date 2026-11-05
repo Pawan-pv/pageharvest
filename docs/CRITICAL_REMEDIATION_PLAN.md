@@ -174,14 +174,40 @@ Navigation stability fix staged: `waitForNewElementsOrMutation` in `src/core/nav
 - A recovered infinite-scroll job scrolls again from the top, because the feed reloads.
 - An HTTP 404 page with HTML is treated as an empty page, so the job completes with `empty_page` rather than failing.
 - The page-load check uses a timer in the service worker. If the worker stops first, the check happens when the panel next opens.
-- Auto-detect shows only its top choice, with no list of alternatives. If it picks wrong, use the element picker.
+- Auto-detect ranks and presents up to 8 candidate lists in `DetectedListPreview.tsx`; the user must explicitly choose one. Manual element selection targets the single chosen list. If auto-detect picks wrong, use the element picker.
 - Items that are bare text with no child elements get no automatic column, so add one by hand.
 - Each scroll moves 800 px, so a set number of scrolls can load different amounts on sites that load near the bottom.
-- The CSV is built as one string, so very large exports use memory proportional to their size.
+- CSV export now streams chunks directly into a Blob rather than concatenating one in-memory string. XLSX/JSON still build in memory.
 - Each picker hover and each page load wakes the service worker.
 - The initial side panel chunk is 496.65 kB, just under the 500 kB warning.
 - NFR performance targets have not been measured.
 
+**Permissions & Content Script Injection**
+
+The manifest declares no `host_permissions` and no `tabs` permission. Instead, `entrypoints/content.ts` registers a static content script with `matches: ['<all_urls>']` at `runAt: 'document_idle'`. Chrome auto-injects this script into every matching page on each navigation, so multi-page pagination (`next_button`, `url_template`) and `RECOVER_JOB` (which opens a blank tab via `chrome.tabs.create` and navigates it) work without requiring the `tabs` permission. The `tabs` API calls in `src/background/chrome-job-transport.ts` (`openBlankTab`, `navigateTab`) rely on the content script's pre-existing injection rather than on the `tabs` permission.
+
 **For the Chrome Web Store**
 
 The package meets the icon requirement. `store-assets/screenshot-1280x800.png` is a draft of the required screenshot: it shows test data and `127.0.0.1` links, so replace it with a real example before submitting. A 440x280 promotional image and a 1400x560 marquee are optional and were not created.
+
+---
+
+### External Architecture & Code Review — Completed (November 2026)
+
+1. **Verified Architectural Invariants (Passed):**
+   - Single-writer `JobCoordinator` with inside-transaction re-validation of `job.status`, `job.generation`, and `sequence === lastSequence + 1` safely prevents race conditions across pre-transaction async SHA-256 hashing.
+   - `detectListFromSelection` and `autoDetectLists` re-query the scoped selector so displayed `itemCount` and extracted count cannot diverge on the target page.
+   - `fillsInValues` uses a per-DOM-Element `WeakMap<Element, string>` and requires a strict field superset with zero altered values, preventing distinct rows from merging.
+
+2. **Defects & Bottlenecks Remediated During Review:**
+   - **XLSX XML 1.0 Sanitization** (`src/core/export/exporter.ts`): Stripped invalid XML 1.0 control characters (`[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFE\uFFFF]`) in `escapeXml()` to prevent corrupted `.xlsx` files on scraped pages with control characters.
+   - **Currency-Aware Canonical Identity** (`src/core/extraction/record-identity.ts`): Included parsed currency from `_valueNotes` in `canonicalizeRecord()` so values like `$5` and `€5` produce distinct canonical strings and SHA-256 hashes while preserving numeric field values.
+   - **Bounded Undo/Redo Memory** (`src/core/cleaning/data-cleaner.ts`): Added dynamic history caps to `DataCleaningHistory` (20 snapshots default, automatically reduced to 5 for datasets > 5,000 rows both at construction and mid-session in `recordOperation()`).
+   - **Chunked CSV Blob Streaming** (`src/platform/downloads.ts`, `src/components/grid/ExportDialog.tsx`): Streamed `recordsToCsvChunks()` array directly into `new Blob(chunks)` instead of concatenating a single monolithic string in memory.
+   - **Trailing-EUR Precedence Over Page Locale** (`src/utils/number-parser.ts`): Moved the trailing-EUR thousands check (`"1.234 €"`) above `decimalSeparatorOf(locale)` in `readSingleSeparator()` so pages with `<html lang="en">` do not misparse `"1.234 €"` as `1.234`.
+   - **Test & Type Hygiene**: Removed obsolete `tests/integration/selector-drift.test.ts` testing unimplemented phantom methods, fixed `src/core/extraction/types.ts` imports, and updated documentation in `docs/CRITICAL_REMEDIATION_PLAN.md`.
+
+3. **Final Gate Verification:**
+   - `pnpm typecheck` (`tsc --noEmit`): 0 errors
+   - `pnpm lint` (`eslint .`): 0 errors, 0 warnings
+   - `pnpm test`: 977 passed, 0 failed (78 test files)

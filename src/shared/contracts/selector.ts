@@ -81,10 +81,32 @@ export const HealedFieldSummarySchema = z.object({
   fieldName: z.string(),
   /** Which tier ultimately produced values: 'fallback_class' | 'structural_path' | 'fingerprint'. */
   healedTier: z.enum(['fallback_class', 'structural_path', 'fingerprint']),
-  /** The selector that worked, promoted to primary for subsequent pages. */
-  promotedSelector: z.string(),
-  /** How many containers on the page used the healed path (before promotion cutoff). */
+  /** The selector that worked, promoted to primary when it holds an 80% hit rate. */
+  promotedSelector: z.string().optional(),
+  /** How many containers used the healed path on the page. */
   healedCount: z.number().int().min(0),
   containerCount: z.number().int().min(0),
 });
 export type HealedFieldSummary = z.infer<typeof HealedFieldSummarySchema>;
+
+/**
+ * Why the fill-rate gate paused a job on a page whose selectors no longer line up.
+ * Persisted on the job so the side panel can build its drift-recovery banner from
+ * stored state alone, even after a service-worker restart.
+ */
+export const SelectorDriftSchema = z.object({
+  kind: z.enum(['container', 'field']),
+  /** Present only for kind 'field'. */
+  fieldId: z.string().optional(),
+  fieldName: z.string().optional(),
+  /** Page-1 fill rate this field had (0..1). */
+  baselineRate: z.number().min(0).max(1).optional(),
+  /** Fill rate of the drifting batch (0..1). */
+  currentRate: z.number().min(0).max(1).optional(),
+  /** Containers found on page 1. */
+  baselineContainerCount: z.number().int().min(0).optional(),
+  /** Containers found on the drifting page after recovery was attempted. */
+  recoveredContainerCount: z.number().int().min(0).optional(),
+  message: z.string(),
+});
+export type SelectorDrift = z.infer<typeof SelectorDriftSchema>;

@@ -25,6 +25,16 @@ export function safeQuery(root: Document | Element | null, selector: string): El
   }
 }
 
+/** `element.matches()` with the same degrade-to-false semantics. */
+export function safeMatches(element: Element | null, selector: string): boolean {
+  if (!element || !selector) return false;
+  try {
+    return element.matches(selector);
+  } catch {
+    return false;
+  }
+}
+
 /** True when `matches:`-style evaluation must be skipped for a selector. */
 export function isSafeSelector(selector: string): boolean {
   if (!selector) return false;

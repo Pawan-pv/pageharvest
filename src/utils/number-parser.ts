@@ -124,14 +124,16 @@ function readSingleSeparator(
   if (!couldBeThousands) return { kind: 'number', value: asDecimal };
 
   const asThousands = Number(`${whole}${fraction}`);
+  // Trailing EUR takes precedence over the page locale: a price like "1.234 €"
+  // never means 1.234 (Euros never have 3 decimal places), even on lang="en" pages.
+  if (separator === '.' && currency.trailing && currency.currency === 'EUR') {
+    return { kind: 'number', value: asThousands };
+  }
   const decimal = decimalSeparatorOf(locale);
   if (decimal) {
     return { kind: 'number', value: separator === decimal ? asDecimal : asThousands };
   }
   if (separator === ',' && currency.currencySymbol && COMMA_THOUSANDS_SYMBOLS.has(currency.currencySymbol)) {
-    return { kind: 'number', value: asThousands };
-  }
-  if (separator === '.' && currency.trailing && currency.currency === 'EUR') {
     return { kind: 'number', value: asThousands };
   }
   return {

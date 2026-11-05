@@ -251,6 +251,51 @@ export function bestFingerprintMatch(
   return best?.element ?? null;
 }
 
+/**
+ * Finds the repeating items of a vanished list again. The ladders mirror the
+ * field ladder: the filtered class selector first, then structural fingerprints
+ * grouped by parent (the stored fingerprint describes an item inside its list
+ * parent, so a parent with several near-kin candidates is the strongest signal).
+ * Returns an empty list when nothing on the page stands in for the items.
+ */
+export function recoverContainerItems(
+  root: Document | Element,
+  anchor: MultiAnchorSelector | null | undefined
+): Element[] {
+  if (!anchor) return [];
+  if (anchor.fallbackClass) {
+    const byClass = safeQueryAll(root, anchor.fallbackClass);
+    if (byClass.length > 0) return byClass;
+  }
+  const fingerprint = anchor.fingerprint;
+  if (!fingerprint || !fingerprint.tagName) return [];
+
+  const candidates = safeQueryAll(root, fingerprint.tagName).slice(0, 500);
+  if (candidates.length === 0) return [];
+
+  const byParent = new Map<Element, Element[]>();
+  for (const candidate of candidates) {
+    const parent = candidate.parentElement ?? (root as Element);
+    const group = byParent.get(parent);
+    if (group) group.push(candidate);
+    else byParent.set(parent, [candidate]);
+  }
+
+  let bestGroup: Element[] = [];
+  for (const members of byParent.values()) {
+    if (members.length < Math.max(2, bestGroup.length)) continue;
+    const similar = members.filter((member) => {
+      const built = buildElementFingerprint(member, member.parentElement ?? members[0]);
+      built.expectedValueType = fingerprint.expectedValueType;
+      return fingerprintSimilarity(fingerprint, built) >= FINGERPRINT_CONTAINER_THRESHOLD;
+    });
+    if (similar.length > bestGroup.length) {
+      bestGroup = similar;
+    }
+  }
+  return bestGroup;
+}
+
 export function resolveAnchorSelector(
   root: Document | Element,
   anchor: MultiAnchorSelector | null | undefined
