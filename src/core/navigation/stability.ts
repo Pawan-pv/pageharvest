@@ -1,4 +1,5 @@
 import { DOMStabilityOptions, WaitForNewElementsOptions } from './types';
+import { isPageHarvestOverlayMutation } from '@/utils/dom';
 
 /**
  * General-purpose asynchronous condition poller with timeout and AbortSignal support.
@@ -80,8 +81,12 @@ export function waitForDOMStability(
     };
 
     if (typeof MutationObserver !== 'undefined' && target) {
-      observer = new MutationObserver(() => {
-        lastMutationTime = Date.now();
+      observer = new MutationObserver((mutations) => {
+        // Only real page mutations restart the quiet-period clock. PageHarvest
+        // overlay hosts keep animating while extraction waits for the page itself.
+        if (mutations.some((mutation) => !isPageHarvestOverlayMutation(mutation))) {
+          lastMutationTime = Date.now();
+        }
       });
 
       try {
@@ -200,6 +205,8 @@ export function waitForNewElementsOrMutation(
   };
 
   const mutationTouchesMatch = (mutation: MutationRecord, matches: Element[]): boolean => {
+    // Overlay-caused mutations are never page progress.
+    if (isPageHarvestOverlayMutation(mutation)) return false;
     const target = mutation.target;
     if (target instanceof Element && matches.some((element) => element === target || element.contains(target))) {
       return true;
