@@ -291,6 +291,26 @@ describe('Pagination across real document changes', () => {
       expect(job.pagesVisited).toBe(3);
     });
 
+    it('hands each new document the committed running total, so its HUD keeps counting', async () => {
+      const show = serveLinkedPages({
+        [page(1)]: { titles: ['One', 'Uno'], next: page(2) },
+        [page(2)]: { titles: ['Two'], next: page(3) },
+        [page(3)]: { titles: ['Three'] },
+      });
+      show(page(1));
+      const sendToTab = vi.spyOn(harness.transport, 'sendToTab');
+
+      const identity = await harness.start(TAB, recipe(), page(1));
+      const job = await waitForEnd(harness, identity.jobId);
+
+      const totals = sendToTab.mock.calls
+        .map(([, message]) => message)
+        .filter((message) => message.type === 'EXTRACT_RECORDS')
+        .map((message) => (message.type === 'EXTRACT_RECORDS' ? message.payload.resume.recordsExtracted : NaN));
+      expect(totals).toEqual([0, 2, 3]);
+      expect(job.totalExtracted).toBe(4);
+    });
+
     it('stops at maxPages across documents', async () => {
       const show = serveLinkedPages({
         [page(1)]: { titles: ['One'], next: page(2) },

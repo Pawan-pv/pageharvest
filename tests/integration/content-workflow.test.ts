@@ -151,6 +151,7 @@ describe('content workflow coordinator', () => {
           resume: {
             page: 1,
             nextSequence: 1,
+            recordsExtracted: 0,
             scrollsCompleted: 0,
             catchUpScrolls: 0,
             visitedUrls: [],

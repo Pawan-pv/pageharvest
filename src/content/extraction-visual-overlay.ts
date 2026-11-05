@@ -54,6 +54,9 @@ interface OverlayInternals {
   style: HTMLStyleElement | null;
 }
 
+/** The host's final fade; it ends exactly when the completion window does. */
+const HOST_FADE_OUT_MS = 400;
+
 const OVERLAY_STYLES = `
   :host {
     all: initial;
@@ -69,7 +72,7 @@ const OVERLAY_STYLES = `
     line-height: 1.4;
     box-sizing: border-box;
     opacity: 1;
-    transition: opacity 400ms ease-out;
+    transition: opacity ${HOST_FADE_OUT_MS}ms ease-out;
   }
 
   *, *::before, *::after {
@@ -94,7 +97,7 @@ const OVERLAY_STYLES = `
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(90deg, #00f5d4 0%, #10b981 50%, #a855f7 100%);
+    background: linear-gradient(90deg, #00f5d4 0%, #10b981 50%, #00f5d4 100%);
     background-size: 200% 100%;
     box-shadow: 0 0 12px rgba(0, 245, 212, 0.8), 0 0 28px rgba(16, 185, 129, 0.55);
     animation: px-laser-slide 2.2s linear infinite;
@@ -212,19 +215,41 @@ export class ExtractionVisualOverlay {
   private rows = 0;
   private started = false;
   private pendingTimers = new Set<ReturnType<typeof setTimeout>>();
+  /** Live pulse boxes and the page element each one marks. */
+  private trackedBoxes = new Map<HTMLElement, Element>();
+
+  /**
+   * Keeps pulse boxes on their items while the run scrolls the page or a container.
+   * Capture phase sees every scroll; browsers fire scroll at most once per frame.
+   */
+  private readonly onScroll = (): void => {
+    for (const [box, element] of this.trackedBoxes) {
+      const rect = element.getBoundingClientRect();
+      box.style.top = `${rect.top}px`;
+      box.style.left = `${rect.left}px`;
+    }
+  };
 
   /** Initializes and injects the isolated host into the document, keeping everything hidden. */
   public attach(): void {
     this.ensureAttached();
   }
 
-  /** Shows the laser bar + HUD and resets the row counter. */
-  public start(options: ExtractionOverlayTimingOptions = {}): void {
+  /** Shows the laser bar + HUD; the counter starts from rows already harvested. */
+  public start(options: ExtractionOverlayTimingOptions = {}, initialRows = 0): void {
     this.timing = { ...this.timing, ...options };
     this.ensureAttached();
 
-    this.rows = 0;
-    if (this.internals.counter) this.internals.counter.textContent = '⚡ Harvesting • 0 rows';
+    // A previous run's completion fade or leftover pulses must not touch this run.
+    for (const timer of this.pendingTimers) clearTimeout(timer);
+    this.pendingTimers.clear();
+    this.internals.scanLayer?.replaceChildren();
+    if (this.hostElement) this.hostElement.style.opacity = '';
+    this.trackedBoxes.clear();
+    document.addEventListener('scroll', this.onScroll, { capture: true, passive: true });
+
+    this.rows = Math.max(0, initialRows);
+    if (this.internals.counter) this.internals.counter.textContent = `⚡ Harvesting • ${this.rows} rows`;
     this.setAction('scanning');
 
     if (this.internals.laserBar) this.internals.laserBar.classList.remove('px-hidden');
@@ -236,6 +261,10 @@ export class ExtractionVisualOverlay {
   public complete(): void {
     if (!this.started) return;
     this.setAction('complete');
+    this.internals.laserBar?.classList.add('px-hidden');
+    this.schedule(Math.max(0, this.timing.completionFadeMs - HOST_FADE_OUT_MS), () => {
+      if (this.hostElement) this.hostElement.style.opacity = '0';
+    });
     this.schedule(this.timing.completionFadeMs, () => this.destroy());
   }
 
@@ -285,7 +314,7 @@ export class ExtractionVisualOverlay {
 
     const visible = selected.slice(0, this.timing.maxVisibleItems);
     visible.forEach((entry, index) => {
-      this.spawnPulseBox(entry.rect, index + 1, this.timing.pulseStaggerMs * index);
+      this.spawnPulseBox(entry.element, entry.rect, index + 1, this.timing.pulseStaggerMs * index);
     });
   }
 
@@ -303,6 +332,10 @@ export class ExtractionVisualOverlay {
   public destroy(): void {
     for (const timer of this.pendingTimers) clearTimeout(timer);
     this.pendingTimers.clear();
+    this.trackedBoxes.clear();
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('scroll', this.onScroll, { capture: true });
+    }
     this.hostElement?.remove();
     this.hostElement = null;
     this.internals = {
@@ -380,7 +413,7 @@ export class ExtractionVisualOverlay {
     };
   }
 
-  private spawnPulseBox(rect: DOMRect, index: number, delayMs: number): void {
+  private spawnPulseBox(element: Element, rect: DOMRect, index: number, delayMs: number): void {
     const layer = this.internals.scanLayer;
     if (!layer) return;
 
@@ -400,6 +433,7 @@ export class ExtractionVisualOverlay {
     box.appendChild(badge);
 
     layer.appendChild(box);
+    this.trackedBoxes.set(box, element);
 
     const lifeMs = this.timing.pulseLifeMs;
     const fadeMs = Math.min(260, Math.max(60, Math.floor(lifeMs / 3)));
@@ -408,6 +442,7 @@ export class ExtractionVisualOverlay {
       box.style.opacity = '0';
     });
     this.schedule(delayMs + lifeMs, () => {
+      this.trackedBoxes.delete(box);
       box.remove();
     });
   }

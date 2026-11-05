@@ -373,7 +373,8 @@ export function createContentWorkflowCoordinator(
 
       // The neon scan overlay mounts at once, before the first batch is delivered,
       // so the page shows harvesting state from the first moment.
-      getVisualOverlay().start();
+      // It continues the count from rows earlier documents of this job committed.
+    getVisualOverlay().start({}, message.payload.resume.recordsExtracted);
 
       const run: ActiveRun = {
         identity: message.payload.identity,

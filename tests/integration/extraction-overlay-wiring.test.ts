@@ -69,6 +69,7 @@ function makeRecipe() {
 const resume = {
   page: 1,
   nextSequence: 1,
+  recordsExtracted: 0,
   scrollsCompleted: 0,
   catchUpScrolls: 0,
   visitedUrls: [],
@@ -157,6 +158,26 @@ describe('extraction neon overlay wiring', () => {
     // After the fade window the overlay removes itself entirely.
     await sleep(300);
     expect(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)).toBeNull();
+  });
+
+  it('continues the HUD count from the rows earlier documents already committed', async () => {
+    const coordinator = createContentWorkflowCoordinator(() => undefined, document, {
+      getCurrentUrl: () => 'http://localhost:3000/list',
+      sendToBackground: async () => ({ status: 'committed' as const, sequence: 4, inserted: 1, duplicates: 0 }),
+    });
+    coordinators.push(coordinator);
+
+    const message = extractMessage();
+    coordinator.extractRecords({
+      ...message,
+      payload: { ...message.payload, resume: { ...resume, nextSequence: 4, recordsExtracted: 3 } },
+    });
+
+    const hud = overlayRootOf(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!).querySelector<HTMLElement>('.px-hud')!;
+    expect(hud.textContent).toContain('3 rows');
+
+    await coordinator.runSettled();
+    expect(hud.textContent).toContain('4 rows');
   });
 
   it('removes the overlay immediately when the run is aborted', async () => {

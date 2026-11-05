@@ -1276,6 +1276,7 @@ export class JobCoordinator {
           resume: {
             page: checkpoint.nextPage,
             nextSequence: job.lastSequence + 1,
+            recordsExtracted: job.totalExtracted,
             scrollsCompleted: checkpoint.scrollsCompleted,
             catchUpScrolls: checkpoint.catchUpScrolls,
             visitedUrls: checkpoint.visitedUrls,

@@ -219,6 +219,95 @@ describe('ExtractionVisualOverlay (neon scan overlay)', () => {
     expect(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)).toBeNull();
   });
 
+  it('fades the host out at the end of the completion window before removing it', () => {
+    overlay = new ExtractionVisualOverlay();
+    overlay.attach();
+    overlay.start({ completionFadeMs: 2500 });
+    overlay.complete();
+
+    const host = document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!;
+    vi.advanceTimersByTime(2000);
+    expect(host.style.opacity).not.toBe('0');
+
+    vi.advanceTimersByTime(150);
+    expect(host.style.opacity).toBe('0');
+    expect(host.isConnected).toBe(true);
+
+    vi.advanceTimersByTime(400);
+    expect(host.isConnected).toBe(false);
+  });
+
+  it('a new run started during the completion window is not torn down by the old one', () => {
+    overlay = new ExtractionVisualOverlay();
+    overlay.attach();
+    overlay.start({ completionFadeMs: 2500 });
+    overlay.complete();
+    vi.advanceTimersByTime(2200);
+
+    overlay.start();
+
+    const host = document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!;
+    expect(host.style.opacity).not.toBe('0');
+
+    vi.advanceTimersByTime(5000);
+    expect(host.isConnected).toBe(true);
+    const hud = overlayRootOf(host).querySelector<HTMLElement>('.px-hud')!;
+    expect(hud.textContent).toContain('0 rows');
+    expect(hud.textContent).toContain('Scanning DOM');
+  });
+
+  it('starts the counter from rows an earlier document already harvested', () => {
+    overlay = new ExtractionVisualOverlay();
+    overlay.start({}, 7);
+
+    const hud = overlayRootOf(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!).querySelector<HTMLElement>('.px-hud')!;
+    expect(hud.textContent).toContain('7 rows');
+    overlay.addRows(3);
+    expect(hud.textContent).toContain('10 rows');
+  });
+
+  it('keeps each pulse box on its item while the page or a container scrolls', () => {
+    document.body.innerHTML = '<div class="card"></div>';
+    const card = document.querySelector<HTMLElement>('.card')!;
+    const rect = vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(viewportRect(100, 50));
+
+    overlay = new ExtractionVisualOverlay();
+    overlay.start();
+    overlay.pulseSelector('.card', 1);
+
+    const box = overlayRootOf(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!).querySelector<HTMLElement>('.px-scan-box')!;
+    expect(box.style.top).toBe('100px');
+
+    rect.mockReturnValue(viewportRect(40, 50));
+    document.body.dispatchEvent(new Event('scroll'));
+    expect(box.style.top).toBe('40px');
+  });
+
+  it('stops the laser bar on completion while the HUD stays up', () => {
+    overlay = new ExtractionVisualOverlay();
+    overlay.attach();
+    overlay.start();
+
+    const root = overlayRootOf(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!);
+    overlay.complete();
+
+    expect(root.querySelector('.px-laser-bar')!.classList.contains('px-hidden')).toBe(true);
+    expect(root.querySelector('.px-hud')!.classList.contains('px-hidden')).toBe(false);
+  });
+
+  it('draws the laser bar as a cyan-to-emerald gradient only', () => {
+    overlay = new ExtractionVisualOverlay();
+    overlay.attach();
+
+    const host = document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!;
+    const styleText = overlayRootOf(host).querySelector('style')!.textContent ?? '';
+    const laserRule = /\.px-laser-bar \{[^}]*\}/.exec(styleText)?.[0] ?? '';
+
+    expect(laserRule).toContain('#00f5d4');
+    expect(laserRule).toContain('#10b981');
+    expect(laserRule).not.toContain('#a855f7');
+  });
+
   it('removes the host and cancels pending timers on destroy', () => {
     document.body.innerHTML = '<div class="card"></div>';
     overlay = new ExtractionVisualOverlay();

@@ -32,6 +32,19 @@ function rectOf(top: number, left: number, width: number, height: number): DOMRe
 describe('Picker overlay neon styles', () => {
   let overlay: PickerOverlay;
 
+  it('lets the hidden state beat the toolbar display rule in the cascade', () => {
+    overlay = new PickerOverlay();
+    overlay.attach();
+
+    const host = document.getElementById('pageharvest-picker-overlay-host')!;
+    const styleText = overlayRootOf(host).querySelector('style')!.textContent ?? '';
+
+    // Both rules are !important with display values, so specificity must decide:
+    // a bare `.ph-hidden` loses to the later `.ph-toolbar { display: flex }`.
+    expect(styleText).toMatch(/\.ph-root-container \.ph-hidden \{\s*display: none !important;/);
+    expect(styleText).toContain('display: flex !important');
+  });
+
   beforeEach(() => {
     Element.prototype.attachShadow = function attachAndRecord(this: Element, init: ShadowRootInit) {
       const root = originalAttachShadow.call(this, init);

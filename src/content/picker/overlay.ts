@@ -452,7 +452,8 @@ export class PickerOverlay {
         padding: 0 !important;
       }
 
-      .ph-hidden {
+      /* Scoped so it outranks later single-class rules that set display (.ph-toolbar). */
+      .ph-root-container .ph-hidden {
         display: none !important;
       }
 

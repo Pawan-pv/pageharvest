@@ -212,6 +212,8 @@ export const reconcileJobsMessageSchema = baseMessageSchema.extend({
 export const JobResumeStateSchema = z.object({
   page: z.number().int().min(1),
   nextSequence: z.number().int().min(1),
+  /** Rows committed by earlier documents of this job, so each page's HUD keeps counting. */
+  recordsExtracted: z.number().int().min(0).default(0),
   scrollsCompleted: z.number().int().min(0),
   catchUpScrolls: z.number().int().min(0),
   visitedUrls: z.array(z.string()),

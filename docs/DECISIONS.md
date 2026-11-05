@@ -282,3 +282,10 @@ This document tracks all foundational architectural and technical decisions made
 - **Context**: On an infinite-scroll job, a row read before its image loaded was saved again once it had, leaving two rows for one record.
 - **Decision**: When an element is read again and has only gained values, the new record carries `_supersedes` with the earlier canonical form. In the batch's transaction, the coordinator finds that row by hash, confirms it by canonical comparison, and replaces it in place, keeping its order. If it isn't found, the record is added normally, so nothing is lost. A changed value is treated as new content, as a recycled row is. The marker is never stored.
 - **Consequences**: This is the only change to the durable commit path in this milestone. It is covered by `tests/integration/late-values.test.ts`, and listed for independent review.
+
+## ADR-029: The Running Record Total Travels With Each Document
+
+- **Status**: Accepted
+- **Context**: The neon scan overlay's HUD counter lives in the page. On a Next Button or URL job each new document mounts a fresh overlay, so a two-page run of 6 rows ended showing `3 rows`. Real-Chromium E2E (`tests/e2e/neon-overlays.spec.ts`) proved it. The stored data was always correct; only the display was wrong.
+- **Decision**: `JobResumeState` gains `recordsExtracted`, the job's committed `totalExtracted` at the moment the background starts a document. The content script starts the HUD from it, and adds only acknowledged inserts, as before. It defaults to 0, so a message without it still parses.
+- **Consequences**: Contract addition, display-only: nothing in the commit path reads it, and the background stays the only source of the number. Covered by `tests/unit/messages.test.ts`, `tests/integration/job-pagination.test.ts`, `tests/integration/extraction-overlay-wiring.test.ts` and the E2E spec.
