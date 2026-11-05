@@ -8,12 +8,21 @@ import { useActiveTab } from '@/hooks/useActiveTab';
 import { useDatasets } from '@/hooks/useDatasets';
 import { useExtractionWorkflow } from '@/hooks/useExtractionWorkflow';
 import { MainDashboard } from '@/components/dashboard/MainDashboard';
-import { ElementSelectionBanner } from '@/components/picker/ElementSelectionBanner';
-import { DetectedListPreview } from '@/components/picker/DetectedListPreview';
-import { FieldSelectionPanel } from '@/components/picker/FieldSelectionPanel';
-import { ExtractionProgressView } from '@/components/dashboard/ExtractionProgressView';
 import { Alert } from '@/components/common/Alert';
 import { ExtractionJob } from '@/shared/contracts/job';
+
+const ElementSelectionBanner = lazy(() =>
+  import('@/components/picker/ElementSelectionBanner').then((m) => ({ default: m.ElementSelectionBanner }))
+);
+const DetectedListPreview = lazy(() =>
+  import('@/components/picker/DetectedListPreview').then((m) => ({ default: m.DetectedListPreview }))
+);
+const FieldSelectionPanel = lazy(() =>
+  import('@/components/picker/FieldSelectionPanel').then((m) => ({ default: m.FieldSelectionPanel }))
+);
+const ExtractionProgressView = lazy(() =>
+  import('@/components/dashboard/ExtractionProgressView').then((m) => ({ default: m.ExtractionProgressView }))
+);
 
 const DataTable = lazy(() =>
   import('@/components/grid/DataTable').then((module) => ({ default: module.DataTable }))
@@ -221,64 +230,72 @@ export const App: React.FC = () => {
 
         {/* 2. Visual Element Picking State */}
         {workflow.view === 'inspecting' && (
-          <ElementSelectionBanner
-            inspectedElement={workflow.inspectedElement}
-            onConfirm={() => {
-              if (workflow.detectedList) {
-                workflow.setView('review_list');
-              } else {
-                workflow.autoDetectLists();
-              }
-            }}
-            onCancel={workflow.cancelVisualPicker}
-          />
+          <Suspense fallback={<div className="p-4 text-sm text-slate-500">Loading picker…</div>}>
+            <ElementSelectionBanner
+              inspectedElement={workflow.inspectedElement}
+              onConfirm={() => {
+                if (workflow.detectedList) {
+                  workflow.setView('review_list');
+                } else {
+                  workflow.autoDetectLists();
+                }
+              }}
+              onCancel={workflow.cancelVisualPicker}
+            />
+          </Suspense>
         )}
 
         {/* 3. Detected List Preview */}
         {workflow.view === 'review_list' && workflow.detectedList && (
-          <DetectedListPreview
-            detectedList={workflow.detectedList}
-            onSelectCandidate={workflow.selectListCandidate}
-            onConfirm={() => workflow.confirmListCandidate(workflow.detectedList!)}
-            onPickAgain={workflow.startVisualPicker}
-            onCancel={workflow.resetToDashboard}
-          />
+          <Suspense fallback={<div className="p-4 text-sm text-slate-500">Loading candidates…</div>}>
+            <DetectedListPreview
+              detectedList={workflow.detectedList}
+              onSelectCandidate={workflow.selectListCandidate}
+              onConfirm={() => workflow.confirmListCandidate(workflow.detectedList!)}
+              onPickAgain={workflow.startVisualPicker}
+              onCancel={workflow.resetToDashboard}
+            />
+          </Suspense>
         )}
 
         {/* 4. Field Selection & Pagination Config */}
         {workflow.view === 'config_fields' && workflow.detectedList && (
-          <FieldSelectionPanel
-            detectedList={workflow.detectedList}
-            fields={workflow.fields}
-            selectedFieldIds={workflow.selectedFieldIds}
-            pagination={workflow.pagination}
-            sourceUrl={tab.url}
-            projects={workflow.projects}
-            selectedProjectId={workflow.selectedProjectId}
-            onSelectProject={workflow.setSelectedProjectId}
-            onSaveRecipe={workflow.saveCurrentAsRecipe}
-            onToggleField={workflow.toggleFieldSelection}
-            onUpdateField={workflow.updateField}
-            onAddField={workflow.addField}
-            onRemoveField={workflow.removeField}
-            onPaginationChange={(updates) =>
-              workflow.setPagination((prev) => ({ ...prev, ...updates }))
-            }
-            onBack={() => workflow.setView('review_list')}
-            onStartHarvest={workflow.startExtraction}
-          />
+          <Suspense fallback={<div className="p-4 text-sm text-slate-500">Loading fields…</div>}>
+            <FieldSelectionPanel
+              detectedList={workflow.detectedList}
+              fields={workflow.fields}
+              selectedFieldIds={workflow.selectedFieldIds}
+              pagination={workflow.pagination}
+              sourceUrl={tab.url}
+              projects={workflow.projects}
+              selectedProjectId={workflow.selectedProjectId}
+              onSelectProject={workflow.setSelectedProjectId}
+              onSaveRecipe={workflow.saveCurrentAsRecipe}
+              onToggleField={workflow.toggleFieldSelection}
+              onUpdateField={workflow.updateField}
+              onAddField={workflow.addField}
+              onRemoveField={workflow.removeField}
+              onPaginationChange={(updates) =>
+                workflow.setPagination((prev) => ({ ...prev, ...updates }))
+              }
+              onBack={() => workflow.setView('review_list')}
+              onStartHarvest={workflow.startExtraction}
+            />
+          </Suspense>
         )}
 
         {/* 5. Extraction Progress */}
         {workflow.view === 'extracting' && (
-          <ExtractionProgressView
-            stats={workflow.stats}
-            recordWarningThreshold={workflow.recordWarningThreshold}
-            onPause={workflow.pauseExtraction}
-            onResume={workflow.resumeExtraction}
-            onStop={workflow.stopExtraction}
-            onCancel={() => void handleCancelExtraction()}
-          />
+          <Suspense fallback={<div className="p-4 text-sm text-slate-500">Loading progress…</div>}>
+            <ExtractionProgressView
+              stats={workflow.stats}
+              recordWarningThreshold={workflow.recordWarningThreshold}
+              onPause={workflow.pauseExtraction}
+              onResume={workflow.resumeExtraction}
+              onStop={workflow.stopExtraction}
+              onCancel={() => void handleCancelExtraction()}
+            />
+          </Suspense>
         )}
 
         {/* 6. Results Data Table */}

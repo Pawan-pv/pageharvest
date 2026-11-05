@@ -187,7 +187,7 @@ describe('UI: Data Table & Spreadsheet Management', () => {
     await waitFor(() => expect(triggerDownload).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        content: expect.any(String),
+        content: expect.arrayContaining([expect.any(String)]),
         filename: expect.stringMatching(/^tech-accessories-\d{4}-\d{2}-\d{2}\.json$/),
         mimeType: 'application/json',
       })

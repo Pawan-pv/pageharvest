@@ -3,7 +3,7 @@ import { FileSpreadsheet, FileJson, Download, X } from 'lucide-react';
 import { Alert } from '@/components/common/Alert';
 import { Button } from '@/components/common/Button';
 import { ExtractedRecord, FieldDefinition, Dataset } from '@/types';
-import { recordsToCsvChunks, recordsToJson, generateExportFilename, withValueDetails } from '@/core/export/exporter';
+import { recordsToCsvChunks, recordsToJsonChunks, recordsToNdjsonChunks, generateExportFilename, withValueDetails } from '@/core/export/exporter';
 import { triggerDownload } from '@/platform/downloads';
 import { SettingsRepository } from '@/storage/repositories/settings-repository';
 
@@ -109,16 +109,32 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
           filename,
           mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         });
-      } else {
-        const json = recordsToJson(exportRecords, exportFields, {
-          pretty: format === 'json' && prettyJson,
-          indent: jsonIndent || 2,
-          format: format === 'ndjson' ? 'ndjson' : 'json',
-          includeMetadata,
-          orderedColumns,
+      } else if (format === 'ndjson') {
+        const ndjsonChunks: string[] = Array.from(
+          recordsToNdjsonChunks(exportRecords, exportFields, {
+            includeMetadata,
+            orderedColumns,
+          })
+        );
+        result = await triggerDownload({
+          content: ndjsonChunks,
+          filename,
+          mimeType: 'application/x-ndjson',
         });
-        const mimeType = format === 'ndjson' ? 'application/x-ndjson' : 'application/json';
-        result = await triggerDownload({ content: json, filename, mimeType });
+      } else {
+        const jsonChunks: string[] = Array.from(
+          recordsToJsonChunks(exportRecords, exportFields, {
+            pretty: prettyJson,
+            indent: jsonIndent || 2,
+            includeMetadata,
+            orderedColumns,
+          })
+        );
+        result = await triggerDownload({
+          content: jsonChunks,
+          filename,
+          mimeType: 'application/json',
+        });
       }
 
       // The dialog only closes once the browser has accepted the download.

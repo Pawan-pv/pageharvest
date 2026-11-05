@@ -19,6 +19,7 @@ export default defineConfig({
     name: 'PageHarvest',
     description: 'Local-first website data extraction Chrome extension',
     version: '1.0.0',
+    version_name: '1.0.0-rc1',
     // chrome.sidePanel requires Chrome 114; 116 adds the open behavior this extension relies on.
     minimum_chrome_version: '116',
     icons: {

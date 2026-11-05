@@ -895,6 +895,189 @@
         ]
       },
       "expectedSamples": []
+    },
+    {
+      "id": "hn-frontpage",
+      "holdOut": true,
+      "url": "https://news.ycombinator.com/",
+      "categories": [
+        "Article listings",
+        "Real commercial site"
+      ],
+      "permission": "Y Combinator Hacker News. No robots.txt restrictions for /news (User-agent: * is allowed). Public front page.",
+      "structure": "30 story rows in a table; each row is a title link with points and comment count in a subtext row.",
+      "method": "auto-detect",
+      "pagination": {
+        "mode": "Single Page"
+      },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": "tr.athing",
+        "key": "Title",
+        "fields": [
+          {
+            "name": "Title",
+            "kind": "text",
+            "selector": ".titleline > a"
+          },
+          {
+            "name": "Link",
+            "kind": "url",
+            "selector": ".titleline > a",
+            "attribute": "href"
+          }
+        ],
+        "pages": [
+          "https://news.ycombinator.com/"
+        ]
+      },
+      "expectedSamples": []
+    },
+    {
+      "id": "lobsters-frontpage",
+      "holdOut": true,
+      "url": "https://lobste.rs/",
+      "categories": [
+        "Community listings",
+        "Real commercial site"
+      ],
+      "permission": "Lobsters public front page. robots.txt allows crawling. Community-driven linking site.",
+      "structure": "Stories list with title, domain, submitter, and comment count per story.",
+      "method": "auto-detect",
+      "pagination": {
+        "mode": "Single Page"
+      },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": "li.story",
+        "key": "Title",
+        "fields": [
+          {
+            "name": "Title",
+            "kind": "text",
+            "selector": ".story_title a"
+          },
+          {
+            "name": "Link",
+            "kind": "url",
+            "selector": ".story_title a",
+            "attribute": "href"
+          }
+        ],
+        "pages": [
+          "https://lobste.rs/"
+        ]
+      },
+      "expectedSamples": []
+    },
+    {
+      "id": "wikipedia-us-states",
+      "holdOut": true,
+      "url": "https://en.wikipedia.org/wiki/List_of_U.S._states_by_population",
+      "categories": [
+        "Tables",
+        "Real commercial site"
+      ],
+      "permission": "Wikipedia. Content under CC BY-SA. robots.txt allows crawling.",
+      "structure": "A sortable wikitable with US states, population, and density columns.",
+      "method": "table",
+      "pagination": {
+        "mode": "Single Page"
+      },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": "table.wikitable tbody tr",
+        "key": "State",
+        "fields": [
+          {
+            "name": "State",
+            "kind": "text",
+            "selector": "td:nth-child(1)"
+          },
+          {
+            "name": "Population",
+            "kind": "text",
+            "selector": "td:nth-child(3)"
+          }
+        ],
+        "pages": [
+          "https://en.wikipedia.org/wiki/List_of_U.S._states_by_population"
+        ]
+      },
+      "expectedSamples": []
+    },
+    {
+      "id": "openlibrary-trending",
+      "holdOut": true,
+      "url": "https://openlibrary.org/trending/daily",
+      "categories": [
+        "E-commerce",
+        "Real commercial site"
+      ],
+      "permission": "Open Library (Internet Archive). Public trending books page. robots.txt allows crawling.",
+      "structure": "Trending books list with title, author, and cover image per book.",
+      "method": "auto-detect",
+      "pagination": {
+        "mode": "Single Page"
+      },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": "li.search-result",
+        "key": "Title",
+        "fields": [
+          {
+            "name": "Title",
+            "kind": "text",
+            "selector": "h3.booktitle a"
+          },
+          {
+            "name": "Link",
+            "kind": "url",
+            "selector": "h3.booktitle a",
+            "attribute": "href"
+          }
+        ],
+        "pages": [
+          "https://openlibrary.org/trending/daily"
+        ]
+      },
+      "expectedSamples": []
+    },
+    {
+      "id": "wikipedia-eiffel",
+      "holdOut": true,
+      "url": "https://en.wikipedia.org/wiki/Eiffel_Tower",
+      "categories": [
+        "Infobox tables",
+        "Real commercial site"
+      ],
+      "permission": "Wikipedia. Content under CC BY-SA. robots.txt allows crawling.",
+      "structure": "Wikipedia infobox with structured fields (height, architect, opening date, etc.).",
+      "method": "table",
+      "pagination": {
+        "mode": "Single Page"
+      },
+      "expectedPages": 1,
+      "truth": {
+        "recordSelector": "table.infobox tbody tr",
+        "key": "Label",
+        "fields": [
+          {
+            "name": "Label",
+            "kind": "text",
+            "selector": "th"
+          },
+          {
+            "name": "Value",
+            "kind": "text",
+            "selector": "td"
+          }
+        ],
+        "pages": [
+          "https://en.wikipedia.org/wiki/Eiffel_Tower"
+        ]
+      },
+      "expectedSamples": []
     }
   ]
 }

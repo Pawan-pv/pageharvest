@@ -5,6 +5,8 @@ import {
   escapeCsvCell,
   generateExportFilename,
   recordsToCsvChunks,
+  recordsToJsonChunks,
+  recordsToNdjsonChunks,
 } from '@/core/export/exporter';
 import { ExtractedRecord, FieldDefinition } from '@/types';
 
@@ -186,8 +188,90 @@ describe('Exporter Engine - Comprehensive (Escaping, Unicode, Filenames, Large D
     });
   });
 
-  describe('Export Integrity & Round-Trip', () => {
-    it('preserves exact cell values during round-trip', () => {
+  describe('JSON / NDJSON Chunk Streaming', () => {
+    const chunkRecords: ExtractedRecord[] = [
+      { _id: '1', _page: 1, _extractedAt: 100, Name: 'Alpha', Price: 10, Details: 'First', Category: 'Tech' },
+      { _id: '2', _page: 1, _extractedAt: 200, Name: 'Beta', Price: 20, Details: 'Second', Category: 'Tech' },
+      { _id: '3', _page: 1, _extractedAt: 300, Name: 'Gamma', Price: 30, Details: 'Third', Category: 'Home' },
+    ];
+
+    it('recordsToJsonChunks concatenation matches recordsToJson output exactly', () => {
+      const expected = recordsToJson(chunkRecords, fields, { pretty: true, indent: 2 });
+      const chunks = Array.from(recordsToJsonChunks(chunkRecords, fields, { pretty: true, indent: 2 }));
+      const actual = chunks.join('');
+      expect(actual).toBe(expected);
+    });
+
+    it('recordsToJsonChunks non-pretty concatenation matches recordsToJson output exactly', () => {
+      const expected = recordsToJson(chunkRecords, fields, { pretty: false });
+      const chunks = Array.from(recordsToJsonChunks(chunkRecords, fields, { pretty: false }));
+      expect(chunks.join('')).toBe(expected);
+    });
+
+    it('recordsToNdjsonChunks concatenation matches recordsToJson(ndjson) output exactly', () => {
+      const expected = recordsToJson(chunkRecords, fields, { format: 'ndjson' });
+      const chunks = Array.from(recordsToNdjsonChunks(chunkRecords, fields));
+      expect(chunks.join('')).toBe(expected);
+    });
+
+    it('recordsToNdjsonChunks produces valid JSON lines', () => {
+      const chunks = Array.from(recordsToNdjsonChunks(chunkRecords, fields));
+      const lines = chunks.join('').split('\n').filter((l) => l.trim().length > 0);
+      expect(lines).toHaveLength(3);
+      for (const line of lines) {
+        const parsed = JSON.parse(line);
+        expect(typeof parsed).toBe('object');
+      }
+    });
+
+    it('recordsToJsonChunks produces valid JSON', () => {
+      const chunks = Array.from(recordsToJsonChunks(chunkRecords, fields, { pretty: true }));
+      const parsed = JSON.parse(chunks.join(''));
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toHaveLength(3);
+    });
+
+    it('recordsToNdjsonChunks with large dataset produces multiple chunks', () => {
+      const largeRecords: ExtractedRecord[] = [];
+      for (let i = 1; i <= 2500; i++) {
+        largeRecords.push({
+          _id: `rec_${i}`,
+          _page: 1,
+          _extractedAt: 1000 + i,
+          Name: `Item #${i}`,
+          Price: i * 2.5,
+          Details: `Description ${i}`,
+          Category: `Cat ${i % 5}`,
+        });
+      }
+      const chunks = Array.from(recordsToNdjsonChunks(largeRecords, fields, { chunkSize: 1000 }));
+      expect(chunks.length).toBe(3);
+      const total = chunks.join('');
+      const lines = total.split('\n').filter((l) => l.trim().length > 0);
+      expect(lines).toHaveLength(2500);
+    });
+
+    it('recordsToJsonChunks with large dataset produces correct output', () => {
+      const largeRecords: ExtractedRecord[] = [];
+      for (let i = 1; i <= 2500; i++) {
+        largeRecords.push({
+          _id: `rec_${i}`,
+          _page: 1,
+          _extractedAt: 1000 + i,
+          Name: `Item #${i}`,
+          Price: i * 2.5,
+          Details: `Description ${i}`,
+          Category: `Cat ${i % 5}`,
+        });
+      }
+      const chunks = Array.from(recordsToJsonChunks(largeRecords, fields, { pretty: false }));
+      const parsed = JSON.parse(chunks.join(''));
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toHaveLength(2500);
+    });
+  });
+
+  describe('Export Integrity & Round-Trip', () => {    it('preserves exact cell values during round-trip', () => {
       const records: ExtractedRecord[] = [
         { _id: '1', _page: 1, _extractedAt: 100, Name: 'Item 1', Price: 99.99, Details: 'Special, "Edition"' },
       ];
