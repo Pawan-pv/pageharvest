@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { ElementSelectionBanner } from '@/components/picker/ElementSelectionBanner';
 import { DetectedListPreview } from '@/components/picker/DetectedListPreview';
 import { ExtractionProgressView } from '@/components/dashboard/ExtractionProgressView';
@@ -67,7 +67,7 @@ describe('UI: Extraction Workflow States & Navigation', () => {
         />
       );
 
-      expect(screen.getByText('24 items detected')).toBeInTheDocument();
+      expect(screen.getByText('24 similar items found')).toBeInTheDocument();
       expect(screen.getByText('Card Item 1')).toBeInTheDocument();
       expect(screen.getByText('Card Item 2')).toBeInTheDocument();
     });
@@ -84,9 +84,10 @@ describe('UI: Extraction Workflow States & Navigation', () => {
 
       expect(screen.queryByText('div.grid > div.card-item')).not.toBeInTheDocument();
 
-      const toggleBtn = screen.getByText(/view advanced CSS selector/i);
-      fireEvent.click(toggleBtn);
-
+      // The selector lives behind a closed disclosure.
+      const summary = screen.getByText('Technical details');
+      expect(summary.closest('details')).not.toHaveAttribute('open');
+      fireEvent.click(summary);
       expect(screen.getByText('div.grid > div.card-item')).toBeInTheDocument();
     });
 
@@ -104,14 +105,47 @@ describe('UI: Extraction Workflow States & Navigation', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /pick again/i }));
+      fireEvent.click(screen.getByRole('button', { name: /pick on the page instead/i }));
       expect(onPickAgain).toHaveBeenCalledTimes(1);
 
-      fireEvent.click(screen.getByRole('button', { name: /next: choose fields/i }));
+      fireEvent.click(screen.getByRole('button', { name: /use this list/i }));
       expect(onConfirm).toHaveBeenCalledTimes(1);
 
       fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
       expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows sample rows in a labelled list and says columns come next, without claiming a confidence', () => {
+      render(
+        <DetectedListPreview
+          detectedList={mockList}
+          onConfirm={vi.fn()}
+          onPickAgain={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      );
+
+      expect(screen.getByRole('heading', { name: 'Is this the data you want?' })).toBeInTheDocument();
+      const samples = screen.getByRole('list', { name: 'Sample rows' });
+      expect(within(samples).getAllByRole('listitem')).toHaveLength(3);
+      expect(screen.getByText(/Columns are suggested on the next step/)).toBeInTheDocument();
+      expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
+    });
+
+    it('explains an empty result and does not let it be used', () => {
+      const onConfirm = vi.fn();
+      render(
+        <DetectedListPreview
+          detectedList={{ containerSelector: 'div', matchCount: 0, sampleSnippets: [] }}
+          onConfirm={onConfirm}
+          onPickAgain={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      );
+
+      expect(screen.getByRole('status')).toHaveTextContent('No repeated items were found on this page');
+      expect(screen.getByRole('button', { name: /use this list/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /pick on the page instead/i })).toBeEnabled();
     });
   });
 

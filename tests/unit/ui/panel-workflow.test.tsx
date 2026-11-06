@@ -126,7 +126,7 @@ describe('Side panel as a view of stored state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel Job' }));
 
-    expect(await screen.findByText('Quick Actions')).toBeInTheDocument();
+    expect(await screen.findByText('Get data from this page')).toBeInTheDocument();
     expect((await db.jobs.get(await jobId()))?.status).toBe('CANCELLED');
     expect(await db.history.count()).toBe(1);
   });

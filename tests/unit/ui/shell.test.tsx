@@ -213,13 +213,14 @@ describe('App shell', () => {
 
   it('shows no steps on the dashboard', async () => {
     render(<App />);
-    await screen.findByText('Quick Actions');
+    await screen.findByText('Get data from this page');
     expect(screen.queryByRole('navigation', { name: 'Extraction steps' })).not.toBeInTheDocument();
   });
 
   it('shows the Table flow with its own first step and a scanning state, not the picker', async () => {
     render(<App />);
-    await userEvent.click(await screen.findByRole('button', { name: /Extract Tables/ }));
+    await userEvent.click(await screen.findByText('More ways to start'));
+    await userEvent.click(screen.getByRole('button', { name: /Extract a table/ }));
 
     const steps = await screen.findByRole('navigation', { name: 'Extraction steps' });
     expect(steps).toHaveTextContent('Step 1 of 5: Find a table');

@@ -63,7 +63,7 @@ describe('UI: App Container & Navigation Lifecycle', () => {
   it('shows no recovery banner when nothing can be recovered', async () => {
     render(<App />);
 
-    await screen.findByText('Quick Actions');
+    await screen.findByText('Get data from this page');
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument();
@@ -133,6 +133,6 @@ describe('UI: App Container & Navigation Lifecycle', () => {
 
     // Return to Harvest
     fireEvent.click(screen.getByRole('button', { name: 'Harvest' }));
-    await waitFor(() => expect(screen.getByText('Quick Actions')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Get data from this page')).toBeInTheDocument());
   });
 });

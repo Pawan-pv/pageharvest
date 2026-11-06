@@ -1,5 +1,5 @@
-import React from 'react';
-import { MousePointer, Sparkles, Table, Link2 } from 'lucide-react';
+import React, { useId } from 'react';
+import { MousePointer, Sparkles, Table, Link2, ChevronRight } from 'lucide-react';
 
 export interface QuickActionsProps {
   disabled?: boolean;
@@ -9,91 +9,120 @@ export interface QuickActionsProps {
   onExtractLinks: () => void;
 }
 
+interface StartOptionProps {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  primary?: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}
+
+/** A large choice button. Its name is the title; the description is read as its description. */
+const StartOption: React.FC<StartOptionProps> = ({ title, description, icon, primary = false, disabled, onClick }) => {
+  const descriptionId = useId();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={title}
+      aria-describedby={descriptionId}
+      className={`w-full flex items-start gap-3 p-3 rounded-card border text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        primary
+          ? 'bg-brand-soft border-brand-line hover:border-brand'
+          : 'bg-surface border-line hover:border-line-strong'
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`w-8 h-8 rounded-control flex items-center justify-center shrink-0 ${
+          primary ? 'bg-brand text-on-strong' : 'bg-surface-muted text-fg-muted'
+        }`}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-fg">{title}</span>
+        <span id={descriptionId} className="block text-xs text-fg-muted mt-0.5 leading-snug">
+          {description}
+        </span>
+      </span>
+      <ChevronRight aria-hidden="true" className="w-4 h-4 text-fg-subtle shrink-0 self-center" />
+    </button>
+  );
+};
+
+const SecondaryOption: React.FC<{ label: string; icon: React.ReactNode; disabled: boolean; onClick: () => void }> = ({
+  label,
+  icon,
+  disabled,
+  onClick,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className="flex items-center gap-2 px-3 py-2 rounded-control border border-line bg-surface text-xs font-medium text-fg-muted hover:text-fg hover:border-line-strong disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+    <span aria-hidden="true">{icon}</span>
+    {label}
+  </button>
+);
+
+/**
+ * How to start. Auto-detect comes first because it needs no knowledge of the page; picking
+ * by hand is the fallback. Tables and links are rarer, so they wait under "More ways".
+ */
 export const QuickActions: React.FC<QuickActionsProps> = ({
   disabled = false,
   onSelectElements,
   onAutoDetectLists,
   onExtractTable,
   onExtractLinks,
-}) => {
-  return (
-    <div className="flex flex-col gap-2 text-left">
-      <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold text-fg-muted tracking-tight uppercase tracking-wider">
-          Quick Actions
-        </h4>
-        <span className="text-2xs text-fg-subtle">Local-first</span>
-      </div>
+}) => (
+  <section aria-labelledby="start-heading" className="flex flex-col gap-2 text-left">
+    <h2 id="start-heading" className="text-sm font-semibold text-fg">
+      Get data from this page
+    </h2>
+    {disabled && (
+      <p className="text-xs text-fg-muted">Open a normal website tab to start. Then press Refresh above.</p>
+    )}
 
-      <div className="grid grid-cols-2 gap-2">
-        {/* Visual Element Picker */}
-        <button
-          onClick={onSelectElements}
+    <StartOption
+      primary
+      title="Find data automatically"
+      description="PageHarvest looks for repeated items, such as products or search results, and shows you what it found."
+      icon={<Sparkles className="w-4 h-4" />}
+      disabled={disabled}
+      onClick={onAutoDetectLists}
+    />
+    <StartOption
+      title="Pick items myself"
+      description="Click one item on the page. PageHarvest finds the others like it."
+      icon={<MousePointer className="w-4 h-4" />}
+      disabled={disabled}
+      onClick={onSelectElements}
+    />
+
+    <details className="group">
+      <summary className="cursor-pointer select-none text-xs font-medium text-fg-muted hover:text-fg py-1">
+        More ways to start
+      </summary>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <SecondaryOption
+          label="Extract a table"
+          icon={<Table className="w-3.5 h-3.5" />}
           disabled={disabled}
-          className="flex flex-col items-start p-3 rounded-xl border border-brand-line/90 bg-brand-soft/40 hover:bg-brand-soft hover:border-brand-line text-left transition-all duration-150 group disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
-        >
-          <div className="w-7 h-7 rounded-lg bg-brand text-on-strong flex items-center justify-center mb-2 shadow-xs group-hover:scale-105 transition-transform">
-            <MousePointer className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-xs font-semibold text-fg leading-tight">
-            Select Elements
-          </span>
-          <span className="text-2xs text-fg-subtle mt-0.5 leading-snug">
-            Point & click any item
-          </span>
-        </button>
-
-        {/* Auto-Detect Repeating Lists */}
-        <button
-          onClick={onAutoDetectLists}
-          disabled={disabled}
-          className="flex flex-col items-start p-3 rounded-xl border border-line bg-surface hover:bg-surface-sunken hover:border-line-strong text-left transition-all duration-150 group disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
-        >
-          <div className="w-7 h-7 rounded-lg bg-inverse text-on-strong flex items-center justify-center mb-2 shadow-xs group-hover:scale-105 transition-transform">
-            <Sparkles className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-xs font-semibold text-fg leading-tight">
-            Auto-Detect Lists
-          </span>
-          <span className="text-2xs text-fg-subtle mt-0.5 leading-snug">
-            Scan cards & rows
-          </span>
-        </button>
-
-        {/* Extract Table */}
-        <button
           onClick={onExtractTable}
+        />
+        <SecondaryOption
+          label="Extract all links"
+          icon={<Link2 className="w-3.5 h-3.5" />}
           disabled={disabled}
-          className="flex flex-col items-start p-3 rounded-xl border border-line bg-surface hover:bg-surface-sunken hover:border-line-strong text-left transition-all duration-150 group disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
-        >
-          <div className="w-7 h-7 rounded-lg bg-info text-on-strong flex items-center justify-center mb-2 shadow-xs group-hover:scale-105 transition-transform">
-            <Table className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-xs font-semibold text-fg leading-tight">
-            Extract Tables
-          </span>
-          <span className="text-2xs text-fg-subtle mt-0.5 leading-snug">
-            Pull HTML tabular data
-          </span>
-        </button>
-
-        {/* Extract Links */}
-        <button
           onClick={onExtractLinks}
-          disabled={disabled}
-          className="flex flex-col items-start p-3 rounded-xl border border-line bg-surface hover:bg-surface-sunken hover:border-line-strong text-left transition-all duration-150 group disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
-        >
-          <div className="w-7 h-7 rounded-lg bg-info text-on-strong flex items-center justify-center mb-2 shadow-xs group-hover:scale-105 transition-transform">
-            <Link2 className="w-3.5 h-3.5" />
-          </div>
-          <span className="text-xs font-semibold text-fg leading-tight">
-            Extract Links
-          </span>
-          <span className="text-2xs text-fg-subtle mt-0.5 leading-snug">
-            Harvest URLs & titles
-          </span>
-        </button>
+        />
       </div>
-    </div>
-  );
-};
+    </details>
+  </section>
+);

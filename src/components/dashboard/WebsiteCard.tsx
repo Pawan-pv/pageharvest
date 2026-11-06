@@ -2,6 +2,7 @@ import React from 'react';
 import { Globe, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { Badge } from '@/components/common/Badge';
+import { Banner } from '@/components/common/Banner';
 import { TabInfo } from '@/services/messaging';
 
 export interface WebsiteCardProps {
@@ -76,9 +77,13 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
       </div>
 
       {!tab.isInjectable && (
-        <div className="mt-3 p-2 rounded-lg bg-warning-soft/80 border border-warning-line/80 text-2xs text-warning-emphasis leading-snug">
-          Chrome extensions cannot inspect browser internal pages. Please switch to any regular website (e.g. e-commerce, blog, or search results) to begin harvesting.
-        </div>
+        <Banner
+          tone="warning"
+          className="mt-3"
+          nextStep="Switch to a normal website tab, such as a shop or a list of articles, then press Refresh."
+        >
+          PageHarvest cannot read browser pages like this one, such as settings or the new tab page.
+        </Banner>
       )}
     </Card>
   );
