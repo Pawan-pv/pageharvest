@@ -170,7 +170,7 @@ describe('UI: Data Table & Spreadsheet Management', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Export' }));
-    fireEvent.click(screen.getByRole('button', { name: /^CSV/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'CSV' }));
     fireEvent.click(screen.getByRole('button', { name: 'Download File' }));
     await waitFor(() => expect(triggerDownload).toHaveBeenNthCalledWith(
       1,
@@ -182,7 +182,7 @@ describe('UI: Data Table & Spreadsheet Management', () => {
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Export' }));
-    fireEvent.click(screen.getByRole('button', { name: /^JSON/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'JSON' }));
     fireEvent.click(screen.getByRole('button', { name: 'Download File' }));
     await waitFor(() => expect(triggerDownload).toHaveBeenNthCalledWith(
       2,

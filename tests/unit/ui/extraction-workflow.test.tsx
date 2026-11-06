@@ -175,7 +175,7 @@ describe('UI: Extraction Workflow States & Navigation', () => {
         />
       );
 
-      expect(screen.getByText('Harvesting in Progress...')).toBeInTheDocument();
+      expect(screen.getByText('Collecting rows…')).toBeInTheDocument();
       expect(screen.getByText('72')).toBeInTheDocument();
       expect(screen.getByText('Page 3 of 10')).toBeInTheDocument();
       expect(screen.getByText('4')).toBeInTheDocument();
@@ -225,7 +225,7 @@ describe('UI: Extraction Workflow States & Navigation', () => {
 
       expect(screen.getByText('Items detected').nextSibling).toHaveTextContent('76');
       expect(screen.getByText('Missing some fields').nextSibling).toHaveTextContent('2');
-      expect(screen.getByText('Filtered out').nextSibling).toHaveTextContent('1');
+      expect(screen.getByText('Rows excluded').nextSibling).toHaveTextContent('1');
       expect(screen.getByText('Failed').nextSibling).toHaveTextContent('0');
     });
 
@@ -272,7 +272,7 @@ describe('UI: Extraction Workflow States & Navigation', () => {
         />
       );
 
-      expect(screen.getByText('Extraction Paused')).toBeInTheDocument();
+      expect(screen.getByText('Extraction paused')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: /resume/i }));
       expect(onResume).toHaveBeenCalledTimes(1);
     });
@@ -294,7 +294,7 @@ describe('UI: Extraction Workflow States & Navigation', () => {
         />
       );
 
-      expect(screen.getByText('Extraction Interrupted')).toBeInTheDocument();
+      expect(screen.getByText('Extraction stopped by a problem')).toBeInTheDocument();
       expect(screen.getByText(/Network timeout loading page 4/)).toBeInTheDocument();
     });
   });

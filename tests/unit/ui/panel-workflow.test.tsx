@@ -49,7 +49,7 @@ describe('Side panel as a view of stored state', () => {
     await openLibraryTab('Recipes');
     fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
     fireEvent.click(await screen.findByRole('button', { name: /Start extraction/i }));
-    await screen.findByText('Harvesting in Progress...');
+    await screen.findByText('Collecting rows…');
     await waitFor(async () => expect(await db.jobs.count()).toBe(1));
   }
 
@@ -73,9 +73,9 @@ describe('Side panel as a view of stored state', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('Harvesting in Progress...')).toBeInTheDocument();
+    expect(await screen.findByText('Collecting rows…')).toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByText('Records Harvested').parentElement?.parentElement).toHaveTextContent('1')
+      expect(screen.getByText('Rows saved').nextSibling).toHaveTextContent('1')
     );
     expect(await db.jobs.count()).toBe(1);
   });
@@ -111,11 +111,11 @@ describe('Side panel as a view of stored state', () => {
     await runSavedRecipe();
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
-    expect(await screen.findByText('Extraction Paused')).toBeInTheDocument();
+    expect(await screen.findByText('Extraction paused')).toBeInTheDocument();
     expect((await db.jobs.get(await jobId()))?.status).toBe('PAUSED');
 
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
-    expect(await screen.findByText('Harvesting in Progress...')).toBeInTheDocument();
+    expect(await screen.findByText('Collecting rows…')).toBeInTheDocument();
     expect((await db.jobs.get(await jobId()))?.status).toBe('RUNNING');
   });
 
@@ -124,7 +124,7 @@ describe('Side panel as a view of stored state', () => {
     render(<App />);
     await runSavedRecipe();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel Job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel job' }));
 
     expect(await screen.findByText('Get data from this page')).toBeInTheDocument();
     expect((await db.jobs.get(await jobId()))?.status).toBe('CANCELLED');
@@ -136,7 +136,7 @@ describe('Side panel as a view of stored state', () => {
     render(<App />);
     await runSavedRecipe();
 
-    fireEvent.click(screen.getByRole('button', { name: /Finish & View Results/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Finish and view rows/ }));
 
     await waitFor(async () => {
       expect((await db.jobs.get(await jobId()))?.status).toBe('COMPLETED');

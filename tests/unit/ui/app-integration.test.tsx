@@ -114,7 +114,7 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     await waitFor(async () => {
       expect((await db.jobs.get(JOB_ID))?.status).toBe('RUNNING');
     });
-    expect(await screen.findByText('Harvesting in Progress...')).toBeInTheDocument();
+    expect(await screen.findByText('Collecting rows…')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument();
     });
