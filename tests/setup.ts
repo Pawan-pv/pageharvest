@@ -1,11 +1,16 @@
 import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
 import { beforeEach, afterEach } from 'vitest';
+import { configure } from '@testing-library/react';
 import { createChromeMock, ChromeMock } from './utils/chrome-mock';
 
 declare global {
   var chromeMock: ChromeMock;
 }
+
+// Side panel screens are lazy-loaded chunks (ADR-014). Under a full parallel run, loading one
+// can take longer than Testing Library's 1s default, which made findBy/waitFor flaky.
+configure({ asyncUtilTimeout: 5000 });
 
 // Initialize Chrome extension API mock
 const mockChrome = createChromeMock();
