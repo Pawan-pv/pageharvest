@@ -52,10 +52,10 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
   const templateCheck = validateUrlTemplate(sequence, sourceUrl);
 
   return (
-    <Card variant="flat" className="text-left bg-slate-50/70 p-3.5 border-slate-200/80">
+    <Card variant="flat" className="text-left bg-surface-sunken/70 p-3.5 border-line/80">
       <div className="flex items-center gap-1.5 mb-2.5">
-        <Sliders className="w-3.5 h-3.5 text-slate-700" />
-        <h4 className="text-xs font-semibold text-slate-800">
+        <Sliders className="w-3.5 h-3.5 text-fg-muted" />
+        <h4 className="text-xs font-semibold text-fg">
           Navigation & Pagination Strategy
         </h4>
       </div>
@@ -69,17 +69,17 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
             onClick={() => onChange({ type: mode.type })}
             className={`flex flex-col items-start p-2 rounded-lg border text-left transition-all ${
               config.type === mode.type
-                ? 'bg-white border-emerald-600 text-emerald-900 shadow-xs ring-1 ring-emerald-600'
-                : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
+                ? 'bg-surface border-brand text-brand-emphasis shadow-xs ring-1 ring-focus'
+                : 'bg-surface/70 border-line text-fg-muted hover:bg-surface hover:border-line-strong'
             }`}
           >
             <div className="flex items-center gap-1 mb-1">
-              <span className={config.type === mode.type ? 'text-emerald-700' : 'text-slate-500'}>
+              <span className={config.type === mode.type ? 'text-brand-fg' : 'text-fg-subtle'}>
                 {mode.icon}
               </span>
               <span className="text-xs font-semibold">{mode.label}</span>
             </div>
-            <span className="text-[10px] text-slate-500 leading-tight">
+            <span className="text-2xs text-fg-subtle leading-tight">
               {mode.desc}
             </span>
           </button>
@@ -88,7 +88,7 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
 
       {/* Mode specific parameters */}
       {config.type === 'next_button' && (
-        <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200/60">
+        <div className="flex flex-col gap-2.5 pt-2 border-t border-line/60">
           <Input
             label="Next Button Selector"
             placeholder="e.g. a.next, [rel='next'], button.load-more"
@@ -120,7 +120,7 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
       )}
 
       {config.type === 'infinite_scroll' && (
-        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/60">
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-line/60">
           <Input
             type="number"
             label="Max Scrolls"
@@ -142,7 +142,7 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
       )}
 
       {config.type === 'url_template' && (
-        <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200/60">
+        <div className="flex flex-col gap-2.5 pt-2 border-t border-line/60">
           <Input
             label="Page URL Template"
             placeholder="https://example.com/items?page={page}"
@@ -186,16 +186,16 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
           </div>
 
           {templateCheck.valid ? (
-            <div className="rounded-lg bg-white border border-slate-200 p-2">
-              <p className="text-[11px] font-semibold text-slate-600 mb-1">Pages it will visit</p>
-              <ol className="text-[11px] font-mono text-slate-600 flex flex-col gap-0.5" aria-label="Generated page URLs">
+            <div className="rounded-lg bg-surface border border-line p-2">
+              <p className="text-2xs font-semibold text-fg-muted mb-1">Pages it will visit</p>
+              <ol className="text-2xs font-mono text-fg-muted flex flex-col gap-0.5" aria-label="Generated page URLs">
                 {previewTemplateUrls(sequence, 3).map((url) => (
                   <li key={url} className="truncate" title={url}>{url}</li>
                 ))}
               </ol>
             </div>
           ) : (
-            <p role="alert" className="text-[11px] text-rose-600">{templateCheck.error}</p>
+            <p role="alert" className="text-2xs text-danger-fg">{templateCheck.error}</p>
           )}
         </div>
       )}

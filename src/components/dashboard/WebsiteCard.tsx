@@ -25,10 +25,10 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
   }
 
   return (
-    <Card variant="default" className="text-left bg-gradient-to-b from-white to-slate-50/50">
+    <Card variant="default" className="text-left bg-gradient-to-b from-surface to-surface-sunken/50">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 text-emerald-700 shadow-xs">
+          <div className="w-9 h-9 rounded-lg bg-brand-soft border border-brand-line flex items-center justify-center shrink-0 text-brand-fg shadow-xs">
             {tab.favIconUrl ? (
               <img
                 src={tab.favIconUrl}
@@ -45,7 +45,7 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-semibold text-slate-900 tracking-tight truncate max-w-[200px]">
+              <span className="text-xs font-semibold text-fg tracking-tight truncate max-w-[200px]">
                 {hostname}
               </span>
               {tab.isInjectable ? (
@@ -58,7 +58,7 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
                 </Badge>
               )}
             </div>
-            <p className="text-[11px] text-slate-500 truncate max-w-[260px] mt-0.5" title={tab.title}>
+            <p className="text-2xs text-fg-subtle truncate max-w-[260px] mt-0.5" title={tab.title}>
               {tab.title || 'No title'}
             </p>
           </div>
@@ -69,14 +69,14 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
           disabled={isLoading}
           title="Refresh active tab connection"
           aria-label="Refresh active tab connection"
-          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors shrink-0 disabled:opacity-50"
+          className="p-1.5 text-fg-subtle hover:text-fg-muted hover:bg-surface-muted rounded-lg transition-colors shrink-0 disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
       {!tab.isInjectable && (
-        <div className="mt-3 p-2 rounded-lg bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-800 leading-snug">
+        <div className="mt-3 p-2 rounded-lg bg-warning-soft/80 border border-warning-line/80 text-2xs text-warning-emphasis leading-snug">
           Chrome extensions cannot inspect browser internal pages. Please switch to any regular website (e.g. e-commerce, blog, or search results) to begin harvesting.
         </div>
       )}

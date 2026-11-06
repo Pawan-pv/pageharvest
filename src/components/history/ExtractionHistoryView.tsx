@@ -115,10 +115,10 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-bold text-slate-900 leading-tight">
+          <h2 className="text-sm font-bold text-fg leading-tight">
             Saved Extractions
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-fg-subtle mt-0.5">
             Locally stored in IndexedDB on this browser
           </p>
         </div>
@@ -151,7 +151,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
 
       {/* Dataset List */}
       {isLoading ? (
-        <div className="p-8 text-center text-xs text-slate-400">
+        <div className="p-8 text-center text-xs text-fg-subtle">
           Loading extraction history...
         </div>
       ) : datasets.length === 0 ? (
@@ -166,7 +166,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
           }
         />
       ) : filtered.length === 0 ? (
-        <div className="p-6 text-center text-xs text-slate-400">
+        <div className="p-6 text-center text-xs text-fg-subtle">
           No datasets matching "{search}".
         </div>
       ) : (
@@ -180,7 +180,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="text-xs font-semibold text-slate-900 truncate">
+                  <h3 className="text-xs font-semibold text-fg truncate">
                     {dataset.name}
                   </h3>
                   <a
@@ -188,7 +188,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="text-[11px] text-slate-400 hover:text-emerald-700 truncate block mt-0.5 max-w-[240px]"
+                    className="text-2xs text-fg-subtle hover:text-brand-fg truncate block mt-0.5 max-w-[240px]"
                     title={dataset.url}
                   >
                     {dataset.url}
@@ -200,7 +200,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                 </Badge>
               </div>
 
-              <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="flex items-center justify-between pt-1 border-t border-line-subtle text-2xs text-fg-subtle">
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-3 h-3" />
                   <span>{new Date(dataset.createdAt).toLocaleDateString()}</span>
@@ -213,7 +213,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                     onClick={(e) => handleExportCsv(dataset, e)}
                     title="Export as CSV"
                     aria-label={`Export ${dataset.name} as CSV`}
-                    className="p-1 text-slate-400 hover:text-emerald-700 rounded hover:bg-slate-100 transition-colors"
+                    className="p-1 text-fg-subtle hover:text-brand-fg rounded hover:bg-surface-muted transition-colors"
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
                   </button>
@@ -222,7 +222,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                     onClick={(e) => handleExportJson(dataset, e)}
                     title="Export as JSON"
                     aria-label={`Export ${dataset.name} as JSON`}
-                    className="p-1 text-slate-400 hover:text-emerald-700 rounded hover:bg-slate-100 transition-colors"
+                    className="p-1 text-fg-subtle hover:text-brand-fg rounded hover:bg-surface-muted transition-colors"
                   >
                     <FileJson className="w-3.5 h-3.5" />
                   </button>
@@ -234,7 +234,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                     }}
                     title="Delete dataset"
                     aria-label={`Delete dataset ${dataset.name}`}
-                    className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors"
+                    className="p-1 text-fg-subtle hover:text-danger-fg rounded hover:bg-danger-soft transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -271,7 +271,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
           </>
         }
       >
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-fg-muted">
           Are you sure you want to proceed? This action cannot be undone.
         </p>
       </Modal>

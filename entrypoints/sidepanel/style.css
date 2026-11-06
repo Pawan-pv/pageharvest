@@ -2,20 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Colours come from the design tokens in tailwind.config.js, which also defines the dark values. */
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color-scheme: light;
+  color-scheme: light dark;
 }
 
 body {
   margin: 0;
   padding: 0;
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: rgb(var(--ph-canvas));
+  color: rgb(var(--ph-fg));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-width: 320px;
   overflow-x: hidden;
+}
+
+/* Keyboard users always see where they are. Mouse clicks do not show the ring. */
+:focus-visible {
+  outline: 2px solid rgb(var(--ph-focus));
+  outline-offset: 2px;
 }
 
 /* Crisp, subtle custom scrollbar for the side panel */
@@ -29,10 +36,21 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgb(var(--ph-line-strong) / 0.6);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgb(var(--ph-line-strong));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

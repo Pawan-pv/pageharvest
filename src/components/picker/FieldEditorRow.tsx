@@ -71,8 +71,8 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
     <div
       className={`p-3 rounded-xl border transition-all duration-150 text-left ${
         isSelected
-          ? 'bg-white border-slate-200/90 shadow-xs'
-          : 'bg-slate-50/60 border-slate-200/60 opacity-60'
+          ? 'bg-surface border-line/90 shadow-xs'
+          : 'bg-surface-sunken/60 border-line/60 opacity-60'
       }`}
     >
       {!isEditing ? (
@@ -83,13 +83,13 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
               id={`field-toggle-${field.id}`}
               checked={isSelected}
               onChange={onToggleSelect}
-              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              className="w-4 h-4 rounded border-line-strong text-brand-fg focus:ring-focus cursor-pointer"
             />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <label
                   htmlFor={`field-toggle-${field.id}`}
-                  className="text-xs font-semibold text-slate-900 cursor-pointer hover:text-emerald-700 truncate"
+                  className="text-xs font-semibold text-fg cursor-pointer hover:text-brand-fg truncate"
                 >
                   {field.name}
                 </label>
@@ -102,7 +102,7 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
                   </Badge>
                 )}
               </div>
-              <div className="text-[11px] text-slate-400 font-mono truncate mt-0.5" title={field.selector}>
+              <div className="text-2xs text-fg-subtle font-mono truncate mt-0.5" title={field.selector}>
                 {field.selector}
               </div>
             </div>
@@ -112,14 +112,14 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
             <button
               onClick={() => setIsEditing(true)}
               aria-label={`Edit field ${field.name}`}
-              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors"
+              className="p-1 text-fg-subtle hover:text-fg-muted hover:bg-surface-muted rounded transition-colors"
             >
               <Edit3 className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={onRemove}
               aria-label={`Remove field ${field.name}`}
-              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+              className="p-1 text-fg-subtle hover:text-danger-fg hover:bg-danger-soft rounded transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -128,20 +128,20 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
       ) : (
         /* Edit Mode */
         <div className="flex flex-col gap-2.5 pt-1">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <span className="text-xs font-semibold text-slate-800">Edit Column Definition</span>
+          <div className="flex items-center justify-between border-b border-line-subtle pb-2">
+            <span className="text-xs font-semibold text-fg">Edit Column Definition</span>
             <div className="flex items-center gap-1">
               <button
                 onClick={handleCancel}
                 aria-label="Cancel edit"
-                className="p-1 text-slate-400 hover:text-slate-600 rounded"
+                className="p-1 text-fg-subtle hover:text-fg-muted rounded"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={handleSave}
                 aria-label="Save field edits"
-                className="p-1 text-emerald-600 hover:text-emerald-700 rounded bg-emerald-50"
+                className="p-1 text-brand-fg hover:text-brand-fg rounded bg-brand-soft"
               >
                 <Check className="w-3.5 h-3.5" />
               </button>
@@ -185,11 +185,11 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
               type="checkbox"
               checked={editRequired}
               onChange={(e) => setEditRequired(e.target.checked)}
-              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              className="mt-0.5 w-4 h-4 rounded border-line-strong text-brand-fg focus:ring-focus"
             />
-            <span className="text-xs text-slate-700">
+            <span className="text-xs text-fg-muted">
               Skip rows where this column is empty
-              <span className="block text-[11px] text-slate-500">
+              <span className="block text-2xs text-fg-subtle">
                 Off by default, so rows with a missing value are kept. Skipped rows are counted.
               </span>
             </span>

@@ -162,7 +162,7 @@ const ProjectsPanel: React.FC = () => {
       </div>
 
       {!isLoading && projects.length === 0 && (
-        <p className="p-4 text-center text-xs text-slate-400">
+        <p className="p-4 text-center text-xs text-fg-subtle">
           No projects yet. Extractions are grouped by website automatically.
         </p>
       )}
@@ -170,15 +170,15 @@ const ProjectsPanel: React.FC = () => {
       {projects.map((project) => (
         <Card key={project.id} variant="flat" className="p-3 flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h3 className="text-xs font-semibold text-slate-900 truncate">{project.name}</h3>
+            <h3 className="text-xs font-semibold text-fg truncate">{project.name}</h3>
             {project.targetUrl && (
-              <p className="text-[11px] text-slate-400 truncate">{project.targetUrl}</p>
+              <p className="text-2xs text-fg-subtle truncate">{project.targetUrl}</p>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button
               aria-label={`Rename project ${project.name}`}
-              className="p-1 text-slate-400 hover:text-slate-700 rounded"
+              className="p-1 text-fg-subtle hover:text-fg-muted rounded"
               onClick={() => {
                 setEditing(project);
                 setEditName(project.name);
@@ -188,7 +188,7 @@ const ProjectsPanel: React.FC = () => {
             </button>
             <button
               aria-label={`Delete project ${project.name}`}
-              className="p-1 text-slate-400 hover:text-rose-600 rounded"
+              className="p-1 text-fg-subtle hover:text-danger-fg rounded"
               onClick={() => void askToDelete(project)}
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -231,7 +231,7 @@ const ProjectsPanel: React.FC = () => {
           </>
         }
       >
-        <p className="text-xs text-slate-600">This action cannot be undone.</p>
+        <p className="text-xs text-fg-muted">This action cannot be undone.</p>
       </Modal>
     </div>
   );
@@ -312,9 +312,9 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
       {recipes.map((recipe) => (
         <Card key={recipe.id} variant="flat" className="p-3 flex flex-col gap-2">
           <div className="min-w-0">
-            <h3 className="text-xs font-semibold text-slate-900 truncate">{recipe.name}</h3>
-            <p className="text-[11px] text-slate-400 truncate">{recipe.urlPattern}</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <h3 className="text-xs font-semibold text-fg truncate">{recipe.name}</h3>
+            <p className="text-2xs text-fg-subtle truncate">{recipe.urlPattern}</p>
+            <p className="text-2xs text-fg-subtle mt-0.5">
               {recipe.fields.length} columns, {recipe.pagination?.type ?? 'none'}
             </p>
           </div>
@@ -394,7 +394,7 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
           </>
         }
       >
-        <p className="text-xs text-slate-600">This action cannot be undone.</p>
+        <p className="text-xs text-fg-muted">This action cannot be undone.</p>
       </Modal>
     </div>
   );
@@ -458,9 +458,9 @@ const SchemasPanel: React.FC<{ onUseSchema: (schema: ExtractionSchema) => void }
       {schemas.map((schema) => (
         <Card key={schema.id} variant="flat" className="p-3 flex flex-col gap-2">
           <div className="min-w-0">
-            <h3 className="text-xs font-semibold text-slate-900 truncate">{schema.name}</h3>
-            <p className="text-[11px] font-mono text-slate-400 truncate">{schema.containerSelector}</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <h3 className="text-xs font-semibold text-fg truncate">{schema.name}</h3>
+            <p className="text-2xs font-mono text-fg-subtle truncate">{schema.containerSelector}</p>
+            <p className="text-2xs text-fg-subtle mt-0.5">
               {schema.fields.map((field) => field.name).join(', ')}
             </p>
           </div>
@@ -553,19 +553,19 @@ const RunHistoryPanel: React.FC = () => {
       {runs.map((run) => (
         <Card key={run.id} variant="flat" className="p-3 flex flex-col gap-1">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-xs font-semibold text-slate-900 truncate">{run.name ?? run.url ?? run.id}</h3>
+            <h3 className="text-xs font-semibold text-fg truncate">{run.name ?? run.url ?? run.id}</h3>
             <Badge variant={STATUS_VARIANT[run.status] ?? 'neutral'} size="sm">{run.status}</Badge>
           </div>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-2xs text-fg-subtle">
             {run.totalExtracted} rows, {run.duplicatesSkipped} duplicates skipped
             {run.recordsFiltered ? `, ${run.recordsFiltered} filtered` : ''}
             {run.recordsFailed ? `, ${run.recordsFailed} failed` : ''}
           </p>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-2xs text-fg-subtle">
             {new Date(run.startedAt).toLocaleString()}
             {run.finishedAt ? ` (${Math.max(0, Math.round((run.finishedAt - run.startedAt) / 1000))}s)` : ''}
           </p>
-          {run.errorMessage && <p className="text-[11px] text-rose-600">{run.errorMessage}</p>}
+          {run.errorMessage && <p className="text-2xs text-danger-fg">{run.errorMessage}</p>}
         </Card>
       ))}
     </div>
@@ -593,7 +593,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onRunRecipe, onUseSche
             onClick={() => setTab(item.id)}
             aria-current={tab === item.id ? 'page' : undefined}
             className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-              tab === item.id ? 'bg-emerald-50 text-emerald-800' : 'text-slate-500 hover:text-slate-800'
+              tab === item.id ? 'bg-brand-soft text-brand-emphasis' : 'text-fg-subtle hover:text-fg'
             }`}
           >
             {item.label}

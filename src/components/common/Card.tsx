@@ -13,10 +13,10 @@ export const Card: React.FC<CardProps> = ({
   ...props
 }) => {
   const variantStyles = {
-    default: 'bg-white border border-slate-200/90 shadow-xs rounded-xl',
-    flat: 'bg-slate-50 border border-slate-200/80 rounded-xl',
+    default: 'bg-surface border border-line/90 shadow-xs rounded-xl',
+    flat: 'bg-surface-sunken border border-line/80 rounded-xl',
     interactive:
-      'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-xs transition-all duration-150 cursor-pointer rounded-xl',
+      'bg-surface border border-line hover:border-line-strong hover:shadow-xs transition-all duration-150 cursor-pointer rounded-xl',
   };
 
   return (
@@ -32,10 +32,10 @@ export const CardHeader: React.FC<{
   action?: React.ReactNode;
   className?: string;
 }> = ({ title, subtitle, action, className = '' }) => (
-  <div className={`flex items-start justify-between gap-2 pb-3 mb-3 border-b border-slate-100 ${className}`}>
+  <div className={`flex items-start justify-between gap-2 pb-3 mb-3 border-b border-line-subtle ${className}`}>
     <div>
-      <h3 className="text-sm font-semibold text-slate-900 leading-snug">{title}</h3>
-      {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+      <h3 className="text-sm font-semibold text-fg leading-snug">{title}</h3>
+      {subtitle && <p className="text-xs text-fg-subtle mt-0.5">{subtitle}</p>}
     </div>
     {action && <div className="shrink-0">{action}</div>}
   </div>

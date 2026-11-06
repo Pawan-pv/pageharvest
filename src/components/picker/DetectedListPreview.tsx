@@ -26,7 +26,7 @@ export const DetectedListPreview: React.FC<DetectedListPreviewProps> = ({
         <CardHeader
           title={
             <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-emerald-600" />
+              <Layers className="w-4 h-4 text-brand-fg" />
               <span>Repeating Elements Found</span>
             </div>
           }
@@ -40,7 +40,7 @@ export const DetectedListPreview: React.FC<DetectedListPreviewProps> = ({
 
         {/* Human-readable preview */}
         <div className="flex flex-col gap-2 mt-2">
-          <span className="text-xs font-semibold text-slate-700">
+          <span className="text-xs font-semibold text-fg-muted">
             Sample Preview ({Math.min(detectedList.sampleSnippets.length, 3)} of {detectedList.matchCount}):
           </span>
 
@@ -48,9 +48,9 @@ export const DetectedListPreview: React.FC<DetectedListPreviewProps> = ({
             {detectedList.sampleSnippets.slice(0, 3).map((snippet, idx) => (
               <div
                 key={idx}
-                className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 text-xs text-slate-700 flex items-start gap-2"
+                className="p-2.5 rounded-lg bg-surface-sunken border border-line/80 text-xs text-fg-muted flex items-start gap-2"
               >
-                <span className="text-[10px] font-mono bg-white border border-slate-200 text-slate-500 rounded px-1.5 py-0.5 shrink-0">
+                <span className="text-2xs font-mono bg-surface border border-line text-fg-subtle rounded px-1.5 py-0.5 shrink-0">
                   #{idx + 1}
                 </span>
                 <span className="truncate leading-relaxed">
@@ -62,17 +62,17 @@ export const DetectedListPreview: React.FC<DetectedListPreviewProps> = ({
         </div>
 
         {/* Advanced selector toggle (satisfies UX requirement: Avoid displaying technical DOM details to ordinary users, but allow power users to inspect) */}
-        <div className="mt-4 pt-3 border-t border-slate-100">
+        <div className="mt-4 pt-3 border-t border-line-subtle">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors"
+            className="flex items-center gap-1.5 text-xs text-fg-subtle hover:text-fg transition-colors"
           >
             <Code className="w-3.5 h-3.5" />
             <span>{showAdvanced ? 'Hide technical selector' : 'View advanced CSS selector'}</span>
           </button>
 
           {showAdvanced && (
-            <div className="mt-2 p-2 rounded bg-slate-100 font-mono text-[11px] text-slate-700 break-all select-all">
+            <div className="mt-2 p-2 rounded bg-surface-muted font-mono text-2xs text-fg-muted break-all select-all">
               {detectedList.containerSelector}
             </div>
           )}

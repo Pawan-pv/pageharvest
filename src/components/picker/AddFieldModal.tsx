@@ -87,7 +87,7 @@ export const AddFieldModal: React.FC<AddFieldModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         {error && (
-          <div className="p-2 rounded bg-rose-50 border border-rose-200 text-xs text-rose-700">
+          <div className="p-2 rounded bg-danger-soft border border-danger-line text-xs text-danger-fg">
             {error}
           </div>
         )}

@@ -99,7 +99,7 @@ const EditableCellInput: React.FC<{
     <input
       type="text"
       autoFocus
-      className="w-full px-1.5 py-0.5 text-xs border border-emerald-500 rounded bg-white shadow-xs focus:outline-none"
+      className="w-full px-1.5 py-0.5 text-xs border border-brand rounded bg-surface shadow-xs focus:outline-none"
       value={val}
       onChange={(e) => setVal(e.target.value)}
       onBlur={() => onSave(val)}
@@ -449,7 +449,7 @@ export const DataTable: React.FC<DataTableProps> = ({
           checked={table.getIsAllPageRowsSelected()}
           onChange={table.getToggleAllPageRowsSelectedHandler()}
           aria-label="Select all rows on page"
-          className="w-3.5 h-3.5 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer"
+          className="w-3.5 h-3.5 rounded text-brand-fg border-line-strong focus:ring-focus cursor-pointer"
         />
       ),
       cell: ({ row }) => (
@@ -459,7 +459,7 @@ export const DataTable: React.FC<DataTableProps> = ({
           disabled={!row.getCanSelect()}
           onChange={row.getToggleSelectedHandler()}
           aria-label="Select row"
-          className="w-3.5 h-3.5 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer"
+          className="w-3.5 h-3.5 rounded text-brand-fg border-line-strong focus:ring-focus cursor-pointer"
         />
       ),
       size: 32,
@@ -484,7 +484,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   handleMoveColumn(field.name, 'left');
                 }}
                 title="Move column left"
-                className="p-0.5 text-slate-400 hover:text-slate-700 rounded"
+                className="p-0.5 text-fg-subtle hover:text-fg-muted rounded"
               >
                 <ChevronLeftSquare className="w-3 h-3" />
               </button>
@@ -495,7 +495,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   handleMoveColumn(field.name, 'right');
                 }}
                 title="Move column right"
-                className="p-0.5 text-slate-400 hover:text-slate-700 rounded"
+                className="p-0.5 text-fg-subtle hover:text-fg-muted rounded"
               >
                 <ChevronRightSquare className="w-3 h-3" />
               </button>
@@ -507,7 +507,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   setNewColName(field.name);
                 }}
                 title="Rename column"
-                className="p-0.5 text-slate-400 hover:text-slate-700 rounded"
+                className="p-0.5 text-fg-subtle hover:text-fg-muted rounded"
               >
                 <Edit2 className="w-3 h-3" />
               </button>
@@ -518,7 +518,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   handleDeleteColumn(field.name);
                 }}
                 title="Delete column"
-                className="p-0.5 text-slate-400 hover:text-rose-600 rounded"
+                className="p-0.5 text-fg-subtle hover:text-danger-fg rounded"
               >
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -557,15 +557,15 @@ export const DataTable: React.FC<DataTableProps> = ({
                   href={strVal}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-emerald-700 hover:underline truncate inline-flex items-center gap-0.5"
+                  className="text-brand-fg hover:underline truncate inline-flex items-center gap-0.5"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <span className="truncate">{strVal}</span>
                   <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-70" />
                 </a>
               ) : (
-                <span className="truncate text-slate-800">
-                  {strVal || <span className="text-slate-300 italic">empty</span>}
+                <span className="truncate text-fg">
+                  {strVal || <span className="text-fg-faint italic">empty</span>}
                 </span>
               )}
             </div>
@@ -586,7 +586,7 @@ export const DataTable: React.FC<DataTableProps> = ({
           onClick={() => handleDeleteRow(row.original._id)}
           aria-label="Delete row"
           title="Delete row"
-          className="p-1 text-slate-300 hover:text-rose-600 rounded transition-colors"
+          className="p-1 text-fg-faint hover:text-danger-fg rounded transition-colors"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -641,7 +641,7 @@ export const DataTable: React.FC<DataTableProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-2.5 p-4 text-left h-full bg-slate-50/30">
+    <div className="flex flex-col gap-2.5 p-4 text-left h-full bg-surface-sunken/30">
       {gridError && (
         <Alert variant="error" onDismiss={() => setGridError(null)}>
           {gridError}
@@ -649,7 +649,7 @@ export const DataTable: React.FC<DataTableProps> = ({
       )}
 
       {runSummary && runSummary.recordsDetected > 0 && (
-        <p className="text-[11px] text-slate-500" aria-label="Extraction summary">
+        <p className="text-2xs text-fg-subtle" aria-label="Extraction summary">
           {runSummary.recordsDetected} detected, {runSummary.totalExtracted} kept,{' '}
           {runSummary.recordsWithMissingFields} with missing fields, {runSummary.recordsFiltered} filtered,{' '}
           {runSummary.recordsFailed} failed, {runSummary.duplicatesSkipped} duplicates skipped
@@ -657,13 +657,13 @@ export const DataTable: React.FC<DataTableProps> = ({
       )}
 
       {/* Top Header & Actions */}
-      <div className="flex flex-col gap-2 bg-white p-3 rounded-xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col gap-2 bg-surface p-3 rounded-xl border border-line/80 shadow-xs">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="text-sm font-bold text-slate-900 leading-tight">
+            <h2 className="text-sm font-bold text-fg leading-tight">
               {dataset?.name || 'Local Data Workspace'}
             </h2>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
+            <div className="flex items-center gap-1.5 text-xs text-fg-subtle mt-0.5">
               <Badge variant="brand" size="sm">
                 {currentRecords.length} records
               </Badge>
@@ -672,7 +672,7 @@ export const DataTable: React.FC<DataTableProps> = ({
               {selectedCount > 0 && (
                 <>
                   <span>•</span>
-                  <span className="text-emerald-700 font-semibold">{selectedCount} selected</span>
+                  <span className="text-brand-fg font-semibold">{selectedCount} selected</span>
                 </>
               )}
             </div>
@@ -683,7 +683,7 @@ export const DataTable: React.FC<DataTableProps> = ({
               <Button
                 variant="subtle"
                 size="xs"
-                iconLeft={<PlusCircle className="w-3.5 h-3.5 text-emerald-700" />}
+                iconLeft={<PlusCircle className="w-3.5 h-3.5 text-brand-fg" />}
                 onClick={onNewExtraction}
               >
                 New Extraction
@@ -693,7 +693,7 @@ export const DataTable: React.FC<DataTableProps> = ({
             <Button
               variant="outline"
               size="xs"
-              iconLeft={copyFeedback ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              iconLeft={copyFeedback ? <Check className="w-3.5 h-3.5 text-brand-fg" /> : <Copy className="w-3.5 h-3.5" />}
               onClick={handleCopyToClipboard}
               title="Copy table as CSV"
             >
@@ -712,7 +712,7 @@ export const DataTable: React.FC<DataTableProps> = ({
         </div>
 
         {/* Global Filter Bar, Column Visibility, Column Filters Toggle */}
-        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 flex-wrap">
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-line-subtle flex-wrap">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Input
               placeholder="Search across all columns..."
@@ -744,8 +744,8 @@ export const DataTable: React.FC<DataTableProps> = ({
               </Button>
 
               {showColMenu && (
-                <div className="absolute right-0 top-full mt-1 z-30 w-48 bg-white border border-slate-200 rounded-xl shadow-lg p-2 text-xs flex flex-col gap-1 max-h-60 overflow-y-auto">
-                  <span className="font-semibold text-slate-700 px-1 py-0.5 border-b border-slate-100">
+                <div className="absolute right-0 top-full mt-1 z-30 w-48 bg-surface border border-line rounded-xl shadow-lg p-2 text-xs flex flex-col gap-1 max-h-60 overflow-y-auto">
+                  <span className="font-semibold text-fg-muted px-1 py-0.5 border-b border-line-subtle">
                     Visible Columns
                   </span>
                   {table.getAllLeafColumns().map((column) => {
@@ -753,13 +753,13 @@ export const DataTable: React.FC<DataTableProps> = ({
                     return (
                       <label
                         key={column.id}
-                        className="flex items-center gap-2 px-1 py-1 hover:bg-slate-50 rounded cursor-pointer text-slate-700"
+                        className="flex items-center gap-2 px-1 py-1 hover:bg-surface-sunken rounded cursor-pointer text-fg-muted"
                       >
                         <input
                           type="checkbox"
                           checked={column.getIsVisible()}
                           onChange={column.getToggleVisibilityHandler()}
-                          className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          className="w-3.5 h-3.5 rounded border-line-strong text-brand-fg focus:ring-focus"
                         />
                         <span className="truncate">{column.id}</span>
                       </label>
@@ -790,7 +790,7 @@ export const DataTable: React.FC<DataTableProps> = ({
 
       {/* Selection Action Banner */}
       {selectedCount > 0 && (
-        <div className="flex items-center justify-between px-3 py-1.5 bg-emerald-50/80 border border-emerald-200 rounded-lg text-xs text-emerald-900">
+        <div className="flex items-center justify-between px-3 py-1.5 bg-brand-soft/80 border border-brand-line rounded-lg text-xs text-brand-emphasis">
           <span className="font-medium">{selectedCount} row(s) selected</span>
           <div className="flex items-center gap-2">
             <Button
@@ -814,9 +814,9 @@ export const DataTable: React.FC<DataTableProps> = ({
 
       {/* Error State Banner */}
       {error && (
-        <div className="flex items-center justify-between p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800">
+        <div className="flex items-center justify-between p-3 bg-danger-soft border border-danger-line rounded-xl text-xs text-danger-emphasis">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-danger-fg shrink-0" />
             <span>{error}</span>
           </div>
           {onRetry && (
@@ -834,15 +834,15 @@ export const DataTable: React.FC<DataTableProps> = ({
 
       {/* Loading State Banner */}
       {isLoading ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-12 bg-white border border-slate-200 rounded-xl">
-          <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mb-3" />
-          <h4 className="text-sm font-semibold text-slate-800">Loading data workspace...</h4>
-          <p className="text-xs text-slate-500 mt-1">Retrieving records from IndexedDB</p>
+        <div className="flex-1 flex flex-col items-center justify-center p-12 bg-surface border border-line rounded-xl">
+          <Loader2 className="w-8 h-8 text-brand-fg animate-spin mb-3" />
+          <h4 className="text-sm font-semibold text-fg">Loading data workspace...</h4>
+          <p className="text-xs text-fg-subtle mt-1">Retrieving records from IndexedDB</p>
         </div>
       ) : currentRecords.length === 0 ? (
         /* Empty State */
         <EmptyState
-          icon={<FileSpreadsheet className="w-8 h-8 text-slate-400" />}
+          icon={<FileSpreadsheet className="w-8 h-8 text-fg-subtle" />}
           title="No records extracted yet"
           description="Pick elements on the active web page and run an extraction to populate this workspace."
           action={
@@ -855,10 +855,10 @@ export const DataTable: React.FC<DataTableProps> = ({
         />
       ) : (
         /* Spreadsheet Data Table */
-        <div className="flex-1 flex flex-col min-h-0 border border-slate-200 rounded-xl bg-white shadow-xs overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 border border-line rounded-xl bg-surface shadow-xs overflow-hidden">
           <div className="overflow-x-auto overflow-y-auto flex-1">
             <table className="w-full border-collapse text-left text-xs" style={{ width: table.getTotalSize() }}>
-              <thead className="bg-slate-50/90 sticky top-0 z-10 border-b border-slate-200 text-slate-700 font-semibold select-none">
+              <thead className="bg-surface-sunken/90 sticky top-0 z-10 border-b border-line text-fg-muted font-semibold select-none">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => {
@@ -867,21 +867,21 @@ export const DataTable: React.FC<DataTableProps> = ({
                         <th
                           key={header.id}
                           style={{ width: header.getSize() }}
-                          className="relative px-3 py-2 text-left font-semibold border-r border-slate-200/60 last:border-r-0 whitespace-nowrap"
+                          className="relative px-3 py-2 text-left font-semibold border-r border-line/60 last:border-r-0 whitespace-nowrap"
                         >
                           {header.isPlaceholder ? null : (
                             <div className="flex flex-col gap-1">
                               <div
                                 onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                                className={`flex items-center gap-1.5 ${canSort ? 'cursor-pointer hover:text-slate-900' : ''}`}
+                                className={`flex items-center gap-1.5 ${canSort ? 'cursor-pointer hover:text-fg' : ''}`}
                               >
                                 {flexRender(header.column.columnDef.header, header.getContext())}
                                 {canSort && (
-                                  <span className="text-slate-400">
+                                  <span className="text-fg-subtle">
                                     {header.column.getIsSorted() === 'asc' ? (
-                                      <ArrowUp className="w-3 h-3 text-emerald-600" />
+                                      <ArrowUp className="w-3 h-3 text-brand-fg" />
                                     ) : header.column.getIsSorted() === 'desc' ? (
-                                      <ArrowDown className="w-3 h-3 text-emerald-600" />
+                                      <ArrowDown className="w-3 h-3 text-brand-fg" />
                                     ) : (
                                       <ArrowUpDown className="w-3 h-3 opacity-30 hover:opacity-100" />
                                     )}
@@ -896,7 +896,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                                   value={(header.column.getFilterValue() as string) ?? ''}
                                   onChange={(e) => header.column.setFilterValue(e.target.value)}
                                   placeholder={`Filter ${header.id}...`}
-                                  className="w-full px-1.5 py-0.5 text-[11px] font-normal border border-slate-200 rounded bg-white"
+                                  className="w-full px-1.5 py-0.5 text-2xs font-normal border border-line rounded bg-surface"
                                   onClick={(e) => e.stopPropagation()}
                                 />
                               )}
@@ -908,8 +908,8 @@ export const DataTable: React.FC<DataTableProps> = ({
                             <div
                               onMouseDown={header.getResizeHandler()}
                               onTouchStart={header.getResizeHandler()}
-                              className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none hover:bg-emerald-500 ${
-                                header.column.getIsResizing() ? 'bg-emerald-600 w-2' : ''
+                              className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none hover:bg-brand ${
+                                header.column.getIsResizing() ? 'bg-brand w-2' : ''
                               }`}
                             />
                           )}
@@ -919,10 +919,10 @@ export const DataTable: React.FC<DataTableProps> = ({
                   </tr>
                 ))}
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+              <tbody className="divide-y divide-line-subtle text-fg-muted">
                 {table.getRowModel().rows.length === 0 ? (
                   <tr>
-                    <td colSpan={columns.length} className="px-3 py-10 text-center text-slate-400">
+                    <td colSpan={columns.length} className="px-3 py-10 text-center text-fg-subtle">
                       No matching records found.
                     </td>
                   </tr>
@@ -930,15 +930,15 @@ export const DataTable: React.FC<DataTableProps> = ({
                   table.getRowModel().rows.map((row) => (
                     <tr
                       key={row.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${
-                        row.getIsSelected() ? 'bg-emerald-50/40' : ''
+                      className={`hover:bg-surface-sunken/80 transition-colors ${
+                        row.getIsSelected() ? 'bg-brand-soft/40' : ''
                       }`}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <td
                           key={cell.id}
                           style={{ width: cell.column.getSize() }}
-                          className="px-3 py-1.5 border-r border-slate-100 last:border-r-0 max-w-[250px]"
+                          className="px-3 py-1.5 border-r border-line-subtle last:border-r-0 max-w-[250px]"
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>
@@ -951,13 +951,13 @@ export const DataTable: React.FC<DataTableProps> = ({
           </div>
 
           {/* Table Footer / Pagination */}
-          <div className="p-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 flex-wrap gap-2">
+          <div className="p-2.5 bg-surface-sunken border-t border-line flex items-center justify-between text-xs text-fg-muted flex-wrap gap-2">
             <div className="flex items-center gap-1.5">
               <span>Rows per page:</span>
               <select
                 value={table.getState().pagination.pageSize}
                 onChange={(e) => table.setPageSize(Number(e.target.value))}
-                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none"
+                className="rounded border border-line-strong bg-surface px-2 py-0.5 text-xs text-fg-muted focus:outline-none"
               >
                 {[10, 25, 50, 100].map((pageSize) => (
                   <option key={pageSize} value={pageSize}>
@@ -965,7 +965,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   </option>
                 ))}
               </select>
-              <span className="text-slate-400">|</span>
+              <span className="text-fg-subtle">|</span>
               <span>
                 Showing {table.getRowModel().rows.length > 0 ? table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1 : 0} -{' '}
                 {Math.min(
@@ -986,7 +986,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   onClick={() => table.previousPage()}
                   disabled={!table.getCanPreviousPage()}
                   aria-label="Previous table page"
-                  className="p-1 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="p-1 rounded border border-line bg-surface text-fg-muted hover:bg-surface-muted disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
@@ -994,7 +994,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
                   aria-label="Next table page"
-                  className="p-1 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="p-1 rounded border border-line bg-surface text-fg-muted hover:bg-surface-muted disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -1006,18 +1006,18 @@ export const DataTable: React.FC<DataTableProps> = ({
 
       {/* Rename Column Modal */}
       {renamingCol && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-2xs p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-xs p-4 flex flex-col gap-3">
-            <span className="font-bold text-slate-900 text-xs">Rename Column "{renamingCol}"</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/30 backdrop-blur-2xs p-4">
+          <div className="bg-surface rounded-xl shadow-xl border border-line w-full max-w-xs p-4 flex flex-col gap-3">
+            <span className="font-bold text-fg text-xs">Rename Column "{renamingCol}"</span>
             <input
               type="text"
               value={newColName}
               onChange={(e) => setNewColName(e.target.value)}
               placeholder="Enter new column name..."
-              className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
+              className="w-full px-2.5 py-1 text-xs border border-line rounded-lg focus:outline-none focus:border-brand"
               autoFocus
             />
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-line-subtle">
               <Button variant="outline" size="xs" onClick={() => setRenamingCol(null)}>
                 Cancel
               </Button>

@@ -59,13 +59,13 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             {!isPaused && !isError ? (
-              <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" />
+              <Loader2 className="w-5 h-5 text-brand-fg animate-spin" />
             ) : isPaused ? (
-              <Pause className="w-5 h-5 text-amber-600" />
+              <Pause className="w-5 h-5 text-warning-fg" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-rose-600" />
+              <AlertCircle className="w-5 h-5 text-danger-fg" />
             )}
-            <h3 className="text-base font-semibold text-slate-900">
+            <h3 className="text-base font-semibold text-fg">
               {isPaused ? 'Extraction Paused' : isError ? 'Extraction Interrupted' : 'Harvesting in Progress...'}
             </h3>
           </div>
@@ -79,10 +79,10 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full bg-slate-100 rounded-full h-2 mb-4 overflow-hidden">
+        <div className="w-full bg-surface-muted rounded-full h-2 mb-4 overflow-hidden">
           <div
             className={`h-2 transition-all duration-300 rounded-full ${
-              isPaused ? 'bg-amber-500' : isError ? 'bg-rose-500' : 'bg-emerald-600 animate-pulse'
+              isPaused ? 'bg-warning' : isError ? 'bg-danger' : 'bg-brand animate-pulse'
             }`}
             style={{ width: `${progress.percent ?? 100}%` }}
           />
@@ -90,63 +90,63 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
 
         {/* Real-time metrics grid */}
         <div className="grid grid-cols-2 gap-2.5 mb-2">
-          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
-            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
-              <Layers className="w-3.5 h-3.5 text-emerald-600" />
+          <div className="p-3 rounded-lg bg-surface-sunken border border-line/70">
+            <div className="flex items-center gap-1.5 text-fg-subtle text-2xs mb-1">
+              <Layers className="w-3.5 h-3.5 text-brand-fg" />
               <span>Records Harvested</span>
             </div>
-            <span className="text-lg font-bold text-slate-900 tracking-tight">
+            <span className="text-lg font-bold text-fg tracking-tight">
               {stats.totalExtracted}
             </span>
           </div>
 
-          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
-            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
-              <Clock className="w-3.5 h-3.5 text-sky-600" />
+          <div className="p-3 rounded-lg bg-surface-sunken border border-line/70">
+            <div className="flex items-center gap-1.5 text-fg-subtle text-2xs mb-1">
+              <Clock className="w-3.5 h-3.5 text-info-fg" />
               <span>Elapsed Time</span>
             </div>
-            <span className="text-lg font-bold text-slate-900 tracking-tight font-mono">
+            <span className="text-lg font-bold text-fg tracking-tight font-mono">
               {formatTime(stats.elapsedSeconds)}
             </span>
           </div>
 
-          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
-            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
+          <div className="p-3 rounded-lg bg-surface-sunken border border-line/70">
+            <div className="flex items-center gap-1.5 text-fg-subtle text-2xs mb-1">
               <span>{progress.label}</span>
             </div>
-            <span className="text-sm font-semibold text-slate-800">
+            <span className="text-sm font-semibold text-fg">
               {progress.value}
             </span>
           </div>
 
-          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
-            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
-              <CopyX className="w-3.5 h-3.5 text-slate-400" />
+          <div className="p-3 rounded-lg bg-surface-sunken border border-line/70">
+            <div className="flex items-center gap-1.5 text-fg-subtle text-2xs mb-1">
+              <CopyX className="w-3.5 h-3.5 text-fg-subtle" />
               <span>Duplicates Skipped</span>
             </div>
-            <span className="text-sm font-semibold text-slate-800">
+            <span className="text-sm font-semibold text-fg">
               {stats.duplicatesSkipped}
             </span>
           </div>
         </div>
 
         {/* What happened to each detected item, so nothing disappears silently */}
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500 mt-3">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-2xs text-fg-subtle mt-3">
           <div className="flex justify-between">
             <dt>Items detected</dt>
-            <dd className="font-semibold text-slate-700">{stats.recordsDetected}</dd>
+            <dd className="font-semibold text-fg-muted">{stats.recordsDetected}</dd>
           </div>
           <div className="flex justify-between">
             <dt>Missing some fields</dt>
-            <dd className="font-semibold text-slate-700">{stats.recordsWithMissingFields}</dd>
+            <dd className="font-semibold text-fg-muted">{stats.recordsWithMissingFields}</dd>
           </div>
           <div className="flex justify-between">
             <dt>Filtered out</dt>
-            <dd className="font-semibold text-slate-700">{stats.recordsFiltered}</dd>
+            <dd className="font-semibold text-fg-muted">{stats.recordsFiltered}</dd>
           </div>
           <div className="flex justify-between">
             <dt>Failed</dt>
-            <dd className="font-semibold text-slate-700">{stats.recordsFailed}</dd>
+            <dd className="font-semibold text-fg-muted">{stats.recordsFailed}</dd>
           </div>
         </dl>
 

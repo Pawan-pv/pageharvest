@@ -22,13 +22,13 @@ export const RecentProjectsCard: React.FC<RecentProjectsCardProps> = ({
   return (
     <div className="flex flex-col gap-2 text-left">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+        <h4 className="text-xs font-semibold text-fg-muted uppercase tracking-wider">
           Recent Extractions
         </h4>
         {datasets.length > 0 && (
           <button
             onClick={onViewAllHistory}
-            className="text-[11px] font-medium text-emerald-700 hover:text-emerald-800 flex items-center gap-1 transition-colors"
+            className="text-2xs font-medium text-brand-fg hover:text-brand-emphasis flex items-center gap-1 transition-colors"
           >
             <span>View all ({datasets.length})</span>
             <ArrowRight className="w-3 h-3" />
@@ -37,14 +37,14 @@ export const RecentProjectsCard: React.FC<RecentProjectsCardProps> = ({
       </div>
 
       {isLoading ? (
-        <Card variant="flat" className="p-3 text-center text-xs text-slate-400">
+        <Card variant="flat" className="p-3 text-center text-xs text-fg-subtle">
           Loading saved datasets...
         </Card>
       ) : recentItems.length === 0 ? (
         <Card variant="flat" className="p-4 text-center">
-          <FileSpreadsheet className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
-          <p className="text-xs font-medium text-slate-600">No recent extractions</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">
+          <FileSpreadsheet className="w-6 h-6 text-fg-faint mx-auto mb-1.5" />
+          <p className="text-xs font-medium text-fg-muted">No recent extractions</p>
+          <p className="text-2xs text-fg-subtle mt-0.5">
             Start a new extraction above to save your first dataset.
           </p>
         </Card>
@@ -59,14 +59,14 @@ export const RecentProjectsCard: React.FC<RecentProjectsCardProps> = ({
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-slate-900 truncate max-w-[190px]">
+                  <span className="text-xs font-semibold text-fg truncate max-w-[190px]">
                     {dataset.name}
                   </span>
                   <Badge variant="neutral" size="sm">
                     {dataset.recordsCount} rows
                   </Badge>
                 </div>
-                <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                <div className="flex items-center gap-1 text-2xs text-fg-subtle mt-0.5">
                   <Clock className="w-3 h-3" />
                   <span>{new Date(dataset.createdAt).toLocaleDateString()}</span>
                   <span>•</span>
@@ -74,7 +74,7 @@ export const RecentProjectsCard: React.FC<RecentProjectsCardProps> = ({
                 </div>
               </div>
 
-              <div className="text-slate-400 hover:text-emerald-600 p-1">
+              <div className="text-fg-subtle hover:text-brand-fg p-1">
                 <ArrowRight className="w-3.5 h-3.5" />
               </div>
             </Card>

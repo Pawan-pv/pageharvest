@@ -112,7 +112,7 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
       <div className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors"
+          className="flex items-center gap-1.5 text-xs font-medium text-fg-subtle hover:text-fg transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to list selection</span>
@@ -128,10 +128,10 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
       {/* Columns Header & Toggle All */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 leading-tight">
+          <h3 className="text-sm font-semibold text-fg leading-tight">
             Columns to Extract
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-fg-subtle mt-0.5">
             {selectedCount} of {fields.length} columns selected
           </p>
         </div>
@@ -140,16 +140,16 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
           {fields.length > 0 && (
             <button
               onClick={handleToggleAll}
-              className="text-xs text-slate-600 hover:text-slate-900 flex items-center gap-1 p-1"
+              className="text-xs text-fg-muted hover:text-fg flex items-center gap-1 p-1"
             >
               {allSelected ? (
                 <>
-                  <CheckSquare className="w-3.5 h-3.5 text-emerald-600" />
+                  <CheckSquare className="w-3.5 h-3.5 text-brand-fg" />
                   <span>Deselect All</span>
                 </>
               ) : (
                 <>
-                  <Square className="w-3.5 h-3.5 text-slate-400" />
+                  <Square className="w-3.5 h-3.5 text-fg-subtle" />
                   <span>Select All</span>
                 </>
               )}
@@ -169,7 +169,7 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
       {/* Field List */}
       <div className="flex flex-col gap-2">
         {fields.length === 0 ? (
-          <div className="p-4 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400">
+          <div className="p-4 rounded-xl border border-dashed border-line text-center text-xs text-fg-subtle">
             No fields detected. Click "Add Column" to manually define one.
           </div>
         ) : (
@@ -249,7 +249,7 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
         </Button>
 
         {selectedCount === 0 && (
-          <p className="text-[11px] text-rose-500 text-center mt-1.5 flex items-center justify-center gap-1">
+          <p className="text-2xs text-danger-fg text-center mt-1.5 flex items-center justify-center gap-1">
             <AlertCircle className="w-3 h-3" />
             <span>Select at least one column to start harvesting</span>
           </p>

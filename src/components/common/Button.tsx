@@ -35,17 +35,17 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variantClasses: Record<ButtonVariant, string> = {
     primary:
-      'bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 focus:ring-emerald-500 shadow-sm border border-emerald-700',
+      'bg-brand text-on-strong hover:bg-brand-hover active:bg-brand-active focus:ring-focus shadow-sm border border-brand',
     secondary:
-      'bg-slate-800 text-white hover:bg-slate-900 active:bg-black focus:ring-slate-500 shadow-sm border border-slate-700',
+      'bg-inverse text-on-strong hover:bg-inverse-hover active:bg-inverse-active focus:ring-focus shadow-sm border border-inverse',
     outline:
-      'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 focus:ring-slate-400 shadow-xs',
+      'bg-surface text-fg-muted border border-line-strong hover:bg-surface-sunken hover:text-fg active:bg-surface-muted focus:ring-focus shadow-xs',
     subtle:
-      'bg-slate-100 text-slate-800 hover:bg-slate-200 active:bg-slate-300 focus:ring-slate-400 border border-slate-200/80',
+      'bg-surface-muted text-fg hover:bg-surface-strong active:bg-surface-strong focus:ring-focus border border-line/80',
     ghost:
-      'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 focus:ring-slate-400',
+      'bg-transparent text-fg-muted hover:bg-surface-muted hover:text-fg active:bg-surface-strong focus:ring-focus',
     danger:
-      'bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800 focus:ring-rose-500 shadow-sm border border-rose-700',
+      'bg-danger text-on-strong hover:bg-danger-hover active:bg-danger-active focus:ring-danger shadow-sm border border-danger',
   };
 
   const isDisabled = disabled || isLoading;

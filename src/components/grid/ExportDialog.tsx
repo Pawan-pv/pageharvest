@@ -109,24 +109,24 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden text-left flex flex-col animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-xs p-4">
+      <div className="bg-surface rounded-2xl shadow-2xl border border-line w-full max-w-md overflow-hidden text-left flex flex-col animate-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line-subtle bg-surface-sunken/50">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700">
+            <div className="p-1.5 rounded-lg bg-brand-soft text-brand-fg">
               <Download className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Export Extracted Data</h3>
-              <p className="text-xs text-slate-500">
+              <h3 className="text-sm font-bold text-fg">Export Extracted Data</h3>
+              <p className="text-xs text-fg-subtle">
                 {records.length} records ready to export
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            className="p-1 rounded-lg text-fg-subtle hover:text-fg-muted hover:bg-surface-muted transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -142,20 +142,20 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
           {/* Format Selection */}
           <div className="flex flex-col gap-1.5">
-            <label className="font-semibold text-slate-700">Format</label>
+            <label className="font-semibold text-fg-muted">Format</label>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setFormat('csv')}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
                   format === 'csv'
-                    ? 'border-emerald-600 bg-emerald-50/50 text-emerald-900 font-semibold shadow-xs'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    ? 'border-brand bg-brand-soft/50 text-brand-emphasis font-semibold shadow-xs'
+                    : 'border-line hover:bg-surface-sunken text-fg-muted'
                 }`}
               >
-                <FileSpreadsheet className="w-5 h-5 mb-1 text-emerald-600" />
+                <FileSpreadsheet className="w-5 h-5 mb-1 text-brand-fg" />
                 <span>CSV</span>
-                <span className="text-[10px] text-slate-500 font-normal">Excel / Sheets</span>
+                <span className="text-2xs text-fg-subtle font-normal">Excel / Sheets</span>
               </button>
 
               <button
@@ -163,13 +163,13 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                 onClick={() => setFormat('json')}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
                   format === 'json'
-                    ? 'border-emerald-600 bg-emerald-50/50 text-emerald-900 font-semibold shadow-xs'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    ? 'border-brand bg-brand-soft/50 text-brand-emphasis font-semibold shadow-xs'
+                    : 'border-line hover:bg-surface-sunken text-fg-muted'
                 }`}
               >
-                <FileJson className="w-5 h-5 mb-1 text-emerald-600" />
+                <FileJson className="w-5 h-5 mb-1 text-brand-fg" />
                 <span>JSON</span>
-                <span className="text-[10px] text-slate-500 font-normal">Standard Array</span>
+                <span className="text-2xs text-fg-subtle font-normal">Standard Array</span>
               </button>
 
               <button
@@ -177,36 +177,36 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                 onClick={() => setFormat('ndjson')}
                 className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
                   format === 'ndjson'
-                    ? 'border-emerald-600 bg-emerald-50/50 text-emerald-900 font-semibold shadow-xs'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    ? 'border-brand bg-brand-soft/50 text-brand-emphasis font-semibold shadow-xs'
+                    : 'border-line hover:bg-surface-sunken text-fg-muted'
                 }`}
               >
-                <FileJson className="w-5 h-5 mb-1 text-emerald-600" />
+                <FileJson className="w-5 h-5 mb-1 text-brand-fg" />
                 <span>NDJSON</span>
-                <span className="text-[10px] text-slate-500 font-normal">Line-Delimited</span>
+                <span className="text-2xs text-fg-subtle font-normal">Line-Delimited</span>
               </button>
             </div>
           </div>
 
           {/* Options depending on format */}
           {format === 'csv' && (
-            <div className="flex flex-col gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+            <div className="flex flex-col gap-3 p-3 bg-surface-sunken/80 rounded-xl border border-line-subtle">
               <div className="flex items-center justify-between">
-                <span className="text-slate-700">Include UTF-8 BOM (for Excel)</span>
+                <span className="text-fg-muted">Include UTF-8 BOM (for Excel)</span>
                 <input
                   type="checkbox"
                   checked={includeBom}
                   onChange={(e) => setIncludeBom(e.target.checked)}
-                  className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500"
+                  className="w-4 h-4 rounded text-brand-fg border-line-strong focus:ring-focus"
                 />
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-700">Delimiter</span>
+                <span className="text-fg-muted">Delimiter</span>
                 <select
                   value={delimiter}
                   onChange={(e) => setDelimiter(e.target.value as ',' | ';' | '\t')}
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
+                  className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs text-fg-muted"
                 >
                   <option value=",">Comma (,)</option>
                   <option value=";">Semicolon (;)</option>
@@ -217,46 +217,46 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
           )}
 
           {format === 'json' && (
-            <div className="flex items-center justify-between p-3 bg-slate-50/80 rounded-xl border border-slate-100">
-              <span className="text-slate-700">Pretty Indentation (2 spaces)</span>
+            <div className="flex items-center justify-between p-3 bg-surface-sunken/80 rounded-xl border border-line-subtle">
+              <span className="text-fg-muted">Pretty Indentation (2 spaces)</span>
               <input
                 type="checkbox"
                 checked={prettyJson}
                 onChange={(e) => setPrettyJson(e.target.checked)}
-                className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500"
+                className="w-4 h-4 rounded text-brand-fg border-line-strong focus:ring-focus"
               />
             </div>
           )}
 
           {/* Include provenance metadata */}
           <div className="flex items-center justify-between">
-            <span className="text-slate-700">Include metadata (_id, _page, _extractedAt)</span>
+            <span className="text-fg-muted">Include metadata (_id, _page, _extractedAt)</span>
             <input
               type="checkbox"
               checked={includeMetadata}
               onChange={(e) => setIncludeMetadata(e.target.checked)}
-              className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500"
+              className="w-4 h-4 rounded text-brand-fg border-line-strong focus:ring-focus"
             />
           </div>
 
           {/* Filename Preview */}
           <div className="flex flex-col gap-1">
-            <label className="font-semibold text-slate-700">Custom Filename (optional)</label>
+            <label className="font-semibold text-fg-muted">Custom Filename (optional)</label>
             <input
               type="text"
               placeholder={autoFilename}
               value={customFilename}
               onChange={(e) => setCustomFilename(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-1.5 rounded-lg border border-line text-xs text-fg placeholder-fg-subtle focus:outline-none focus:border-brand"
             />
-            <span className="text-[11px] text-slate-400">
-              File will be saved as: <code className="text-slate-600">{customFilename.trim() ? `${customFilename.trim()}.${format === 'ndjson' ? 'ndjson' : format}` : autoFilename}</code>
+            <span className="text-2xs text-fg-subtle">
+              File will be saved as: <code className="text-fg-muted">{customFilename.trim() ? `${customFilename.trim()}.${format === 'ndjson' ? 'ndjson' : format}` : autoFilename}</code>
             </span>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-line-subtle bg-surface-sunken/50">
           <Button variant="outline" size="sm" onClick={onClose}>
             Cancel
           </Button>

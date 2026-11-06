@@ -21,17 +21,17 @@ export const Alert: React.FC<AlertProps> = ({
   className = '',
 }) => {
   const icons = {
-    info: <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />,
-    success: <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />,
-    warning: <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />,
-    error: <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />,
+    info: <Info className="w-4 h-4 text-info-fg shrink-0 mt-0.5" />,
+    success: <CheckCircle2 className="w-4 h-4 text-brand-fg shrink-0 mt-0.5" />,
+    warning: <AlertTriangle className="w-4 h-4 text-warning-fg shrink-0 mt-0.5" />,
+    error: <AlertCircle className="w-4 h-4 text-danger-fg shrink-0 mt-0.5" />,
   };
 
   const variantStyles = {
-    info: 'bg-sky-50/80 border-sky-200 text-sky-900',
-    success: 'bg-emerald-50/80 border-emerald-200 text-emerald-900',
-    warning: 'bg-amber-50/80 border-amber-200 text-amber-900',
-    error: 'bg-rose-50/80 border-rose-200 text-rose-900',
+    info: 'bg-info-soft/80 border-info-line text-info-emphasis',
+    success: 'bg-brand-soft/80 border-brand-line text-brand-emphasis',
+    warning: 'bg-warning-soft/80 border-warning-line text-warning-emphasis',
+    error: 'bg-danger-soft/80 border-danger-line text-danger-emphasis',
   };
 
   return (
@@ -49,7 +49,7 @@ export const Alert: React.FC<AlertProps> = ({
         <button
           onClick={onDismiss}
           aria-label="Dismiss alert"
-          className="p-1 -mr-1 text-slate-400 hover:text-slate-600 rounded hover:bg-black/5"
+          className="p-1 -mr-1 text-fg-subtle hover:text-fg-muted rounded hover:bg-fg/5"
         >
           <X className="w-3.5 h-3.5" />
         </button>
