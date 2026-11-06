@@ -470,6 +470,18 @@ export function useExtractionWorkflow(tab: TabInfo) {
     setSelectedFieldIds((prev) => new Set(prev).add(newField.id));
   }, []);
 
+  /** Swaps a column with its neighbour. The recipe keeps this order, so the export does too. */
+  const moveField = useCallback((id: string, direction: -1 | 1) => {
+    setFields((prev) => {
+      const from = prev.findIndex((f) => f.id === id);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+  }, []);
+
   const removeField = useCallback((id: string) => {
     setFields((prev) => prev.filter((f) => f.id !== id));
     setSelectedFieldIds((prev) => {
@@ -801,6 +813,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
     toggleFieldSelection,
     updateField,
     addField,
+    moveField,
     removeField,
     startExtraction,
     pauseExtraction,

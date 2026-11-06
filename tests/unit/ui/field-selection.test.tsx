@@ -41,8 +41,9 @@ describe('UI: Field Selection & Configuration', () => {
       );
 
       expect(screen.getByText('Product Title')).toBeInTheDocument();
-      expect(screen.getByText('text')).toBeInTheDocument();
-      expect(screen.getByText('h2.title')).toBeInTheDocument();
+      // The type is shown in plain words; the selector stays out of the way.
+      expect(screen.getByText('Text')).toBeInTheDocument();
+      expect(screen.queryByText('h2.title')).not.toBeInTheDocument();
     });
 
     it('toggles selection checkbox', () => {
@@ -77,7 +78,7 @@ describe('UI: Field Selection & Configuration', () => {
       const editBtn = screen.getByLabelText(/edit field Product Title/i);
       fireEvent.click(editBtn);
 
-      expect(screen.getByText('Edit Column Definition')).toBeInTheDocument();
+      expect(screen.getByText('Edit column')).toBeInTheDocument();
 
       const nameInput = screen.getByPlaceholderText('e.g. Price');
       fireEvent.change(nameInput, { target: { value: 'Item Name' } });
@@ -172,10 +173,10 @@ describe('UI: Field Selection & Configuration', () => {
         />
       );
 
-      fireEvent.click(screen.getByText('Next Button'));
+      fireEvent.click(screen.getByRole('radio', { name: 'Click a Next button' }));
       expect(onChange).toHaveBeenCalledWith({ type: 'next_button' });
 
-      fireEvent.click(screen.getByText('Infinite Scroll'));
+      fireEvent.click(screen.getByRole('radio', { name: 'Scroll to load more' }));
       expect(onChange).toHaveBeenCalledWith({ type: 'infinite_scroll' });
     });
 
@@ -188,9 +189,10 @@ describe('UI: Field Selection & Configuration', () => {
         />
       );
 
-      expect(screen.getByText('Next Button Selector')).toBeInTheDocument();
-      expect(screen.getByText('Max Pages to Crawl')).toBeInTheDocument();
-      expect(screen.getByText('Delay Between Pages (ms)')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+      expect(screen.getByLabelText('Next button selector (optional)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Most pages')).toHaveValue(5);
+      expect(screen.getByLabelText('Wait between pages (seconds)')).toHaveValue(1.5);
 
       const selectorInput = screen.getByDisplayValue('a.next-page');
       fireEvent.change(selectorInput, { target: { value: 'button.pagination-next' } });

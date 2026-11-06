@@ -9,6 +9,7 @@ import { Stepper } from '@/components/common/Stepper';
 import { RecoveryBanner } from '@/components/shell/RecoveryBanner';
 import { ScanningState } from '@/components/shell/ScanningState';
 import { flowSteps, stepForView, type FlowKind } from '@/components/shell/flow';
+import type { ConfigStep } from '@/components/picker/FieldSelectionPanel';
 
 // Each step of the flow is its own chunk, so the panel opens on the dashboard alone (ADR-014).
 const ElementSelectionBanner = lazy(() =>
@@ -56,10 +57,14 @@ export const App: React.FC = () => {
   // outside a flow (a saved dataset, a resumed job, the dashboard) shows no stepper.
   const [flow, setFlow] = useState<FlowKind | null>(null);
   const activeFlow = workflow.view === 'dashboard' ? null : flow;
-  const currentStep = activeFlow ? stepForView(workflow.view) : null;
+  // Review fields and Pagination share one panel view; this says which half is showing.
+  const [configStep, setConfigStep] = useState<ConfigStep>('fields');
+  const viewStep = activeFlow ? stepForView(workflow.view) : null;
+  const currentStep = viewStep === 'fields' && configStep === 'pagination' ? 'pagination' : viewStep;
 
   const startFlow = (kind: FlowKind, start: () => void) => {
     setFlow(kind);
+    setConfigStep('fields');
     start();
   };
 
@@ -238,7 +243,10 @@ export const App: React.FC = () => {
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading lists…</div>}>
             <DetectedListPreview
               detectedList={workflow.detectedList}
-              onConfirm={() => workflow.confirmListCandidate(workflow.detectedList!)}
+              onConfirm={() => {
+                setConfigStep('fields');
+                void workflow.confirmListCandidate(workflow.detectedList!);
+              }}
               onPickAgain={() => startFlow('pick', workflow.startVisualPicker)}
               onCancel={workflow.resetToDashboard}
             />
@@ -261,6 +269,9 @@ export const App: React.FC = () => {
               onToggleField={workflow.toggleFieldSelection}
               onUpdateField={workflow.updateField}
               onAddField={workflow.addField}
+              onMoveField={workflow.moveField}
+              step={configStep}
+              onStepChange={setConfigStep}
               onRemoveField={workflow.removeField}
               onPaginationChange={(updates) =>
                 workflow.setPagination((prev) => ({ ...prev, ...updates }))
@@ -315,11 +326,13 @@ export const App: React.FC = () => {
               onRunRecipe={(recipe) => {
                 setActiveTabNav('harvest');
                 setFlow('recipe');
+                setConfigStep('fields');
                 workflow.loadRecipe(recipe);
               }}
               onUseSchema={(schema) => {
                 setActiveTabNav('harvest');
                 setFlow('recipe');
+                setConfigStep('fields');
                 workflow.loadSchema(schema);
               }}
             />
