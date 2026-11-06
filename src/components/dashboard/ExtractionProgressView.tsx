@@ -5,7 +5,9 @@ import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';
 import { HelpTip } from '@/components/common/Tooltip';
 import { Banner } from '@/components/common/Banner';
+import { ErrorBanner } from '@/components/common/ErrorBanner';
 import { ExtractionStats } from '@/hooks/useExtractionWorkflow';
+import { describeProgress } from './progress-copy';
 
 export interface ExtractionProgressViewProps {
   stats: ExtractionStats;
@@ -17,24 +19,7 @@ export interface ExtractionProgressViewProps {
   onCancel: () => void;
 }
 
-/** Progress in the unit this job actually advances by. */
-function describeProgress(stats: ExtractionStats): { label: string; value: string; percent: number | null } {
-  if (stats.progressKind === 'scrolls') {
-    return {
-      label: 'Scrolling',
-      value: `Scroll ${stats.currentStep} of ${stats.targetSteps}`,
-      percent: Math.min(Math.round((stats.currentStep / stats.targetSteps) * 100), 100),
-    };
-  }
-  if (stats.progressKind === 'pages') {
-    return {
-      label: 'Page Crawled',
-      value: `Page ${stats.currentStep} of ${stats.targetSteps}`,
-      percent: Math.min(Math.round((stats.currentStep / stats.targetSteps) * 100), 100),
-    };
-  }
-  return { label: 'Scope', value: 'Current page', percent: null };
-}
+const PROGRESS_LABEL = { single: 'Scope', pages: 'Pages', scrolls: 'Scrolling' } as const;
 
 export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
   stats,
@@ -46,7 +31,12 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
 }) => {
   const isPaused = stats.status === 'PAUSED';
   const isError = stats.status === 'FAILED';
-  const progress = describeProgress(stats);
+  const progress = describeProgress({
+    kind: stats.progressKind,
+    step: stats.currentStep,
+    total: stats.targetSteps,
+    rows: stats.totalExtracted,
+  });
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -113,10 +103,10 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
 
           <div className="p-3 rounded-lg bg-surface-sunken border border-line/70">
             <div className="flex items-center gap-1.5 text-fg-subtle text-2xs mb-1">
-              <span>{progress.label}</span>
+              <span>{PROGRESS_LABEL[stats.progressKind]}</span>
             </div>
             <span className="text-sm font-semibold text-fg">
-              {progress.value}
+              {progress.stepLabel}
             </span>
           </div>
 
@@ -159,11 +149,7 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
         )}
 
         {/* Error notice if present */}
-        {isError && (
-          <Banner tone="danger" title="Extraction Error" className="mt-3">
-            {stats.errorMessage || 'An error occurred during extraction. You can still inspect the records harvested so far.'}
-          </Banner>
-        )}
+        {isError && <ErrorBanner error={{ message: stats.errorMessage }} className="mt-3" />}
       </Card>
 
       {/* Control Buttons */}

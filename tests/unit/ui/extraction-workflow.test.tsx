@@ -174,7 +174,7 @@ describe('UI: Extraction Workflow States & Navigation', () => {
         />
       );
 
-      expect(screen.getByText('Current page')).toBeInTheDocument();
+      expect(screen.getByText('This page')).toBeInTheDocument();
       expect(screen.queryByText(/Page \d+ of/)).not.toBeInTheDocument();
     });
 

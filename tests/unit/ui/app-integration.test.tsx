@@ -66,7 +66,7 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     await screen.findByText('Quick Actions');
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(screen.queryByText('Interrupted Session Detected')).not.toBeInTheDocument();
+    expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument();
   });
 
   it('displays the recovery banner for a stored recoverable job, with its real progress', async () => {
@@ -74,28 +74,31 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('Interrupted Session Detected')).toBeInTheDocument();
-      expect(screen.getByText(/3 pages \/ 45 rows/)).toBeInTheDocument();
+      expect(screen.getByText('Extraction interrupted')).toBeInTheDocument();
+      expect(screen.getByText(/stopped at page 3 of 10/)).toBeInTheDocument();
+      expect(screen.getByText(/45 rows saved and safe/)).toBeInTheDocument();
       expect(screen.getByText(/tab running this extraction was closed/)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: 'Resume Session' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
   });
 
   it('reports scroll jobs in scrolls on the banner', async () => {
     await storeRecoverableJob({ progressKind: 'scrolls', scrollsCompleted: 6, pagesVisited: 7 });
     render(<App />);
 
-    expect(await screen.findByText(/6 scrolls \/ 45 rows/)).toBeInTheDocument();
+    expect(await screen.findByText(/stopped at scroll 6 of 10/)).toBeInTheDocument();
   });
 
   it('discards the session through the background, ending the job for good', async () => {
     await storeRecoverableJob();
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Discard Session' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    // Discarding asks first, and says the saved rows are kept.
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard job' }));
 
     await waitFor(() => {
-      expect(screen.queryByText('Interrupted Session Detected')).not.toBeInTheDocument();
+      expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument();
     });
     expect((await db.jobs.get(JOB_ID))?.status).toBe('CANCELLED');
     expect(await db.checkpoints.get(JOB_ID)).toBeUndefined();
@@ -106,14 +109,14 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     await storeRecoverableJob();
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Resume Session' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume' }));
 
     await waitFor(async () => {
       expect((await db.jobs.get(JOB_ID))?.status).toBe('RUNNING');
     });
     expect(await screen.findByText('Harvesting in Progress...')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByText('Interrupted Session Detected')).not.toBeInTheDocument();
+      expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument();
     });
   });
 
