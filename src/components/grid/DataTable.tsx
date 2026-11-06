@@ -35,7 +35,7 @@ import {
   Loader2,
   Filter,
 } from 'lucide-react';
-import { Alert } from '@/components/common/Alert';
+import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { Badge } from '@/components/common/Badge';
@@ -643,9 +643,9 @@ export const DataTable: React.FC<DataTableProps> = ({
   return (
     <div className="flex flex-col gap-2.5 p-4 text-left h-full bg-surface-sunken/30">
       {gridError && (
-        <Alert variant="error" onDismiss={() => setGridError(null)}>
+        <Banner tone="danger" onDismiss={() => setGridError(null)}>
           {gridError}
-        </Alert>
+        </Banner>
       )}
 
       {runSummary && runSummary.recordsDetected > 0 && (

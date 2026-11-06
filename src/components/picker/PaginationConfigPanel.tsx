@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowRightCircle, Link2, MoveDown, Compass, Sliders } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { Input } from '@/components/common/Input';
+import { HelpTip } from '@/components/common/Tooltip';
 import { previewTemplateUrls, validateUrlTemplate } from '@/core/navigation/url-paginator';
 import { ExtractionPaginationConfig, PaginationType } from '@/types';
 
@@ -58,6 +59,7 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
         <h4 className="text-xs font-semibold text-fg">
           Navigation & Pagination Strategy
         </h4>
+        <HelpTip tipId="pagination-modes" />
       </div>
 
       {/* Mode selection buttons */}

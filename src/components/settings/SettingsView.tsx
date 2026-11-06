@@ -3,8 +3,8 @@ import { ShieldCheck, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
-import { Modal } from '@/components/common/Modal';
-import { Alert } from '@/components/common/Alert';
+import { Dialog } from '@/components/common/Dialog';
+import { Banner } from '@/components/common/Banner';
 import { Select } from '@/components/common/Select';
 import { UserSettingsSchema } from '@/shared/contracts/settings';
 import { db } from '@/storage/db';
@@ -128,15 +128,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
       </div>
 
       {savedFeedback && (
-        <Alert variant="success" onDismiss={() => setSavedFeedback(false)}>
+        <Banner tone="success" onDismiss={() => setSavedFeedback(false)}>
           Settings saved successfully.
-        </Alert>
+        </Banner>
       )}
 
       {settingsError && (
-        <Alert variant="error" onDismiss={() => setSettingsError(null)}>
+        <Banner tone="danger" onDismiss={() => setSettingsError(null)}>
           {settingsError}
-        </Alert>
+        </Banner>
       )}
 
       {/* Crawl & Extraction Defaults */}
@@ -321,7 +321,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
       </Card>
 
       {/* Clear Storage Modal */}
-      <Modal
+      <Dialog
         isOpen={isClearModalOpen}
         onClose={() => setIsClearModalOpen(false)}
         title="Clear All Saved Data?"
@@ -349,7 +349,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
         <p className="text-xs text-fg-muted">
           This operation cannot be reversed. Make sure you have exported any needed CSV or JSON datasets first.
         </p>
-      </Modal>
+      </Dialog>
     </div>
   );
 };

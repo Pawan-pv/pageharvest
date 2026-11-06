@@ -3,7 +3,8 @@ import { Loader2, Pause, Play, Square, Clock, Layers, CopyX, AlertCircle } from 
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';
-import { Alert } from '@/components/common/Alert';
+import { HelpTip } from '@/components/common/Tooltip';
+import { Banner } from '@/components/common/Banner';
 import { ExtractionStats } from '@/hooks/useExtractionWorkflow';
 
 export interface ExtractionProgressViewProps {
@@ -123,6 +124,7 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
             <div className="flex items-center gap-1.5 text-fg-subtle text-2xs mb-1">
               <CopyX className="w-3.5 h-3.5 text-fg-subtle" />
               <span>Duplicates Skipped</span>
+              <HelpTip tipId="dedup" />
             </div>
             <span className="text-sm font-semibold text-fg">
               {stats.duplicatesSkipped}
@@ -151,16 +153,16 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
         </dl>
 
         {recordWarningThreshold !== undefined && stats.totalExtracted >= recordWarningThreshold && (
-          <Alert variant="warning" title="Large dataset" className="mt-3">
+          <Banner tone="warning" title="Large dataset" className="mt-3">
             This extraction has passed {recordWarningThreshold.toLocaleString()} rows. The grid may slow down.
-          </Alert>
+          </Banner>
         )}
 
         {/* Error notice if present */}
         {isError && (
-          <Alert variant="error" title="Extraction Error" className="mt-3">
+          <Banner tone="danger" title="Extraction Error" className="mt-3">
             {stats.errorMessage || 'An error occurred during extraction. You can still inspect the records harvested so far.'}
-          </Alert>
+          </Banner>
         )}
       </Card>
 

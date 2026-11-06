@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 export interface SelectOption {
@@ -24,7 +24,10 @@ export const Select: React.FC<SelectProps> = ({
   disabled,
   ...props
 }) => {
-  const selectId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+  const generatedId = useId();
+  const selectId = id ?? generatedId;
+  const messageId = `${selectId}-message`;
+  const hasMessage = Boolean(error || helperText);
 
   return (
     <div className="w-full flex flex-col gap-1 text-left">
@@ -37,10 +40,12 @@ export const Select: React.FC<SelectProps> = ({
         <select
           id={selectId}
           disabled={disabled}
-          className={`w-full appearance-none rounded-lg border bg-surface px-3 py-2 pr-9 text-sm text-fg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:bg-surface-sunken disabled:text-fg-subtle disabled:cursor-not-allowed ${
+          aria-invalid={error ? true : undefined}
+          aria-describedby={hasMessage ? messageId : undefined}
+          className={`w-full appearance-none rounded-lg border bg-surface px-3 py-2 pr-9 text-sm text-fg transition-colors focus:outline-none focus:ring-1 focus:ring-offset-0 disabled:bg-surface-sunken disabled:text-fg-subtle disabled:cursor-not-allowed ${
             error
-              ? 'border-danger focus:border-danger focus:ring-danger-line'
-              : 'border-line-strong focus:border-brand focus:ring-brand-line'
+              ? 'border-danger focus:border-danger focus:ring-danger'
+              : 'border-line-strong focus:border-focus focus:ring-focus'
           } ${className}`}
           {...props}
         >
@@ -55,9 +60,9 @@ export const Select: React.FC<SelectProps> = ({
         </div>
       </div>
       {error ? (
-        <span className="text-xs text-danger-fg font-medium">{error}</span>
+        <span id={messageId} className="text-xs text-danger-fg font-medium">{error}</span>
       ) : helperText ? (
-        <span className="text-xs text-fg-subtle">{helperText}</span>
+        <span id={messageId} className="text-xs text-fg-subtle">{helperText}</span>
       ) : null}
     </div>
   );

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Edit3, Trash2, Check, X } from 'lucide-react';
 import { Badge } from '@/components/common/Badge';
+import { IconButton } from '@/components/common/IconButton';
+import { HelpTip } from '@/components/common/Tooltip';
 import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
 import { FieldDefinition, FieldExtractorType } from '@/types';
@@ -109,20 +111,17 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            <button
+            <IconButton
+              label={`Edit field ${field.name}`}
+              icon={<Edit3 className="w-3.5 h-3.5" />}
               onClick={() => setIsEditing(true)}
-              aria-label={`Edit field ${field.name}`}
-              className="p-1 text-fg-subtle hover:text-fg-muted hover:bg-surface-muted rounded transition-colors"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-            </button>
-            <button
+            />
+            <IconButton
+              label={`Remove field ${field.name}`}
+              variant="danger"
+              icon={<Trash2 className="w-3.5 h-3.5" />}
               onClick={onRemove}
-              aria-label={`Remove field ${field.name}`}
-              className="p-1 text-fg-subtle hover:text-danger-fg hover:bg-danger-soft rounded transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            />
           </div>
         </div>
       ) : (
@@ -131,20 +130,13 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
           <div className="flex items-center justify-between border-b border-line-subtle pb-2">
             <span className="text-xs font-semibold text-fg">Edit Column Definition</span>
             <div className="flex items-center gap-1">
-              <button
-                onClick={handleCancel}
-                aria-label="Cancel edit"
-                className="p-1 text-fg-subtle hover:text-fg-muted rounded"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-              <button
+              <IconButton label="Cancel edit" icon={<X className="w-3.5 h-3.5" />} onClick={handleCancel} />
+              <IconButton
+                label="Save field edits"
+                variant="brand"
+                icon={<Check className="w-3.5 h-3.5" />}
                 onClick={handleSave}
-                aria-label="Save field edits"
-                className="p-1 text-brand-fg hover:text-brand-fg rounded bg-brand-soft"
-              >
-                <Check className="w-3.5 h-3.5" />
-              </button>
+              />
             </div>
           </div>
 
@@ -180,20 +172,23 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
             />
           )}
 
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={editRequired}
-              onChange={(e) => setEditRequired(e.target.checked)}
-              className="mt-0.5 w-4 h-4 rounded border-line-strong text-brand-fg focus:ring-focus"
-            />
-            <span className="text-xs text-fg-muted">
-              Skip rows where this column is empty
-              <span className="block text-2xs text-fg-subtle">
-                Off by default, so rows with a missing value are kept. Skipped rows are counted.
+          <div className="flex items-start gap-1">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editRequired}
+                onChange={(e) => setEditRequired(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-line-strong text-brand-fg focus:ring-focus"
+              />
+              <span className="text-xs text-fg-muted">
+                Skip rows where this column is empty
+                <span className="block text-2xs text-fg-subtle">
+                  Off by default, so rows with a missing value are kept. Skipped rows are counted.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+            <HelpTip tipId="required-field" />
+          </div>
         </div>
       )}
     </div>

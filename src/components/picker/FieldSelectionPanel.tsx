@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, ArrowLeft, Play, AlertCircle, CheckSquare, Square, Save } from 'lucide-react';
-import { Alert } from '@/components/common/Alert';
+import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';
 import { Input } from '@/components/common/Input';
@@ -230,7 +230,7 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
             </Button>
           </div>
           {recipeResult && (
-            <Alert variant={recipeResult.ok ? 'success' : 'error'}>{recipeResult.message}</Alert>
+            <Banner tone={recipeResult.ok ? 'success' : 'danger'}>{recipeResult.message}</Banner>
           )}
         </div>
       )}

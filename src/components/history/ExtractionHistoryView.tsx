@@ -11,9 +11,9 @@ import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';
 import { Input } from '@/components/common/Input';
-import { Modal } from '@/components/common/Modal';
+import { Dialog } from '@/components/common/Dialog';
 import { EmptyState } from '@/components/common/EmptyState';
-import { Alert } from '@/components/common/Alert';
+import { Banner } from '@/components/common/Banner';
 import { Dataset, ExtractedRecord } from '@/types';
 import {
   recordsToCsv,
@@ -133,9 +133,9 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
       </div>
 
       {actionError && (
-        <Alert variant="error" onDismiss={() => setActionError(null)}>
+        <Banner tone="danger" onDismiss={() => setActionError(null)}>
           {actionError}
-        </Alert>
+        </Banner>
       )}
 
       {/* Search Input */}
@@ -246,7 +246,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
       )}
 
       {/* Delete Confirmation Modal */}
-      <Modal
+      <Dialog
         isOpen={deleteTargetId !== null}
         onClose={() => setDeleteTargetId(null)}
         title="Delete Dataset?"
@@ -274,7 +274,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
         <p className="text-xs text-fg-muted">
           Are you sure you want to proceed? This action cannot be undone.
         </p>
-      </Modal>
+      </Dialog>
     </div>
   );
 };

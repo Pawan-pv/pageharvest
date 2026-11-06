@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Play, Pencil, Trash2, Plus } from 'lucide-react';
-import { Alert } from '@/components/common/Alert';
+import { Banner } from '@/components/common/Banner';
 import { Badge } from '@/components/common/Badge';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Input } from '@/components/common/Input';
-import { Modal } from '@/components/common/Modal';
+import { Dialog } from '@/components/common/Dialog';
 import { ExtractionHistoryView, ExtractionHistoryViewProps } from '@/components/history/ExtractionHistoryView';
 import { JobStatus } from '@/shared/contracts/job';
 import { ExtractionProject } from '@/shared/contracts/project';
@@ -139,7 +139,7 @@ const ProjectsPanel: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-3">
-      {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
+      {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
 
       <div className="flex items-end gap-2">
         <div className="flex-1">
@@ -197,7 +197,7 @@ const ProjectsPanel: React.FC = () => {
         </Card>
       ))}
 
-      <Modal
+      <Dialog
         isOpen={editing !== null}
         onClose={() => setEditing(null)}
         title="Rename Project"
@@ -211,9 +211,9 @@ const ProjectsPanel: React.FC = () => {
         }
       >
         <Input label="Project Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
-      </Modal>
+      </Dialog>
 
-      <Modal
+      <Dialog
         isOpen={deleting !== null}
         onClose={() => setDeleting(null)}
         title="Delete Project?"
@@ -232,7 +232,7 @@ const ProjectsPanel: React.FC = () => {
         }
       >
         <p className="text-xs text-fg-muted">This action cannot be undone.</p>
-      </Modal>
+      </Dialog>
     </div>
   );
 };
@@ -300,7 +300,7 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
 
   return (
     <div className="flex flex-col gap-3">
-      {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
+      {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
 
       {!isLoading && recipes.length === 0 && (
         <EmptyState
@@ -348,7 +348,7 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
         </Card>
       ))}
 
-      <Modal
+      <Dialog
         isOpen={editing !== null}
         onClose={() => setEditing(null)}
         title="Edit Recipe"
@@ -378,9 +378,9 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
             onChange={(e) => setDraft((prev) => ({ ...prev, containerSelector: e.target.value }))}
           />
         </div>
-      </Modal>
+      </Dialog>
 
-      <Modal
+      <Dialog
         isOpen={deleting !== null}
         onClose={() => setDeleting(null)}
         title="Delete Recipe?"
@@ -395,7 +395,7 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
         }
       >
         <p className="text-xs text-fg-muted">This action cannot be undone.</p>
-      </Modal>
+      </Dialog>
     </div>
   );
 };
@@ -446,7 +446,7 @@ const SchemasPanel: React.FC<{ onUseSchema: (schema: ExtractionSchema) => void }
 
   return (
     <div className="flex flex-col gap-3">
-      {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
+      {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
 
       {!isLoading && schemas.length === 0 && (
         <EmptyState
@@ -496,7 +496,7 @@ const SchemasPanel: React.FC<{ onUseSchema: (schema: ExtractionSchema) => void }
         </Card>
       ))}
 
-      <Modal
+      <Dialog
         isOpen={editing !== null}
         onClose={() => setEditing(null)}
         title="Edit Schema"
@@ -521,7 +521,7 @@ const SchemasPanel: React.FC<{ onUseSchema: (schema: ExtractionSchema) => void }
             onChange={(e) => setDraft((prev) => ({ ...prev, containerSelector: e.target.value }))}
           />
         </div>
-      </Modal>
+      </Dialog>
     </div>
   );
 };
@@ -544,7 +544,7 @@ const RunHistoryPanel: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-2">
-      {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
+      {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
 
       {!isLoading && runs.length === 0 && (
         <EmptyState title="No runs yet" description="Finished, failed and cancelled extractions appear here." />

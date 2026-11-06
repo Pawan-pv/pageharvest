@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -19,7 +19,10 @@ export const Input: React.FC<InputProps> = ({
   disabled,
   ...props
 }) => {
-  const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
+  const messageId = `${inputId}-message`;
+  const hasMessage = Boolean(error || helperText);
 
   return (
     <div className="w-full flex flex-col gap-1 text-left">
@@ -37,12 +40,14 @@ export const Input: React.FC<InputProps> = ({
         <input
           id={inputId}
           disabled={disabled}
-          className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-subtle transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:bg-surface-sunken disabled:text-fg-subtle disabled:cursor-not-allowed ${
+          aria-invalid={error ? true : undefined}
+          aria-describedby={hasMessage ? messageId : undefined}
+          className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-subtle transition-colors focus:outline-none focus:ring-1 focus:ring-offset-0 disabled:bg-surface-sunken disabled:text-fg-subtle disabled:cursor-not-allowed ${
             iconLeft ? 'pl-9' : ''
           } ${iconRight ? 'pr-9' : ''} ${
             error
-              ? 'border-danger focus:border-danger focus:ring-danger-line'
-              : 'border-line-strong focus:border-brand focus:ring-brand-line'
+              ? 'border-danger focus:border-danger focus:ring-danger'
+              : 'border-line-strong focus:border-focus focus:ring-focus'
           } ${className}`}
           {...props}
         />
@@ -53,9 +58,9 @@ export const Input: React.FC<InputProps> = ({
         )}
       </div>
       {error ? (
-        <span className="text-xs text-danger-fg font-medium">{error}</span>
+        <span id={messageId} className="text-xs text-danger-fg font-medium">{error}</span>
       ) : helperText ? (
-        <span className="text-xs text-fg-subtle">{helperText}</span>
+        <span id={messageId} className="text-xs text-fg-subtle">{helperText}</span>
       ) : null}
     </div>
   );

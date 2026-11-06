@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal } from '@/components/common/Modal';
+import { Dialog } from '@/components/common/Dialog';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
@@ -69,7 +69,7 @@ export const AddFieldModal: React.FC<AddFieldModalProps> = ({
   };
 
   return (
-    <Modal
+    <Dialog
       isOpen={isOpen}
       onClose={handleClose}
       title="Add Custom Column"
@@ -132,6 +132,6 @@ export const AddFieldModal: React.FC<AddFieldModalProps> = ({
           />
         )}
       </form>
-    </Modal>
+    </Dialog>
   );
 };

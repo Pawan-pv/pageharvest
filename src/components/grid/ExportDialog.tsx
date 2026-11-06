@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FileSpreadsheet, FileJson, Download, X } from 'lucide-react';
-import { Alert } from '@/components/common/Alert';
+import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
 import { ExtractedRecord, FieldDefinition, Dataset } from '@/types';
 import {
@@ -135,9 +135,9 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
         {/* Content */}
         <div className="p-5 flex flex-col gap-4 text-xs">
           {exportError && (
-            <Alert variant="error" title="Export failed">
+            <Banner tone="danger" title="Export failed">
               {exportError}
-            </Alert>
+            </Banner>
           )}
 
           {/* Format Selection */}

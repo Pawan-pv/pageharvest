@@ -24,28 +24,28 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseClasses =
-    'inline-flex items-center justify-center font-medium transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 select-none disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer rounded-lg';
+    'inline-flex items-center justify-center font-medium transition-all duration-150 select-none disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer rounded-control';
 
   const sizeClasses: Record<ButtonSize, string> = {
-    xs: 'text-xs px-2 py-1 gap-1',
-    sm: 'text-xs px-2.5 py-1.5 gap-1.5',
+    xs: 'text-xs px-2 py-1 gap-1 min-h-7',
+    sm: 'text-xs px-2.5 py-1.5 gap-1.5 min-h-8',
     md: 'text-sm px-3.5 py-2 gap-2',
     lg: 'text-base px-4 py-2.5 gap-2.5',
   };
 
   const variantClasses: Record<ButtonVariant, string> = {
     primary:
-      'bg-brand text-on-strong hover:bg-brand-hover active:bg-brand-active focus:ring-focus shadow-sm border border-brand',
+      'bg-brand text-on-strong hover:bg-brand-hover active:bg-brand-active shadow-sm border border-brand',
     secondary:
-      'bg-inverse text-on-strong hover:bg-inverse-hover active:bg-inverse-active focus:ring-focus shadow-sm border border-inverse',
+      'bg-inverse text-on-strong hover:bg-inverse-hover active:bg-inverse-active shadow-sm border border-inverse',
     outline:
-      'bg-surface text-fg-muted border border-line-strong hover:bg-surface-sunken hover:text-fg active:bg-surface-muted focus:ring-focus shadow-xs',
+      'bg-surface text-fg-muted border border-line-strong hover:bg-surface-sunken hover:text-fg active:bg-surface-muted shadow-xs',
     subtle:
-      'bg-surface-muted text-fg hover:bg-surface-strong active:bg-surface-strong focus:ring-focus border border-line/80',
+      'bg-surface-muted text-fg hover:bg-surface-strong active:bg-surface-strong border border-line/80',
     ghost:
-      'bg-transparent text-fg-muted hover:bg-surface-muted hover:text-fg active:bg-surface-strong focus:ring-focus',
+      'bg-transparent text-fg-muted hover:bg-surface-muted hover:text-fg active:bg-surface-strong',
     danger:
-      'bg-danger text-on-strong hover:bg-danger-hover active:bg-danger-active focus:ring-danger shadow-sm border border-danger',
+      'bg-danger text-on-strong hover:bg-danger-hover active:bg-danger-active shadow-sm border border-danger',
   };
 
   const isDisabled = disabled || isLoading;
