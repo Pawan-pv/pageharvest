@@ -273,6 +273,7 @@ export const jobFailedMessageSchema = baseMessageSchema.extend({
     identity: JobIdentitySchema,
     message: z.string().min(1),
     category: HarvestErrorSchema.shape.category,
+    code: HarvestErrorSchema.shape.code,
     recoverable: z.boolean().default(false),
   }),
 });

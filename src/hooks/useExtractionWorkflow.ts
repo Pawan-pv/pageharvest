@@ -7,6 +7,7 @@ import {
   isTerminalJobStatus,
 } from '@/shared/contracts/job';
 import { ExtractionProject } from '@/shared/contracts/project';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
 import { ExtractionSchema } from '@/shared/contracts/schema';
 import {
   DatasetRepository,
@@ -49,6 +50,12 @@ export interface DetectedList {
   sampleSnippets: string[];
 }
 
+/** An error the panel shows. The code picks the explanation; the message is detail. */
+export interface OperationError {
+  message: string;
+  code?: ExtractionErrorCode;
+}
+
 export interface ExtractionStats {
   progressKind: JobProgressKind;
   currentStep: number;
@@ -62,6 +69,8 @@ export interface ExtractionStats {
   elapsedSeconds: number;
   status: ExtractionStatus;
   errorMessage?: string;
+  /** The code of the job's latest error, for the panel's explanation (ADR-031). */
+  errorCode?: ExtractionErrorCode;
   stopReason?: string;
 }
 
@@ -100,6 +109,7 @@ export function statsFromJob(job: ExtractionJob, now: number = Date.now()): Extr
     elapsedSeconds: Math.max(0, Math.floor((endedAt - job.startedAt - job.pausedMs) / 1000)),
     status: job.status,
     errorMessage: job.errorMessage,
+    errorCode: job.errors.at(-1)?.code,
     stopReason: job.stopReason,
   };
 }
@@ -140,7 +150,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const [recordsRevision, setRecordsRevision] = useState(0);
   const [currentDataset, setCurrentDataset] = useState<Dataset | null>(null);
   const [stats, setStats] = useState<ExtractionStats>(IDLE_STATS);
-  const [operationError, setOperationError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<OperationError | null>(null);
   const [recoverableJobs, setRecoverableJobs] = useState<ExtractionJob[]>([]);
   const [activeJob, setActiveJob] = useState<ExtractionJob | null>(null);
   const [projects, setProjects] = useState<ExtractionProject[]>([]);
@@ -157,7 +167,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const handleOperationError = useCallback((error: unknown, fallbackView: WorkflowView) => {
     const message = errorText(error);
     console.warn('PageHarvest operation failed:', message);
-    setOperationError(message);
+    setOperationError({ message });
     setView(fallbackView);
   }, []);
 
@@ -287,7 +297,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
 
           // Auto-trigger list detection using this selected element
           messagingService.detectRepeatedElements(selector).catch((err: unknown) => {
-            setOperationError(errorText(err));
+            setOperationError({ message: errorText(err) });
           });
           break;
         }
@@ -334,7 +344,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         }
 
         case 'EXTRACTION_ERROR': {
-          setOperationError(message.payload.message);
+          setOperationError({ message: message.payload.message, code: message.payload.code });
           // Detection failed with no picker open, so there is nothing left to wait for.
           if (!pickerActiveRef.current) {
             setView((current) => (current === 'inspecting' ? 'dashboard' : current));
@@ -496,11 +506,11 @@ export function useExtractionWorkflow(tab: TabInfo) {
     if (!recipe) return;
 
     if (recipe.fields.length === 0) {
-      setOperationError('Select at least one field to extract.');
+      setOperationError({ message: 'Select at least one field to extract.', code: 'VALIDATION_ERROR' });
       return;
     }
     if (typeof tab.id !== 'number') {
-      setOperationError('There is no active tab to extract from.');
+      setOperationError({ message: 'There is no active tab to extract from.', code: 'VALIDATION_ERROR' });
       return;
     }
 
@@ -555,7 +565,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       await messagingService.pauseJob(jobId);
       await refreshFollowedJob();
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [refreshFollowedJob]);
 
@@ -566,7 +576,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       await messagingService.resumeJob(jobId);
       await refreshFollowedJob();
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [refreshFollowedJob]);
 
@@ -586,7 +596,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       }
       setView('results');
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [loadDataset, repositories]);
 
@@ -609,7 +619,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setRecords([]);
       setView('dashboard');
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [repositories]);
 
@@ -624,7 +634,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
           await followJob(job);
         }
       } catch (err) {
-        setOperationError(errorText(err));
+        setOperationError({ message: errorText(err) });
         await refreshRecoverableJobs();
       }
     },
@@ -638,7 +648,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         await messagingService.discardJob(jobId);
         await refreshRecoverableJobs();
       } catch (err) {
-        setOperationError(errorText(err));
+        setOperationError({ message: errorText(err) });
       }
     },
     [refreshRecoverableJobs]
@@ -653,7 +663,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         await loadDataset(dataset.id);
         setView('results');
       } catch (err) {
-        setOperationError(errorText(err));
+        setOperationError({ message: errorText(err) });
       }
     },
     [loadDataset]

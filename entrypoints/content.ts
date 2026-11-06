@@ -62,6 +62,7 @@ export default defineContentScript({
           payload: {
             id: reported.id,
             category: reported.category,
+            code: reported.code,
             severity: reported.severity,
             message: reported.message,
             timestamp: reported.timestamp,

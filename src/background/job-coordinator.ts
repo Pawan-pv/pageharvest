@@ -46,6 +46,7 @@ import {
   SettingsRepository,
 } from '@/storage/repositories';
 import { ErrorCategory, ExtractionRunHistory, HarvestError, RecordEntity } from '@/types';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
 
 /**
  * Background job coordinator: the only owner of durable extraction state.
@@ -737,7 +738,7 @@ export class JobCoordinator {
   }
 
   public async reportJobFailure(payload: JobFailedPayload, sender: MessageSenderInfo): Promise<BatchAck> {
-    const { identity, message, category, recoverable } = payload;
+    const { identity, message, category, code, recoverable } = payload;
     const current = await this.jobs.getJob(identity.jobId);
     const rejection = this.validateSender(current, identity, sender);
     if (rejection || !current) {
@@ -747,7 +748,7 @@ export class JobCoordinator {
     if (recoverable) {
       await this.interruptJob(identity.jobId, message);
     } else {
-      await this.failJob(identity.jobId, message, category);
+      await this.failJob(identity.jobId, message, category, code);
     }
     return { status: 'committed', sequence: current.lastSequence, inserted: 0, duplicates: 0 };
   }
@@ -976,8 +977,13 @@ export class JobCoordinator {
     }
   }
 
-  private async failJob(jobId: string, message: string, category: ErrorCategory): Promise<void> {
-    const reported = this.report(category, message, { jobId });
+  private async failJob(
+    jobId: string,
+    message: string,
+    category: ErrorCategory,
+    code?: ExtractionErrorCode
+  ): Promise<void> {
+    const reported = this.report(category, message, { jobId }, code);
     const job = await this.db.transaction(
       'rw',
       [this.db.jobs, this.db.checkpoints, this.db.history],
@@ -1299,9 +1305,10 @@ export class JobCoordinator {
   private report(
     category: ErrorCategory,
     error: unknown,
-    context: Record<string, unknown>
+    context: Record<string, unknown>,
+    code?: ExtractionErrorCode
   ): HarvestError {
-    return this.reporter.report(category, error, { context });
+    return this.reporter.report(category, error, { context, code });
   }
 
   private buildError(

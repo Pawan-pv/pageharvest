@@ -11,6 +11,9 @@ import { JobIdentity } from '@/shared/contracts/job';
 import { ExtractionSchema } from '@/shared/contracts/schema';
 import { PaginationConfig } from '@/shared/contracts/pagination';
 import { PageHarvestDB } from '@/storage/db';
+import { codeForCategory } from '@/core/resilience/error-reporter';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
+import type { ErrorCategory } from '@/types';
 
 /**
  * Runs the real background coordinator against the real content runtime, over real
@@ -256,12 +259,18 @@ export class ExtensionHarness {
   }
 }
 
-function quietReporter(category: string, error: unknown) {
+/** The real reporter's output, without its console noise or shared history. */
+function quietReporter(
+  category: ErrorCategory,
+  error: unknown,
+  options: { code?: ExtractionErrorCode } = {}
+) {
   const message = error instanceof Error ? error.message : String(error);
   return {
     id: `err_${Math.random().toString(36).slice(2, 10)}`,
-    category: category as never,
+    category,
     severity: 'ERROR' as const,
+    code: options.code ?? codeForCategory(category),
     message,
     timestamp: Date.now(),
   };

@@ -7,6 +7,11 @@ export interface ErrorCopy {
   whatHappened: string;
   dataSafety: string;
   nextStep: string;
+  /**
+   * The code's contract says its message is written for the user, so it is shown as the
+   * body instead of behind the disclosure. Decided by code, never by reading the message.
+   */
+  bodyFromMessage?: boolean;
 }
 
 /**
@@ -37,10 +42,10 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
   },
   PAGINATION_TIMEOUT: {
     tone: 'danger',
-    title: 'The next page took too long',
-    whatHappened: 'The next page did not finish loading in time.',
+    title: 'The next page did not open',
+    whatHappened: 'PageHarvest tried to reach the next page, but it did not load.',
     dataSafety: 'Rows from earlier pages are saved.',
-    nextStep: 'Set a longer wait under Pagination, Advanced, then try again.',
+    nextStep: 'Check that the page still works in the tab, set a longer wait under Pagination, Advanced, then try again.',
   },
   INFINITE_SCROLL_STALLED: {
     tone: 'info',
@@ -76,6 +81,7 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     whatHappened: 'One of the settings is not valid.',
     dataSafety: 'Nothing was changed.',
     nextStep: 'Check the settings on this step and try again.',
+    bodyFromMessage: true,
   },
   ABORTED_BY_USER: {
     tone: 'info',
@@ -109,6 +115,10 @@ export function describeError(error: PanelError): DescribedError {
   const parsed = ExtractionErrorCodeSchema.safeParse(error.code);
   const code: ExtractionErrorCode = parsed.success ? parsed.data : 'UNKNOWN_ERROR';
   const message = error.message?.trim();
+  const copy = ERROR_COPY[code];
+  if (copy.bodyFromMessage && message) {
+    return { ...copy, code, whatHappened: message, details: undefined };
+  }
   const details = parsed.success ? [code, message].filter(Boolean).join(': ') : message;
-  return { ...ERROR_COPY[code], code, details: details || undefined };
+  return { ...copy, code, details: details || undefined };
 }

@@ -19,7 +19,7 @@ function WorkflowProbe() {
       <output data-testid="workflow-state">
         {workflow.view}:{workflow.detectedList?.containerSelector ?? 'no-list'}
       </output>
-      <output data-testid="workflow-error">{workflow.operationError ?? 'no-error'}</output>
+      <output data-testid="workflow-error">{workflow.operationError?.message ?? 'no-error'}</output>
     </>
   );
 }

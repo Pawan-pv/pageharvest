@@ -88,6 +88,7 @@ export class MessageRouter {
                 payload: {
                   id: `err_${Date.now()}`,
                   category: 'UNKNOWN',
+                  code: 'UNKNOWN_ERROR',
                   severity: 'ERROR',
                   message: errorMessage,
                   timestamp: Date.now(),
@@ -110,6 +111,7 @@ export class MessageRouter {
           payload: {
             id: `err_${Date.now()}`,
             category: 'UNKNOWN',
+            code: 'UNKNOWN_ERROR',
             severity: 'ERROR',
             message: errorMessage,
             timestamp: Date.now(),

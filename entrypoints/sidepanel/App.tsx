@@ -182,7 +182,7 @@ export const App: React.FC = () => {
 
       {workflow.operationError && workflow.view !== 'extracting' && (
         <ErrorBanner
-          error={{ message: workflow.operationError }}
+          error={workflow.operationError}
           className="m-3 mb-0"
           onDismiss={workflow.clearOperationError}
         />

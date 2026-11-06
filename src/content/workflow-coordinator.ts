@@ -229,8 +229,9 @@ export function createContentWorkflowCoordinator(
       const text = error instanceof Error ? error.message : String(error);
       const recoverable = error instanceof BatchDeliveryError;
       const category = error instanceof NavigationJobError ? 'PAGINATION_FAILED' : 'DOM_PARSING';
-      errorReporter.report(recoverable ? 'RUNTIME_MESSAGING' : category, error, {
+      const reported = errorReporter.report(recoverable ? 'RUNTIME_MESSAGING' : category, error, {
         context: { jobId: run.identity.jobId },
+        code: !recoverable && error instanceof NavigationJobError ? error.code : undefined,
       });
 
       await options
@@ -243,6 +244,7 @@ export function createContentWorkflowCoordinator(
               identity: run.identity,
               message: text,
               category: recoverable ? ('RUNTIME_MESSAGING' as const) : category,
+              code: reported.code,
               recoverable,
             },
           })

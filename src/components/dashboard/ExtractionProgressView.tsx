@@ -149,7 +149,7 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
         )}
 
         {/* Error notice if present */}
-        {isError && <ErrorBanner error={{ message: stats.errorMessage }} className="mt-3" />}
+        {isError && <ErrorBanner error={{ message: stats.errorMessage, code: stats.errorCode }} className="mt-3" />}
       </Card>
 
       {/* Control Buttons */}
