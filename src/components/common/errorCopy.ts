@@ -21,10 +21,10 @@ export interface ErrorCopy {
 export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
   CONTAINER_NOT_FOUND: {
     tone: 'danger',
-    title: 'The list is no longer on the page',
-    whatHappened: 'PageHarvest could not find the items you chose. The page may have changed or not finished loading.',
+    title: 'PageHarvest could not find those items',
+    whatHappened: 'Nothing on this page matched what you asked for. The page may have changed or not finished loading.',
     dataSafety: 'Rows saved before this are safe.',
-    nextStep: 'Reload the page and pick the list again.',
+    nextStep: 'Wait for the page to finish loading and try again, or pick the items on the page yourself.',
   },
   FIELD_EXTRACTION_FAILED: {
     tone: 'warning',

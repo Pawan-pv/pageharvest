@@ -4,6 +4,7 @@ import { HarvestErrorSchema, ExtractionErrorCodeSchema } from '@/shared/contract
 import { jobFailedMessageSchema } from '@/shared/contracts/message';
 import { ErrorReporter, codeForCategory } from '@/core/resilience/error-reporter';
 import { NavigationJobError } from '@/core/navigation/runner';
+import { createContentWorkflowCoordinator, DetectionError } from '@/content/workflow-coordinator';
 import { ErrorBanner } from '@/components/common/ErrorBanner';
 import { ERROR_COPY } from '@/components/common/errorCopy';
 import { useExtractionWorkflow } from '@/hooks/useExtractionWorkflow';
@@ -227,5 +228,26 @@ describe('ErrorBanner for setup problems', () => {
     render(<ErrorBanner error={{ code: 'TAB_DISCONNECTED', message: 'Receiving end does not exist.' }} />);
     expect(screen.getByRole('alert')).toHaveTextContent(ERROR_COPY.TAB_DISCONNECTED.whatHappened);
     expect(screen.getByText(/Receiving end does not exist/).closest('details')).not.toBeNull();
+  });
+});
+
+describe('Detection that finds nothing', () => {
+  it.each([
+    ['table', 'No data table was found on this page.'],
+    ['links', 'No links were found on this page.'],
+  ] as const)('reports %s detection with CONTAINER_NOT_FOUND, not an unexpected error', async (mode, message) => {
+    document.body.innerHTML = '<p>Just a paragraph.</p>';
+    const coordinator = createContentWorkflowCoordinator(() => undefined, document);
+    const failure = coordinator.detectRepeatedElements({
+      id: 'd',
+      type: 'DETECT_REPEATED_ELEMENTS',
+      timestamp: 1,
+      payload: { mode },
+    });
+    await expect(failure).rejects.toBeInstanceOf(DetectionError);
+    await expect(failure).rejects.toMatchObject({ code: 'CONTAINER_NOT_FOUND', message });
+    expect(new ErrorReporter().report('DOM_PARSING', new DetectionError(message), { code: 'CONTAINER_NOT_FOUND' }).code).toBe(
+      'CONTAINER_NOT_FOUND'
+    );
   });
 });

@@ -38,6 +38,19 @@ type ExtractRecordsMessage = Extract<ExtensionMessage, { type: 'EXTRACT_RECORDS'
 type ControlJobMessage = Extract<ExtensionMessage, { type: 'CONTROL_JOB' }>;
 type PreviewFieldsMessage = Extract<ExtensionMessage, { type: 'PREVIEW_FIELDS' }>;
 
+/**
+ * Detection found nothing to offer. It carries CONTAINER_NOT_FOUND so the panel explains it
+ * as "nothing like that is on this page" instead of an unexpected error (ADR-031).
+ */
+export class DetectionError extends Error {
+  public readonly code = 'CONTAINER_NOT_FOUND' as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'DetectionError';
+  }
+}
+
 export interface ContentWorkflowCoordinator {
   detectRepeatedElements(
     message: DetectRepeatedElementsMessage
@@ -308,14 +321,14 @@ export function createContentWorkflowCoordinator(
 
       if (mode === 'table') {
         candidates = detectTables(root);
-        if (candidates.length === 0) throw new Error('No data table was found on this page.');
+        if (candidates.length === 0) throw new DetectionError('No data table was found on this page.');
       } else if (mode === 'links') {
         candidates = detectLinkRegions(root);
-        if (candidates.length === 0) throw new Error('No links were found on this page.');
+        if (candidates.length === 0) throw new DetectionError('No links were found on this page.');
       } else if (targetSelector) {
         const target = root.querySelector(targetSelector);
         if (!target) {
-          throw new Error(`The selected element could not be found for selector "${targetSelector}".`);
+          throw new DetectionError(`The selected element could not be found for selector "${targetSelector}".`);
         }
         const picked = detectListFromSelection(target);
         candidates = picked ? [listCandidateOf(picked)] : [];
@@ -324,7 +337,7 @@ export function createContentWorkflowCoordinator(
       }
 
       if (candidates.length === 0) {
-        throw new Error('No repeated list or table rows were detected on this page.');
+        throw new DetectionError('No repeated list or table rows were detected on this page.');
       }
 
       const [best] = candidates;
@@ -346,7 +359,7 @@ export function createContentWorkflowCoordinator(
     async detectFields(message) {
       const containers = Array.from(root.querySelectorAll(message.payload.containerSelector));
       if (containers.length === 0) {
-        throw new Error(
+        throw new DetectionError(
           `No elements matched the container selector "${message.payload.containerSelector}".`
         );
       }

@@ -3,7 +3,7 @@ import { MessageRouter } from '@/platform/message-router';
 import { MessagingClient } from '@/platform/messaging-client';
 import { ExtensionMessage } from '@/contracts/messages';
 import { PickerMessenger } from '@/content/picker';
-import { createContentWorkflowCoordinator } from '@/content/workflow-coordinator';
+import { createContentWorkflowCoordinator, DetectionError } from '@/content/workflow-coordinator';
 import { errorReporter } from '@/core/resilience/error-reporter';
 
 interface PageHarvestWindow extends Window {
@@ -55,6 +55,7 @@ export default defineContentScript({
       } catch (error: unknown) {
         const reported = errorReporter.report('DOM_PARSING', error, {
           context: { originalMessageType: sourceType },
+          code: error instanceof DetectionError ? error.code : undefined,
         });
         await emitToExtension({
           id: reported.id,
