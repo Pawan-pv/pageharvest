@@ -264,6 +264,8 @@ test.describe('PageHarvest release workflows', () => {
   });
 
   test('E: harvests dynamically appended records with the infinite-scroll runner', async () => {
+    // Its own waits add up to more than the default 30s (the run alone may take 45s on a busy machine).
+    test.setTimeout(90000);
     const sidePanelPage = await context.newPage();
     await sidePanelPage.goto(`chrome-extension://${extensionId}/sidepanel.html`);
     const targetPage = await context.newPage();

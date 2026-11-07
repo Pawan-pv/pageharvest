@@ -470,6 +470,8 @@ test.describe('PageHarvest production workflows', () => {
   });
 
   test('C: a browser restart mid-job is recovered, with nothing lost or duplicated', async () => {
+    // Two browser launches and six scrolls 6s apart: about 70s when the machine is idle.
+    test.setTimeout(240000);
     const recoveryProfile = await fs.mkdtemp(path.join(os.tmpdir(), 'pageharvest-recovery-profile-'));
     let session = await launch(recoveryProfile);
     let panel = await openPanel(session.context, session.extensionId);
