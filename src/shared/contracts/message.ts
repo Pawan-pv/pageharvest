@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { HarvestErrorSchema } from './error';
+import { ExtractionErrorCodeSchema, HarvestErrorSchema } from './error';
 import { ExtractionFieldSchema } from './field';
 import { JobIdentitySchema } from './job';
 import { ExtractionProgressSchema } from './progress';
@@ -124,6 +124,44 @@ export const fieldsDetectedMessageSchema = baseMessageSchema.extend({
     suggestedFields: z.array(ExtractionFieldSchema),
   }),
 });
+
+// ---------------------------------------------------------------------------
+// Field preview: side panel -> content, read-only (ADR-030)
+// ---------------------------------------------------------------------------
+/** The most rows a preview returns. */
+export const PREVIEW_ROW_LIMIT = 5;
+
+/**
+ * Reads the first items of a list with the given fields, to preview columns while they are
+ * edited. Strictly read-only: the content script reads the DOM and replies; nothing is
+ * stored, no job changes, and no other message is sent.
+ */
+export const previewFieldsMessageSchema = baseMessageSchema.extend({
+  type: z.literal('PREVIEW_FIELDS'),
+  payload: z.object({
+    containerSelector: z.string().min(1),
+    fields: z.array(ExtractionFieldSchema).min(1).max(50),
+    limit: z.number().int().min(1).max(PREVIEW_ROW_LIMIT),
+  }),
+});
+
+export const PreviewCellSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+/** The content script's reply to PREVIEW_FIELDS, validated again by the side panel. */
+export const FieldPreviewResultSchema = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    rows: z.array(z.record(z.string(), PreviewCellSchema)).max(PREVIEW_ROW_LIMIT),
+    matchCount: z.number().int().min(0),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: ExtractionErrorCodeSchema,
+    message: z.string().min(1),
+  }),
+]);
+
+export type FieldPreviewResult = z.infer<typeof FieldPreviewResultSchema>;
 
 // ---------------------------------------------------------------------------
 // Job commands: side panel -> background
@@ -308,6 +346,7 @@ export const BrowserMessageSchema = z.discriminatedUnion('type', [
   repeatedElementsDetectedMessageSchema,
   detectFieldsMessageSchema,
   fieldsDetectedMessageSchema,
+  previewFieldsMessageSchema,
   startJobMessageSchema,
   pauseJobMessageSchema,
   resumeJobMessageSchema,

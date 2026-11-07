@@ -1,13 +1,16 @@
 import {
   ExtensionMessage,
+  FieldPreviewResult,
+  FieldPreviewResultSchema,
   JobCommandResult,
   JobCommandResultSchema,
+  PREVIEW_ROW_LIMIT,
   extensionMessageSchema,
 } from '@/contracts/messages';
 import { MessagingClient } from '@/platform/messaging-client';
 import { isHarvestableUrl } from '@/platform/tab-manager';
 import { JobIdentity } from '@/shared/contracts/job';
-import { ExtractionRecipe } from '@/types';
+import { ExtractionRecipe, FieldDefinition } from '@/types';
 
 function generateId(): string {
   return 'msg_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
@@ -15,6 +18,8 @@ function generateId(): string {
 
 const TAB_MESSAGE_TIMEOUT_MS = 15_000;
 const JOB_COMMAND_TIMEOUT_MS = 20_000;
+/** A preview is a convenience: it gives up quickly rather than hold the panel. */
+const PREVIEW_TIMEOUT_MS = 4_000;
 
 export interface TabInfo {
   id?: number;
@@ -184,6 +189,55 @@ class ExtensionMessagingService {
       type: 'DETECT_REPEATED_ELEMENTS',
       payload: { targetSelector },
     });
+  }
+
+  /**
+   * Asks the page for the first rows with these fields (ADR-030). Read-only on the page side.
+   * Never throws: every failure comes back as a coded result the panel can explain.
+   */
+  public async previewFields(
+    containerSelector: string,
+    fields: FieldDefinition[],
+    options: { limit?: number; timeoutMs?: number } = {}
+  ): Promise<FieldPreviewResult> {
+    const message = extensionMessageSchema.safeParse({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'PREVIEW_FIELDS',
+      payload: { containerSelector, fields, limit: options.limit ?? PREVIEW_ROW_LIMIT },
+    });
+    if (!message.success) {
+      return {
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        message: 'These columns cannot be previewed yet. Check that each Pattern and Attribute column is filled in.',
+      };
+    }
+
+    let tab: TabInfo;
+    try {
+      tab = await this.getActiveTab();
+    } catch {
+      return { ok: false, code: 'TAB_DISCONNECTED', message: 'There is no page to preview.' };
+    }
+    if (!tab.id || !tab.isInjectable) {
+      return { ok: false, code: 'TAB_DISCONNECTED', message: 'PageHarvest cannot read this tab.' };
+    }
+
+    let reply: unknown;
+    try {
+      reply = await this.client.sendToTab<unknown>(tab.id, message.data, {
+        timeoutMs: options.timeoutMs ?? PREVIEW_TIMEOUT_MS,
+        retries: 0,
+      });
+    } catch {
+      return { ok: false, code: 'TAB_DISCONNECTED', message: 'The page did not answer in time.' };
+    }
+
+    const parsed = FieldPreviewResultSchema.safeParse(reply);
+    return parsed.success
+      ? parsed.data
+      : { ok: false, code: 'UNKNOWN_ERROR', message: 'The page sent a preview PageHarvest could not read.' };
   }
 
   public async detectFields(containerSelector: string): Promise<void> {

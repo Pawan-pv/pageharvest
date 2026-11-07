@@ -255,6 +255,19 @@ This document tracks all foundational architectural and technical decisions made
 - **Decision**: A `windows-latest` job clicks the extension in the real toolbar with pywinauto, finding controls by name. A pass needs the browser to report a `SIDE_PANEL` context, 20 rows saved through that panel, and the rows still present after closing and reopening it from the toolbar. Neither `chrome.sidePanel.open()` nor opening the page in a tab is used. The job runs Chrome for Testing, because branded Chrome did not load the unpacked extension. A step with no evidence fails, and BLOCKED fails the job. The Linux job uses a new `automated` scope.
 - **Consequences**: A green run means the toolbar was verified, in Chrome for Testing. Branded Chrome stays a manual check. The job only works on machines with a desktop, and Windows minutes count double on a private repository.
 
+## ADR-030: Read-Only Field Preview (PREVIEW_FIELDS)
+
+- **Status**: Accepted
+- **Context**: While editing columns, the user needs to see the values each column will collect. Detection reports each item's text but no per-column values, and the only message that runs field extraction, `EXTRACT_RECORDS`, starts a job and writes rows.
+- **Decision**:
+  1. Contract addition: `PREVIEW_FIELDS` (side panel to content script) with `containerSelector`, `fields` (1 to 50 `ExtractionField`s) and `limit` (1 to `PREVIEW_ROW_LIMIT`, 5). The reply is `FieldPreviewResult`: `{ ok: true, rows, matchCount }`, where each cell is a string, number, boolean or null, or `{ ok: false, code, message }` with an `ExtractionErrorCode`.
+  2. Strictly read-only. The content script queries the DOM and runs the extraction engine, which only reads. It stores nothing, sends no other message, and changes no job. Required columns are not applied, so the preview shows every item.
+  3. Refused while a job is active in that tab: by the content script when it has a run, and by the panel when the job it follows is active in that tab (`VALIDATION_ERROR`, with a message written for the user).
+  4. A selector that is not valid CSS is `VALIDATION_ERROR`; one that no longer matches anything is `CONTAINER_NOT_FOUND` ("The list is no longer on this page").
+  5. The panel gives up after 4 seconds, with no retry, and reports `TAB_DISCONNECTED`. The request is validated before it is sent and by the content router; the reply is validated before it leaves the page and again by the panel, and a reply that fails is `UNKNOWN_ERROR`, never rows.
+  6. The panel asks after a 300 ms pause in editing, and ignores an answer that arrives after a newer request. If the preview fails it says why and falls back to the detection sample.
+- **Consequences**: The background is not involved, so a preview cannot reach storage. A large list is extracted in full and then cut to five rows; extraction of 1,000 items is sub-second. Covered by `tests/integration/preview-fields.test.ts` and `tests/unit/ui/field-preview-live.test.tsx`.
+
 ## ADR-031: Error Codes Reach the Side Panel
 
 - **Status**: Accepted

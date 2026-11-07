@@ -14,6 +14,7 @@ import { PaginationConfigPanel } from './PaginationConfigPanel';
 import { describePagination } from './pagination-copy';
 import { FieldDefinition, ExtractionPaginationConfig } from '@/types';
 import { DetectedList } from '@/hooks/useExtractionWorkflow';
+import type { FieldPreviewResult } from '@/shared/contracts/message';
 
 export type ConfigStep = 'fields' | 'pagination';
 
@@ -34,6 +35,8 @@ export interface FieldSelectionPanelProps {
   onToggleField: (id: string) => void;
   onUpdateField: (id: string, updates: Partial<FieldDefinition>) => void;
   onMoveField?: (id: string, direction: -1 | 1) => void;
+  /** Reads real rows for the chosen columns from the page, for the preview. */
+  onPreviewFields?: (columns: FieldDefinition[]) => Promise<FieldPreviewResult>;
   onAddField: (field: FieldDefinition) => void;
   onRemoveField: (id: string) => void;
   onPaginationChange: (updates: Partial<ExtractionPaginationConfig>) => void;
@@ -56,6 +59,7 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
   onToggleField,
   onUpdateField,
   onMoveField,
+  onPreviewFields,
   onAddField,
   onRemoveField,
   onPaginationChange,
@@ -274,7 +278,7 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
         )}
       </div>
 
-      <FieldPreview columns={selectedFields} samples={detectedList.sampleSnippets} />
+      <FieldPreview columns={selectedFields} samples={detectedList.sampleSnippets} onPreview={onPreviewFields} />
 
       <div className="flex flex-col gap-2 pt-1">
         <p className="text-2xs text-fg-muted">More pages: {describePagination(pagination)}</p>

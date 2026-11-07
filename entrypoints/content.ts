@@ -17,6 +17,7 @@ type DetectRepeatedElementsMessage = Extract<
 type DetectFieldsMessage = Extract<ExtensionMessage, { type: 'DETECT_FIELDS' }>;
 type ExtractRecordsMessage = Extract<ExtensionMessage, { type: 'EXTRACT_RECORDS' }>;
 type ControlJobMessage = Extract<ExtensionMessage, { type: 'CONTROL_JOB' }>;
+type PreviewFieldsMessage = Extract<ExtensionMessage, { type: 'PREVIEW_FIELDS' }>;
 
 const BATCH_DELIVERY_TIMEOUT_MS = 30_000;
 
@@ -127,6 +128,8 @@ export default defineContentScript({
     });
     router.on('CONTROL_JOB', (msg: ControlJobMessage) => coordinator.controlJob(msg));
     router.on('QUERY_JOB_RUN', () => coordinator.queryJobRun());
+    // Read-only: replies with preview rows and changes nothing (ADR-030).
+    router.on('PREVIEW_FIELDS', (msg: PreviewFieldsMessage) => coordinator.previewFields(msg));
 
     router.listen();
 

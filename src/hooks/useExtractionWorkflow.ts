@@ -25,7 +25,7 @@ import {
   ExtractionPaginationConfig,
   ExtractionStatus,
 } from '@/types';
-import { ExtensionMessage } from '@/contracts/messages';
+import { ExtensionMessage, FieldPreviewResult } from '@/contracts/messages';
 
 export type WorkflowView =
   | 'dashboard'
@@ -482,6 +482,27 @@ export function useExtractionWorkflow(tab: TabInfo) {
     });
   }, []);
 
+  /**
+   * Reads real rows for these columns from the page (PREVIEW_FIELDS, ADR-030). Read-only:
+   * nothing is stored and no job changes. Refused while this panel follows a job in this tab.
+   */
+  const previewFields = useCallback(
+    async (columns: FieldDefinition[]): Promise<FieldPreviewResult> => {
+      if (!detectedList) {
+        return { ok: false, code: 'CONTAINER_NOT_FOUND', message: 'Choose a list on the page first.' };
+      }
+      if (activeJob && isActiveJobStatus(activeJob.status) && activeJob.tabId === tab.id) {
+        return {
+          ok: false,
+          code: 'VALIDATION_ERROR',
+          message: 'An extraction is running in this tab. The preview is available again when it finishes.',
+        };
+      }
+      return messagingService.previewFields(detectedList.containerSelector, columns);
+    },
+    [activeJob, detectedList, tab.id]
+  );
+
   const removeField = useCallback((id: string) => {
     setFields((prev) => prev.filter((f) => f.id !== id));
     setSelectedFieldIds((prev) => {
@@ -814,6 +835,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
     updateField,
     addField,
     moveField,
+    previewFields,
     removeField,
     startExtraction,
     pauseExtraction,

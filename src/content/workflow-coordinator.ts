@@ -22,12 +22,15 @@ import {
   runNavigationJob,
 } from '@/core/navigation/runner';
 import { errorReporter } from '@/core/resilience/error-reporter';
+import type { FieldPreviewResult } from '@/shared/contracts/message';
+import { previewFields } from './preview-fields';
 import { JobIdentity } from '@/shared/contracts/job';
 
 type DetectRepeatedElementsMessage = Extract<ExtensionMessage, { type: 'DETECT_REPEATED_ELEMENTS' }>;
 type DetectFieldsMessage = Extract<ExtensionMessage, { type: 'DETECT_FIELDS' }>;
 type ExtractRecordsMessage = Extract<ExtensionMessage, { type: 'EXTRACT_RECORDS' }>;
 type ControlJobMessage = Extract<ExtensionMessage, { type: 'CONTROL_JOB' }>;
+type PreviewFieldsMessage = Extract<ExtensionMessage, { type: 'PREVIEW_FIELDS' }>;
 
 export interface ContentWorkflowCoordinator {
   detectRepeatedElements(
@@ -40,6 +43,8 @@ export interface ContentWorkflowCoordinator {
   extractRecords(message: ExtractRecordsMessage): ContentCommandResult;
   controlJob(message: ControlJobMessage): ContentCommandResult;
   queryJobRun(): JobRunStatus;
+  /** Reads the first rows with the given fields. Read-only, and refused while a job runs here. */
+  previewFields(message: PreviewFieldsMessage): FieldPreviewResult;
   /** Resolves once the current run, if any, has ended. */
   runSettled(): Promise<void>;
 }
@@ -359,6 +364,13 @@ export function createContentWorkflowCoordinator(
 
     runSettled() {
       return activeRun ? activeRun.settled : Promise.resolve();
+    },
+
+    previewFields(message) {
+      return previewFields(root, message.payload, {
+        jobActive: activeRun !== null,
+        baseUrl: options.getCurrentUrl?.() ?? root.location?.href ?? '',
+      });
     },
   };
 }

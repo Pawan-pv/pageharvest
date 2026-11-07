@@ -304,6 +304,7 @@ export const App: React.FC = () => {
               onUpdateField={workflow.updateField}
               onAddField={workflow.addField}
               onMoveField={workflow.moveField}
+              onPreviewFields={workflow.previewFields}
               step={configStep}
               onStepChange={setConfigStep}
               onRemoveField={workflow.removeField}
