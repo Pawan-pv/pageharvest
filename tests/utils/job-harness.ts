@@ -146,11 +146,17 @@ export class ExtensionHarness {
   ): HarnessPage {
     this.currentUrls.set(tabId, url);
     this.tabsWithoutContent.delete(tabId);
+    const page = { tabId } as HarnessPage;
     const coordinator = createContentWorkflowCoordinator(
       () => undefined,
       document,
       {
-        sendToBackground: (message) => this.deliverFromPage(tabId, message),
+        // jsdom keeps one document, so a replaced page's run can keep going. In a browser that
+        // document is destroyed and sends nothing; this makes the harness behave the same way.
+        sendToBackground: (message) =>
+          this.pages.get(tabId) === page
+            ? this.deliverFromPage(tabId, message)
+            : Promise.reject(new Error('This document was unloaded and can no longer send.')),
         getCurrentUrl: () => this.currentUrls.get(tabId) ?? url,
         navigateUrl: (target) => {
           this.navigations.push({ tabId, url: target });
@@ -162,7 +168,7 @@ export class ExtensionHarness {
         ...options,
       }
     );
-    const page = { coordinator, tabId };
+    page.coordinator = coordinator;
     this.pages.set(tabId, page);
     return page;
   }

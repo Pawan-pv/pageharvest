@@ -890,8 +890,27 @@ export class JobCoordinator {
     const status = await this.transport.getTabLoadStatus(tabId);
     if (status === 'loading') return; // Another load event will check again.
 
+    // A Next click can change the address without loading a new document (a client-side
+    // route). Then the page is still there and still running this job, and nothing failed
+    // to load (ADR-033). Only that exact run counts: same job, same generation.
+    if (await this.tabIsRunning(tabId, job)) {
+      const latest = await this.jobs.getJob(jobId);
+      if (latest && latest.generation === job.generation) return;
+    }
+
     const page = checkpoint.expectedUrl ? `The page ${checkpoint.expectedUrl}` : 'The next page';
     await this.interruptJob(jobId, `${page} failed to load.`);
+  }
+
+  /** Whether the content script in this tab answers that it is running this run of the job. */
+  private async tabIsRunning(tabId: number, job: ExtractionJob): Promise<boolean> {
+    try {
+      const reply = await this.transport.sendToTab(tabId, this.buildMessage({ type: 'QUERY_JOB_RUN', payload: {} }));
+      const parsed = JobRunStatusSchema.safeParse(reply);
+      return parsed.success && parsed.data.active && parsed.data.jobId === job.id && parsed.data.generation === job.generation;
+    } catch {
+      return false; // No document answered: the load really did fail.
+    }
   }
 
   /**
