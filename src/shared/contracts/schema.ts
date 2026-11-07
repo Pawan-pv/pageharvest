@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ExtractionFieldSchema } from './field';
 import { PaginationConfigSchema } from './pagination';
+import { MultiAnchorSelectorSchema } from './selector';
 
 /**
  * Canonical ExtractionSchema definition.
@@ -13,6 +14,8 @@ export const ExtractionSchemaSchema = z.object({
   projectId: z.string().optional(),
   urlPattern: z.string().min(1, 'URL pattern or wildcard is required'),
   containerSelector: z.string().min(1, 'Container selector is required'),
+  /** Multi-anchor fallback ladder for the repeating container. Optional for legacy recipes. */
+  containerAnchor: MultiAnchorSelectorSchema.optional(),
   fields: z.array(ExtractionFieldSchema).min(1, 'At least one field is required'),
   pagination: PaginationConfigSchema.default({
     type: 'none',
@@ -21,6 +24,8 @@ export const ExtractionSchemaSchema = z.object({
     scrollCount: 30,
     scrollDelayMs: 1500,
   }),
+  // A run keeps one record per value of these fields, such as one record per link URL.
+  dedupeFields: z.array(z.string()).optional(),
   version: z.number().int().min(1).default(1),
   createdAt: z.number().int().default(() => Date.now()),
   updatedAt: z.number().int().default(() => Date.now()),

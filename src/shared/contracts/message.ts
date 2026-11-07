@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ExtractionErrorCodeSchema, HarvestErrorSchema } from './error';
+import { MultiAnchorSelectorSchema, HealedFieldSummarySchema } from './selector';
 import { ExtractionFieldSchema } from './field';
 import { JobIdentitySchema } from './job';
 import { ExtractionProgressSchema } from './progress';
@@ -98,23 +99,51 @@ export const selectionCancelledMessageSchema = baseMessageSchema.extend({
 // ---------------------------------------------------------------------------
 // Detection
 // ---------------------------------------------------------------------------
+export const CandidateKindSchema = z.enum(['list', 'table', 'links']);
+export type CandidateKind = z.infer<typeof CandidateKindSchema>;
+
+/** One thing on the page the user could extract, with the evidence for choosing it. */
+export const ListCandidateSchema = z.object({
+  containerSelector: z.string(),
+  containerAnchor: MultiAnchorSelectorSchema.optional(),
+  matchCount: z.number(),
+  sampleSnippets: z.array(z.string()),
+  name: z.string(),
+  kind: CandidateKindSchema,
+  credible: z.boolean(),
+  confidence: z.number().min(0).max(1),
+  evidence: z.array(z.string()),
+  suggestedFields: z.array(z.string()),
+  dedupeFields: z.array(z.string()).optional(),
+});
+export type ListCandidate = z.infer<typeof ListCandidateSchema>;
+
 export const detectRepeatedElementsMessageSchema = baseMessageSchema.extend({
   type: z.literal('DETECT_REPEATED_ELEMENTS'),
-  payload: z.object({ targetSelector: z.string().optional() }).optional(),
+  payload: z
+    .object({
+      targetSelector: z.string().optional(),
+      mode: z.enum(['table', 'links']).optional(),
+    })
+    .optional(),
 });
 
 export const repeatedElementsDetectedMessageSchema = baseMessageSchema.extend({
   type: z.literal('REPEATED_ELEMENTS_DETECTED'),
   payload: z.object({
     containerSelector: z.string(),
+    /** Multi-tier fallback ladder of the best candidate's repeating item. */
+    containerAnchor: MultiAnchorSelectorSchema.optional(),
     matchCount: z.number(),
     sampleSnippets: z.array(z.string()),
+    candidates: z.array(ListCandidateSchema).optional(),
+    credible: z.boolean().optional(),
   }),
 });
 
 export const detectFieldsMessageSchema = baseMessageSchema.extend({
   type: z.literal('DETECT_FIELDS'),
-  payload: z.object({ containerSelector: z.string() }),
+  payload: z.object({ containerSelector: z.string(), kind: CandidateKindSchema.optional() }),
 });
 
 export const fieldsDetectedMessageSchema = baseMessageSchema.extend({
@@ -140,6 +169,8 @@ export const previewFieldsMessageSchema = baseMessageSchema.extend({
   type: z.literal('PREVIEW_FIELDS'),
   payload: z.object({
     containerSelector: z.string().min(1),
+    /** The list's backup ladder (ADR-030). Used only to read; never stored or written back. */
+    containerAnchor: MultiAnchorSelectorSchema.optional(),
     fields: z.array(ExtractionFieldSchema).min(1).max(50),
     limit: z.number().int().min(1).max(PREVIEW_ROW_LIMIT),
   }),
@@ -153,6 +184,11 @@ export const FieldPreviewResultSchema = z.discriminatedUnion('ok', [
     ok: z.literal(true),
     rows: z.array(z.record(z.string(), PreviewCellSchema)).max(PREVIEW_ROW_LIMIT),
     matchCount: z.number().int().min(0),
+    /**
+     * True when the saved selector no longer matched and the list was found with its backup
+     * anchor. A run uses the saved selector only, so it would not find the list yet.
+     */
+    usedFallback: z.boolean().default(false),
   }),
   z.object({
     ok: z.literal(false),
@@ -221,6 +257,8 @@ export const reconcileJobsMessageSchema = baseMessageSchema.extend({
 export const JobResumeStateSchema = z.object({
   page: z.number().int().min(1),
   nextSequence: z.number().int().min(1),
+  /** Rows committed by earlier documents of this job, so each page's HUD keeps counting. */
+  recordsExtracted: z.number().int().min(0).default(0),
   scrollsCompleted: z.number().int().min(0),
   catchUpScrolls: z.number().int().min(0),
   visitedUrls: z.array(z.string()),
@@ -252,6 +290,34 @@ export const queryJobRunMessageSchema = baseMessageSchema.extend({
 });
 
 // ---------------------------------------------------------------------------
+// Schema healing commands: side panel -> background
+// ---------------------------------------------------------------------------
+/**
+ * Applies a re-picked field selector to a paused job's schema in place. The
+ * selector and anchor are relative to the job's containerSelector, so the
+ * update never disturbs the other fields or their column order.
+ */
+export const updateJobSchemaMessageSchema = baseMessageSchema.extend({
+  type: z.literal('UPDATE_JOB_SCHEMA'),
+  payload: z.object({
+    jobId: z.string().min(1),
+    fieldUpdate: z.object({
+      fieldId: z.string().min(1),
+      selector: z.string(),
+      anchor: MultiAnchorSelectorSchema.optional(),
+    }),
+    /** Drop the staged drift batch (the Re-Pick path never commits degraded rows). */
+    discardStagedBatch: z.boolean().default(false),
+  }),
+});
+
+/** Accepts the staged drift batch ("Accept Auto-Healed Preview / Continue"). */
+export const acceptSelectorDriftMessageSchema = baseMessageSchema.extend({
+  type: z.literal('ACCEPT_SELECTOR_DRIFT'),
+  payload: z.object({ jobId: z.string().min(1) }),
+});
+
+// ---------------------------------------------------------------------------
 // Job execution: content script -> background
 // ---------------------------------------------------------------------------
 export const BatchStatsSchema = z.object({
@@ -260,6 +326,14 @@ export const BatchStatsSchema = z.object({
   filtered: z.number().int().min(0),
   failed: z.number().int().min(0),
   duplicates: z.number().int().min(0),
+  /** Field name -> records of this batch that carry a value. Drives the drift gate. */
+  fillHits: z.record(z.string(), z.number().int().min(0)).optional(),
+  /** Containers examined on the page, after recovery was attempted. */
+  containerCount: z.number().int().min(0).optional(),
+  /** True when the batch came from the container fallback ladder, not the primary selector. */
+  containerRecovered: z.boolean().optional(),
+  /** Fields a heal tier carried on this batch. */
+  healedFields: z.array(HealedFieldSummarySchema).optional(),
 });
 
 export type BatchStats = z.infer<typeof BatchStatsSchema>;
@@ -364,6 +438,8 @@ export const BrowserMessageSchema = z.discriminatedUnion('type', [
   jobFailedMessageSchema,
   jobUpdatedMessageSchema,
   extractionErrorMessageSchema,
+  updateJobSchemaMessageSchema,
+  acceptSelectorDriftMessageSchema,
 ]);
 
 export type BrowserMessage = z.infer<typeof BrowserMessageSchema>;
@@ -380,6 +456,8 @@ export const BatchRejectionReasonSchema = z.enum([
   'wrong_tab',
   'out_of_order',
   'persist_failed',
+  /** Batch held for review by the drift gate; the job is paused with it staged. */
+  'selector_drift',
 ]);
 
 export type BatchRejectionReason = z.infer<typeof BatchRejectionReasonSchema>;

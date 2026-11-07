@@ -255,6 +255,41 @@ This document tracks all foundational architectural and technical decisions made
 - **Decision**: A `windows-latest` job clicks the extension in the real toolbar with pywinauto, finding controls by name. A pass needs the browser to report a `SIDE_PANEL` context, 20 rows saved through that panel, and the rows still present after closing and reopening it from the toolbar. Neither `chrome.sidePanel.open()` nor opening the page in a tab is used. The job runs Chrome for Testing, because branded Chrome did not load the unpacked extension. A step with no evidence fails, and BLOCKED fails the job. The Linux job uses a new `automated` scope.
 - **Consequences**: A green run means the toolbar was verified, in Chrome for Testing. Branded Chrome stays a manual check. The job only works on machines with a desktop, and Windows minutes count double on a private repository.
 
+## ADR-025: One Number Parser That Never Guesses
+
+- **Status**: Accepted
+- **Context**: Extraction used `normalizeNumber`, while field samples and the Normalize tool used `parseNumberValue`, and both silently produced wrong numbers: `1.234.567` became 1.234, a Unicode minus was lost, and `49,99 €` became 4999 in the Normalize tool.
+- **Decision**: `src/utils/number-parser.ts` serves every path. A value is read as a number only if its format, currency or the page's `lang` settles it. Otherwise the status is `ambiguous`, both readings are returned, and the cell keeps its text. Ranges keep both ends and keep their text as the cell value. Each row stores how its numbers were read in `_valueNotes`, which can be exported as extra columns.
+- **Consequences**: Contract addition: `_valueNotes` on records. A price column can now hold text as well as numbers, and the grid says how many values need a look. A `srcset` now resolves to its largest candidate instead of its first, which changed one earlier test expectation deliberately. Known gap: currency is metadata, so `€5` and `$5` have equal canonical forms.
+
+## ADR-026: Discover Fields From Many Records
+
+- **Status**: Accepted
+- **Context**: Fields came from the first record only, so a column missing there was never offered, and positional selectors could read different data in different records.
+- **Decision**: `discoverFieldsInCluster` samples up to 12 records, including the first and last, and merges what it finds. For each field it tries several selectors and keeps the one with the most correct values and fewest conflicts across the sample. An element belongs to the fields that recognized it, so a badge on one record can't claim another record's price. Values known only by a class name become columns named after that class, and a card's other links become columns named after their text if they recur. Coverage and confidence are recorded on the field, and a rare field is offered but not selected.
+- **Consequences**: Contract additions: `discovery` on fields, and the `table_cell` and `link_text` extractors. More columns are offered than before. Naming from class names is a heuristic with a hand-written list of layout classes. Discovery still looks only at the page it starts on.
+
+## ADR-027: Rank Lists on Recorded Evidence and Let the User Choose
+
+- **Status**: Accepted
+- **Context**: Auto-detect silently took its first result, and gave a blog menu 88% confidence because that score only measured how alike the items were.
+- **Decision**: Confidence starts from structural similarity and is adjusted by observations, each recorded as evidence: how many consistent values items have, whether they are only links, whether they sit in navigation, whether they are labelled as promotions, and whether they are in the main content. The chooser shows up to eight candidates with samples, columns, confidence and evidence. A list in navigation, or below a minimum score, is not credible. If nothing is credible the panel says so, and continuing takes a deliberate click. Extract Tables and Extract Links produce candidates through the same chooser, and the picker's selector is narrowed until it matches exactly the chosen items.
+- **Consequences**: Contract addition: `candidates` and `credible` on `REPEATED_ELEMENTS_DETECTED`, and `kind` on `DETECT_FIELDS`. The weights are judgment calls, not calibrated, and the label vocabulary is English. The score is a heuristic, not a probability.
+
+## ADR-028: A Value That Arrives Late Updates Its Row
+
+- **Status**: Accepted
+- **Context**: On an infinite-scroll job, a row read before its image loaded was saved again once it had, leaving two rows for one record.
+- **Decision**: When an element is read again and has only gained values, the new record carries `_supersedes` with the earlier canonical form. In the batch's transaction, the coordinator finds that row by hash, confirms it by canonical comparison, and replaces it in place, keeping its order. If it isn't found, the record is added normally, so nothing is lost. A changed value is treated as new content, as a recycled row is. The marker is never stored.
+- **Consequences**: This is the only change to the durable commit path in this milestone. It is covered by `tests/integration/late-values.test.ts`, and listed for independent review.
+
+## ADR-029: The Running Record Total Travels With Each Document
+
+- **Status**: Accepted
+- **Context**: The neon scan overlay's HUD counter lives in the page. On a Next Button or URL job each new document mounts a fresh overlay, so a two-page run of 6 rows ended showing `3 rows`. Real-Chromium E2E (`tests/e2e/neon-overlays.spec.ts`) proved it. The stored data was always correct; only the display was wrong.
+- **Decision**: `JobResumeState` gains `recordsExtracted`, the job's committed `totalExtracted` at the moment the background starts a document. The content script starts the HUD from it, and adds only acknowledged inserts, as before. It defaults to 0, so a message without it still parses.
+- **Consequences**: Contract addition, display-only: nothing in the commit path reads it, and the background stays the only source of the number. Covered by `tests/unit/messages.test.ts`, `tests/integration/job-pagination.test.ts`, `tests/integration/extraction-overlay-wiring.test.ts` and the E2E spec.
+
 ## ADR-030: Read-Only Field Preview (PREVIEW_FIELDS)
 
 - **Status**: Accepted
@@ -266,6 +301,7 @@ This document tracks all foundational architectural and technical decisions made
   4. A selector that is not valid CSS is `VALIDATION_ERROR`; one that no longer matches anything is `CONTAINER_NOT_FOUND` ("The list is no longer on this page").
   5. The panel gives up after 4 seconds, with no retry, and reports `TAB_DISCONNECTED`. The request is validated before it is sent and by the content router; the reply is validated before it leaves the page and again by the panel, and a reply that fails is `UNKNOWN_ERROR`, never rows.
   6. The panel asks after a 300 ms pause in editing, and ignores an answer that arrives after a newer request. If the preview fails it says why and falls back to the detection sample.
+  7. `containerAnchor` (optional) carries the list's backup ladder (ADR-027 detection anchors). When the saved selector matches nothing, the content script tries `recoverContainerItems`: the class backup, then the structural fingerprint. Rows found that way come back with `usedFallback: true`. Extraction uses only the saved selector today, so the panel labels those rows "Found with a backup", says the page layout changed and that a run would not find the list yet, blocks Start extraction, and offers "Pick the list again". Nothing is healed or written back: no IndexedDB write, no recipe change, no message to the background.
 - **Consequences**: The background is not involved, so a preview cannot reach storage. A large list is extracted in full and then cut to five rows; extraction of 1,000 items is sub-second. Covered by `tests/integration/preview-fields.test.ts` and `tests/unit/ui/field-preview-live.test.tsx`.
 
 ## ADR-031: Error Codes Reach the Side Panel
@@ -278,7 +314,7 @@ This document tracks all foundational architectural and technical decisions made
   3. `NavigationJobError` carries a code set where it is thrown: an invalid selector or URL template, an off-site or repeated page URL are `VALIDATION_ERROR`; a next page that could not be reached is `PAGINATION_TIMEOUT`. The content workflow reports it and sends it in `JOB_FAILED`; the coordinator stores it on the job and broadcasts it in `EXTRACTION_ERROR`. The message router's fallback errors are `UNKNOWN_ERROR`.
   4. `useExtractionWorkflow` exposes `operationError` as `{ message, code? }`, and `ExtractionStats.errorCode` is the code of the job's latest error. An error stored before this ADR has no code; the panel gives it the default for its category, the one the reporter would assign today (`tests/integration/legacy-error-records.test.tsx`). The panel's own setup checks use `VALIDATION_ERROR`.
   5. `VALIDATION_ERROR` means the user's own setup is invalid, and its message is written for the user, so the panel shows that message as the explanation. Internal data that fails validation is `UNKNOWN_ERROR`. For every other code the message stays behind "Technical details".
-- **Consequences**: Errors without a precise code still get the generic explanation, which is honest but less helpful; adding a code at a throw site improves it without touching the panel. `DOM_PARSING` errors, which cover most detection failures, are `UNKNOWN_ERROR` until those sites name a code. Covered by `tests/unit/error-codes.test.tsx`. Numbered 031 because 025 to 029 are used on `feat/self-healing-selectors` and 030 is reserved for `PREVIEW_FIELDS`.
+- **Consequences**: Errors without a precise code still get the generic explanation, which is honest but less helpful; adding a code at a throw site improves it without touching the panel. `DOM_PARSING` errors, which cover most detection failures, are `UNKNOWN_ERROR` until those sites name a code. Covered by `tests/unit/error-codes.test.tsx`.
 
 ## ADR-032: Side Panel Design Tokens, Shared Components and In-App Guide
 
@@ -292,4 +328,4 @@ This document tracks all foundational architectural and technical decisions made
   5. The guide ships inside the extension: a five-step first-run tour, a searchable Help screen, and `?` tips whose ids are typed keys into the guide. Whether the tour was seen is a preference in `chrome.storage.local` (ADR-005), never IndexedDB; if local storage fails the tour shows at most once per browser session. The Help screen links to a public practice site and fetches nothing.
   6. The picker, list, field and progress screens, Help and the tour are lazy chunks (ADR-014). On `main` the flow screens were eager and the side panel chunk passed Rollup's 500 kB warning; it is now about 477 kB.
   7. The picker overlay keeps its closed root (ADR-022) and gains reduced motion, focus rings and AA button contrast.
-- **Consequences**: `useExtractionWorkflow` gained `moveField`, panel state only, so column order is the export order. The tour would open over App tests, so the test setup marks it seen; the tour's own tests clear the flag. Tests give lazy views 5s per wait and 15s per test. The auto-detect card on `main` shows one list without confidence, because ranked candidates (ADR-027) exist only on `feat/self-healing-selectors`; the card is ready to list several. Columns in the preview follow every edit, but cell values need `PREVIEW_FIELDS` (ADR-030).
+- **Consequences**: `useExtractionWorkflow` gained `moveField`, panel state only, so column order is the export order. The tour would open over App tests, so the test setup marks it seen; the tour's own tests clear the flag. Tests give lazy views 5s per wait and 15s per test. Detection results are ranked candidate cards built on ADR-027's evidence: a plain reason, sample rows, column count and a confidence label, with the evidence behind Technical details. Columns in the preview follow every edit, and cell values come from `PREVIEW_FIELDS` (ADR-030).

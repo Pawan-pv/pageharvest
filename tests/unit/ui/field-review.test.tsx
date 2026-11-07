@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FieldEditorRow } from '@/components/picker/FieldEditorRow';
 import { FieldSelectionPanel, type FieldSelectionPanelProps } from '@/components/picker/FieldSelectionPanel';
@@ -292,5 +292,30 @@ describe('useExtractionWorkflow.moveField', () => {
     expect(screen.getByTestId('order')).toHaveTextContent('Price,Title');
     act(() => screen.getByRole('button', { name: 'Move' }).click());
     expect(screen.getByTestId('order')).toHaveTextContent('Price,Title');
+  });
+});
+
+describe('Review fields on a drifted page', () => {
+  it('blocks Start extraction while the list is only found with its backup, and offers picking it again', async () => {
+    const onStartHarvest = vi.fn();
+    const onPickListAgain = vi.fn();
+    render(
+      <FieldSelectionPanel
+        {...panelProps({
+          onStartHarvest,
+          onPickListAgain,
+          onPreviewFields: async () => ({ ok: true, rows: [{ Title: 'Alpha', Price: 3 }], matchCount: 2, usedFallback: true }),
+        })}
+      />
+    );
+
+    expect(await screen.findByText('Found with a backup')).toBeInTheDocument();
+    const start = screen.getByRole('button', { name: /Start extraction/ });
+    // The panel learns of the drift one render after the preview shows it.
+    await waitFor(() => expect(start).toBeDisabled());
+    await userEvent.click(start);
+    expect(onStartHarvest).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Pick the list again' }));
+    expect(onPickListAgain).toHaveBeenCalled();
   });
 });

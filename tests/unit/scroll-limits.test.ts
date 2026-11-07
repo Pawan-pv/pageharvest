@@ -128,6 +128,80 @@ describe('Scroll and page limits are independent', () => {
     expect(result.duplicatesSkipped).toBe(0);
   });
 
+  it('does not count a late value update toward maxRecords', async () => {
+    const lateFields: FieldDefinition[] = [
+      { id: 't', name: 'Title', selector: '.title', extractor: 'text' },
+      { id: 'p', name: 'Picture', selector: 'img', extractor: 'src' },
+    ];
+    document.body.innerHTML = `
+      <div id="feed">
+        <div class="card"><h3 class="title">Post 1</h3><img></div>
+      </div>
+    `;
+    const feed = document.getElementById('feed') as HTMLElement;
+    let scrollCount = 0;
+    const scrollBy = vi.fn(() => {
+      scrollCount++;
+      if (scrollCount === 1) {
+        feed.querySelector('img')?.setAttribute('src', '/post-1.jpg');
+        return;
+      }
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = '<h3 class="title">Post 2</h3><img src="/post-2.jpg">';
+      feed.appendChild(card);
+    });
+    window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
+
+    const result = await runMultiPageExtraction({
+      strategy: 'infinite_scroll',
+      containerSelector: '.card',
+      fields: lateFields,
+      maxRecords: 2,
+      maxScrolls: 3,
+      scrollDelayMs: 1,
+      pageTimeoutMs: 50,
+      onPageExtracted: (batch) => ({
+        inserted: batch.records.filter((record) => record._supersedes === undefined).length,
+      }),
+    });
+
+    expect(scrollBy).toHaveBeenCalledTimes(2);
+    expect(result.pages.at(-1)?.records[0]?.Title).toBe('Post 2');
+    expect(result.resumableState?.totalExtracted).toBe(2);
+    expect(result.stopReason).toBe('max_records_reached');
+  });
+
+  it('does not wait for new containers when an existing row changes after scrolling', async () => {
+    const lateFields: FieldDefinition[] = [
+      { id: 't', name: 'Title', selector: '.title', extractor: 'text' },
+      { id: 'p', name: 'Picture', selector: 'img', extractor: 'src' },
+    ];
+    document.body.innerHTML = `
+      <div id="feed">
+        <div class="card"><h3 class="title">Post 1</h3><img></div>
+      </div>
+    `;
+    const scrollBy = vi.fn(() => {
+      document.querySelector('img')?.setAttribute('src', '/loaded.jpg');
+    });
+    window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
+
+    const startedAt = Date.now();
+    const result = await runMultiPageExtraction({
+      strategy: 'infinite_scroll',
+      containerSelector: '.card',
+      fields: lateFields,
+      maxScrolls: 1,
+      scrollDelayMs: 1,
+      pageTimeoutMs: 200,
+    });
+
+    expect(scrollBy).toHaveBeenCalledTimes(1);
+    expect(result.pages.at(-1)?.records[0]?.Picture).toBe('http://localhost:3000/loaded.jpg');
+    expect(Date.now() - startedAt).toBeLessThan(450);
+  });
+
   it('stops promptly when cancelled during a scroll delay', async () => {
     const scrollBy = renderScrollFeed();
     window.scrollBy = scrollBy as unknown as typeof window.scrollBy;

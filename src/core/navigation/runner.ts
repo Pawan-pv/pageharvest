@@ -60,9 +60,14 @@ export interface NavigationJobOptions {
   commitCheckpoint: (navigation: JobNavigationState) => Promise<void>;
   /** Starts leaving this document for the given URL. Nothing after it is guaranteed to run. */
   navigateTo: (url: string) => void | Promise<void>;
+  /** Announces what the runner is currently doing, for the on-page neon scan HUD. */
+  onProgressAction?: (action: NavigationProgressAction) => void;
   /** Overrides engine timing, for tests. */
   engineOverrides?: { pageTimeoutMs?: number; navigationTimeoutMs?: number };
 }
+
+/** What the visual overlay HUD announces while a run moves. */
+export type NavigationProgressAction = 'scanning' | 'scrolling' | 'navigating' | 'complete';
 
 export type NavigationJobOutcome =
   | { kind: 'finished'; stopReason: string }
@@ -106,6 +111,7 @@ function asFields(recipe: ExtractionSchema): FieldDefinition[] {
     attributeName: field.attributeName,
     regexPattern: field.regexPattern,
     regexGroup: field.regexGroup,
+    columnIndex: field.columnIndex,
     defaultValue: field.defaultValue,
     required: field.required,
     transform: field.transform,
@@ -125,6 +131,7 @@ function assertValidContainer(recipe: ExtractionSchema, root: Document): void {
 
 async function runSinglePageJob(options: NavigationJobOptions): Promise<NavigationJobOutcome> {
   const { recipe, resume, root, signal, getCurrentUrl, waitWhilePaused, commitBatch } = options;
+  options.onProgressAction?.('scanning');
   await waitWhilePaused();
   if (signal.aborted) return { kind: 'cancelled' };
 
@@ -135,8 +142,11 @@ async function runSinglePageJob(options: NavigationJobOptions): Promise<Navigati
     fields: asFields(recipe),
     pageNumber: resume.page,
     baseUrl: url,
-    // Every matched element on a single page is its own row.
-    deduplication: { enabled: false },
+    // Every matched element on a single page is its own row, unless the recipe says one
+    // value of a field is one record, as with links.
+    deduplication: recipe.dedupeFields?.length
+      ? { enabled: true, fields: recipe.dedupeFields }
+      : { enabled: false },
   });
 
   await commitBatch({
@@ -147,7 +157,7 @@ async function runSinglePageJob(options: NavigationJobOptions): Promise<Navigati
       missingFields: output.statistics.missingFieldRecordsCount,
       filtered: output.statistics.filteredRecordsCount,
       failed: output.statistics.erroredRecordsCount,
-      duplicates: 0,
+      duplicates: output.statistics.duplicatesCount,
     },
     navigation: {
       nextPage: resume.page + 1,
@@ -167,6 +177,7 @@ async function runSinglePageJob(options: NavigationJobOptions): Promise<Navigati
  */
 async function runUrlTemplateJob(options: NavigationJobOptions): Promise<NavigationJobOutcome> {
   const { recipe, resume, root, signal, getCurrentUrl, waitWhilePaused, commitBatch, navigateTo } = options;
+  options.onProgressAction?.('scanning');
   const pagination = recipe.pagination;
   const sequence = {
     template: pagination.urlTemplate ?? '',
@@ -213,7 +224,7 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
       missingFields: output.statistics.missingFieldRecordsCount,
       filtered: output.statistics.filteredRecordsCount,
       failed: output.statistics.erroredRecordsCount,
-      duplicates: 0,
+      duplicates: output.statistics.duplicatesCount,
     },
     navigation: {
       nextPage: step + 1,
@@ -234,6 +245,7 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
   await waitWhilePaused();
   if (signal.aborted) return { kind: 'cancelled' };
 
+  options.onProgressAction?.('navigating');
   await navigateTo(nextUrl);
   return { kind: 'navigating' };
 }
@@ -248,6 +260,7 @@ function resolveClickStrategy(root: Document, selector?: string): NavigationStra
 
 async function runEngineJob(options: NavigationJobOptions): Promise<NavigationJobOutcome> {
   const { recipe, resume, root, signal, getCurrentUrl, waitWhilePaused, commitBatch, commitCheckpoint } = options;
+  options.onProgressAction?.('scanning');
   const pagination = recipe.pagination;
   const isScroll = pagination.type === 'infinite_scroll';
   const strategy: NavigationStrategy = isScroll
@@ -273,6 +286,14 @@ async function runEngineJob(options: NavigationJobOptions): Promise<NavigationJo
     waitWhilePaused,
     allowedOrigin: new URL(resume.startUrl).origin,
     ...options.engineOverrides,
+    onProgress: (progress) => {
+      // Feed the neon HUD: infinite scroll harvests by scrolling, every other
+      // engine strategy moves to the next document.
+      if (progress.status !== 'running') return;
+      options.onProgressAction?.(
+        progress.strategy === 'infinite_scroll' ? 'scrolling' : 'navigating'
+      );
+    },
     initialSessionState: {
       strategy,
       currentPage: resume.page - 1,

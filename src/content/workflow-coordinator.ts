@@ -8,11 +8,16 @@ import {
   extensionMessageSchema,
 } from '@/contracts/messages';
 import { fieldDefinitionSchema } from '@/contracts/schemas';
+import { ListCandidate } from '@/shared/contracts/message';
+import { detectLinkRegions, linkFields } from '@/core/extraction/link-extractor';
+import { detectTables, tableFields } from '@/core/extraction/table-extractor';
+import { DetectedListResult } from '@/types/detection';
 import {
   autoDetectLists,
-  detectFieldsInContainer,
+  discoverFieldsInCluster,
   detectListFromSelection,
   suggestionsToFieldDefinitions,
+  attachFieldAnchors,
 } from '@/core/detection';
 import {
   CommitOutcome,
@@ -25,6 +30,7 @@ import { errorReporter } from '@/core/resilience/error-reporter';
 import type { FieldPreviewResult } from '@/shared/contracts/message';
 import { previewFields } from './preview-fields';
 import { JobIdentity } from '@/shared/contracts/job';
+import { getVisualOverlay } from '@/content/extraction-visual-overlay';
 
 type DetectRepeatedElementsMessage = Extract<ExtensionMessage, { type: 'DETECT_REPEATED_ELEMENTS' }>;
 type DetectFieldsMessage = Extract<ExtensionMessage, { type: 'DETECT_FIELDS' }>;
@@ -79,11 +85,27 @@ const RETRYABLE_REJECTIONS = new Set(['persist_failed']);
 
 interface ActiveRun {
   identity: JobIdentity;
+  containerSelector: string;
   controller: AbortController;
   paused: boolean;
   resumeWaiters: Array<() => void>;
   nextSequence: number;
   settled: Promise<void>;
+}
+
+function listCandidateOf(list: DetectedListResult): ListCandidate {
+  return {
+    containerSelector: list.containerSelector,
+    containerAnchor: list.containerAnchor,
+    matchCount: list.itemCount,
+    sampleSnippets: list.sampleElements.map((sample) => sample.previewText),
+    name: list.name,
+    kind: 'list',
+    credible: list.credible,
+    confidence: list.confidence,
+    evidence: list.evidence,
+    suggestedFields: list.availableFields.filter((field) => field.suggested).map((field) => field.name),
+  };
 }
 
 export function createContentWorkflowCoordinator(
@@ -118,6 +140,8 @@ export function createContentWorkflowCoordinator(
   const abortRun = (run: ActiveRun): void => {
     run.controller.abort();
     releasePause(run);
+    // The neon scan indicators only belong to a live run in this document.
+    getVisualOverlay().destroy();
   };
 
   /**
@@ -180,6 +204,13 @@ export function createContentWorkflowCoordinator(
       })
     );
     run.nextSequence = sequence + 1;
+    // Visual progress comes after the ack: nothing is celebrated before the
+    // transaction has actually committed in storage.
+    if (ack.inserted > 0) {
+      const overlay = getVisualOverlay();
+      overlay.addRows(ack.inserted);
+      overlay.pulseSelector(run.containerSelector, batch.records.length);
+    }
     return { inserted: ack.inserted, shouldStop: ack.shouldStop === true };
   };
 
@@ -209,12 +240,21 @@ export function createContentWorkflowCoordinator(
         commitBatch: (batch) => commitBatch(run, batch),
         commitCheckpoint: (navigation) => commitCheckpoint(run, navigation),
         navigateTo,
+        onProgressAction: (action) => getVisualOverlay().setAction(action),
         engineOverrides: options.engineOverrides,
       });
 
-      if (outcome.kind !== 'finished' || run.controller.signal.aborted) return;
+      if (outcome.kind !== 'finished') {
+        // The document is being replaced; the next document mounts its own overlay.
+        getVisualOverlay().destroy();
+        return;
+      }
+      if (run.controller.signal.aborted) return;
       // The background already ended the job when it told the run to stop.
-      if (outcome.stopReason === 'stopped_by_coordinator') return;
+      if (outcome.stopReason === 'stopped_by_coordinator') {
+        getVisualOverlay().destroy();
+        return;
+      }
 
       await deliver(run, () =>
         createContentWorkflowMessage({
@@ -228,7 +268,9 @@ export function createContentWorkflowCoordinator(
           },
         })
       );
+      getVisualOverlay().complete();
     } catch (error: unknown) {
+      getVisualOverlay().destroy();
       if (error instanceof JobRejectedError || run.controller.signal.aborted) return;
 
       const text = error instanceof Error ? error.message : String(error);
@@ -261,44 +303,66 @@ export function createContentWorkflowCoordinator(
   return {
     async detectRepeatedElements(message) {
       const targetSelector = message.payload?.targetSelector;
-      const result = targetSelector
-        ? (() => {
-            const target = root.querySelector(targetSelector);
-            if (!target) {
-              throw new Error(`The selected element could not be found for selector "${targetSelector}".`);
-            }
-            return detectListFromSelection(target);
-          })()
-        : autoDetectLists(root)[0] ?? null;
+      const mode = message.payload?.mode;
+      let candidates: ListCandidate[];
 
-      if (!result) {
+      if (mode === 'table') {
+        candidates = detectTables(root);
+        if (candidates.length === 0) throw new Error('No data table was found on this page.');
+      } else if (mode === 'links') {
+        candidates = detectLinkRegions(root);
+        if (candidates.length === 0) throw new Error('No links were found on this page.');
+      } else if (targetSelector) {
+        const target = root.querySelector(targetSelector);
+        if (!target) {
+          throw new Error(`The selected element could not be found for selector "${targetSelector}".`);
+        }
+        const picked = detectListFromSelection(target);
+        candidates = picked ? [listCandidateOf(picked)] : [];
+      } else {
+        candidates = autoDetectLists(root).map(listCandidateOf);
+      }
+
+      if (candidates.length === 0) {
         throw new Error('No repeated list or table rows were detected on this page.');
       }
 
+      const [best] = candidates;
       return publish({
         id: messageId('repeated'),
         type: 'REPEATED_ELEMENTS_DETECTED',
         timestamp: Date.now(),
         payload: {
-          containerSelector: result.containerSelector,
-          matchCount: result.itemCount,
-          sampleSnippets: result.sampleElements.map((sample) => sample.previewText),
+          containerSelector: best.containerSelector,
+          containerAnchor: best.containerAnchor,
+          matchCount: best.matchCount,
+          sampleSnippets: best.sampleSnippets,
+          candidates,
+          credible: best.credible,
         },
       });
     },
 
     async detectFields(message) {
       const containers = Array.from(root.querySelectorAll(message.payload.containerSelector));
-      const firstContainer = containers[0];
-      if (!firstContainer) {
+      if (containers.length === 0) {
         throw new Error(
           `No elements matched the container selector "${message.payload.containerSelector}".`
         );
       }
 
-      const suggestions = suggestionsToFieldDefinitions(detectFieldsInContainer(firstContainer)).map(
-        (field) => fieldDefinitionSchema.parse(field)
-      );
+      const { containerSelector, kind } = message.payload;
+      const definitions =
+        kind === 'table'
+          ? tableFields(containerSelector, root)
+          : kind === 'links'
+            ? linkFields(containerSelector, root)
+            : suggestionsToFieldDefinitions(
+                // Anchors attach here, on the final discovery result — the
+                // detection hot path itself stays fingerprint-free.
+                attachFieldAnchors(discoverFieldsInCluster(containers), containers[0])
+              );
+      const suggestions = definitions.map((field) => fieldDefinitionSchema.parse(field));
       return publish({
         id: messageId('fields'),
         type: 'FIELDS_DETECTED',
@@ -314,8 +378,14 @@ export function createContentWorkflowCoordinator(
       // A new generation supersedes anything still running in this document.
       if (activeRun) abortRun(activeRun);
 
+      // The neon scan overlay mounts at once, before the first batch is delivered,
+      // so the page shows harvesting state from the first moment.
+      // It continues the count from rows earlier documents of this job committed.
+    getVisualOverlay().start({}, message.payload.resume.recordsExtracted);
+
       const run: ActiveRun = {
         identity: message.payload.identity,
+        containerSelector: message.payload.recipe.containerSelector,
         controller: new AbortController(),
         paused: false,
         resumeWaiters: [],

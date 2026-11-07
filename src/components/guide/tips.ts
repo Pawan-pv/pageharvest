@@ -66,6 +66,11 @@ export const helpTips = {
     text: 'Rows are saved as they are collected, so an interruption loses nothing already saved. Resume continues from the last saved page.',
     section: 'recovering',
   },
+  confidence: {
+    topic: 'Confidence',
+    text: 'How sure PageHarvest is that these items are data rather than menus or adverts. It is a guide, not a guarantee, so check the sample rows.',
+    section: 'auto-detect',
+  },
   'finish-vs-cancel': {
     topic: 'Finish or Cancel',
     text: 'Finish stops now and opens the rows collected so far. Cancel stops the job too, and its saved rows stay in Datasets.',

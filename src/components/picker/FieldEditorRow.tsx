@@ -29,6 +29,8 @@ export const EXTRACTOR_LABELS: Record<FieldExtractorType, string> = {
   attribute: 'Attribute',
   regex: 'Pattern (regex)',
   html: 'HTML (advanced)',
+  table_cell: 'Table column',
+  link_text: 'Link text',
 };
 
 const EXTRACTOR_ORDER: FieldExtractorType[] = ['text', 'href', 'src', 'number', 'attribute', 'regex', 'html'];
@@ -88,7 +90,6 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
     }
     setErrors(nextErrors);
     if (nextErrors.attribute || nextErrors.regex) return;
-
     onUpdate({
       name: editName.trim() || field.name,
       selector: editSelector.trim() || field.selector,
@@ -133,6 +134,13 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
                 )}
                 {!isSelected && <span className="text-2xs text-fg-subtle">Left out</span>}
               </div>
+              {field.discovery && (
+                <p className="text-2xs text-fg-subtle mt-0.5 truncate">
+                  Found in {Math.round(field.discovery.coverage * field.discovery.sampleSize)} of{' '}
+                  {field.discovery.sampleSize} sampled items
+                  {field.discovery.sampleValue ? `, such as "${field.discovery.sampleValue}"` : ''}
+                </p>
+              )}
             </div>
           </div>
 
@@ -197,7 +205,11 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
           <Select
             label="What to collect"
             value={editExtractor}
-            options={EXTRACTOR_ORDER.map((value) => ({ value, label: EXTRACTOR_LABELS[value] }))}
+            options={[
+              ...EXTRACTOR_ORDER,
+              // Detection assigns these to table columns and link texts; they are kept, not offered.
+              ...(field.extractor === 'table_cell' || field.extractor === 'link_text' ? [field.extractor] : []),
+            ].map((value) => ({ value, label: EXTRACTOR_LABELS[value] }))}
             onChange={(e) => {
               setEditExtractor(e.target.value as FieldExtractorType);
               setErrors({});

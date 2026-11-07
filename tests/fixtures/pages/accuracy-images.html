@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Images - PageHarvest Fixture</title>
+</head>
+<body>
+<h1>Images</h1>
+<div class="gallery">
+  <article class="photo"><h3>Plain</h3><img src="images/plain.jpg" alt="p"></article>
+  <article class="photo"><h3>Lazy data-src</h3><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="images/lazy.jpg" alt="p"></article>
+  <article class="photo"><h3>Lazy attribute</h3><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="images/other.jpg" alt="p"></article>
+  <article class="photo"><h3>Srcset placeholder</h3><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-srcset="images/s.jpg 300w, images/big.jpg 1200w" alt="p"></article>
+  <article class="photo"><h3>No image</h3><img alt="missing"></article>
+</div>
+</body>
+</html>

@@ -48,6 +48,7 @@ describe('Extension Message Protocol', () => {
         resume: {
           page: 2,
           nextSequence: 2,
+          recordsExtracted: 0,
           scrollsCompleted: 0,
           catchUpScrolls: 0,
           visitedUrls: [],
@@ -65,6 +66,39 @@ describe('Extension Message Protocol', () => {
       expect(parsed.payload.recipe.containerSelector).toBe(recipe.containerSelector);
       expect(parsed.payload.identity).toEqual(identity);
     }
+  });
+
+  it('carries the running record total on EXTRACT_RECORDS and rejects a negative one', () => {
+    const base = {
+      id: 'msg_ext_2',
+      type: 'EXTRACT_RECORDS' as const,
+      timestamp: Date.now(),
+      payload: {
+        identity,
+        recipe: extractionRecipeSchema.parse(createMockRecipe()),
+        resume: {
+          page: 2,
+          nextSequence: 4,
+          recordsExtracted: 37,
+          scrollsCompleted: 0,
+          catchUpScrolls: 0,
+          visitedUrls: [],
+          startUrl: 'https://example.com/',
+        },
+      },
+    };
+
+    const parsed = deserializeMessage(serializeMessage(base));
+    expect(parsed.type === 'EXTRACT_RECORDS' && parsed.payload.resume.recordsExtracted).toBe(37);
+
+    // A sender from before the field existed omits it; that reads as nothing extracted yet.
+    const legacyResume: Record<string, unknown> = { ...base.payload.resume };
+    delete legacyResume.recordsExtracted;
+    const legacy = deserializeMessage(JSON.stringify({ ...base, payload: { ...base.payload, resume: legacyResume } }));
+    expect(legacy.type === 'EXTRACT_RECORDS' && legacy.payload.resume.recordsExtracted).toBe(0);
+
+    const negative = { ...base, payload: { ...base.payload, resume: { ...base.payload.resume, recordsExtracted: -1 } } };
+    expect(() => deserializeMessage(JSON.stringify(negative))).toThrow();
   });
 
   it('serializes and deserializes RECORD_BATCH with extracted records', () => {

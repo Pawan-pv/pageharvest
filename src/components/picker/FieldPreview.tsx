@@ -1,6 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Badge } from '@/components/common/Badge';
 import { ErrorBanner } from '@/components/common/ErrorBanner';
+import { Banner } from '@/components/common/Banner';
+import { Button } from '@/components/common/Button';
 import type { FieldPreviewResult } from '@/shared/contracts/message';
 import type { FieldDefinition } from '@/types';
 import { EXTRACTOR_LABELS } from './FieldEditorRow';
@@ -12,6 +14,10 @@ export interface FieldPreviewProps {
   samples: string[];
   /** Reads real rows from the page for these columns (PREVIEW_FIELDS, ADR-030). */
   onPreview?: (columns: FieldDefinition[]) => Promise<FieldPreviewResult>;
+  /** Told whether the list is found only with its backup anchor, so a run must wait. */
+  onDriftChange?: (drifted: boolean) => void;
+  /** Opens the picker, so the user can choose the list again on a changed page. */
+  onPickListAgain?: () => void;
 }
 
 const PREVIEW_ROWS = 3;
@@ -47,38 +53,52 @@ function formatCell(value: string | number | boolean | null | undefined): React.
  * With a live preview the rows are real values read from the page; otherwise, or when the
  * page cannot answer, rows show each item's text from detection, labelled as such.
  */
-export const FieldPreview: React.FC<FieldPreviewProps> = ({ columns, samples, onPreview }) => {
+export const FieldPreview: React.FC<FieldPreviewProps> = ({ columns, samples, onPreview, onDriftChange, onPickListAgain }) => {
   const headingId = useId();
   const [live, setLive] = useState<LiveState>({ status: 'idle' });
   const requestRef = useRef(0);
   const key = columnsKey(columns);
   const columnsRef = useRef(columns);
+  // Only the columns decide when to ask again; a new function identity from the parent does not.
+  const onPreviewRef = useRef(onPreview);
+  const hasPreview = Boolean(onPreview);
 
   // Runs before the request effect below, so a request always reads the latest columns.
   useEffect(() => {
     columnsRef.current = columns;
-  }, [columns]);
+    onPreviewRef.current = onPreview;
+  }, [columns, onPreview]);
 
   useEffect(() => {
-    if (!onPreview || columnsRef.current.length === 0) return undefined;
+    if (!hasPreview || columnsRef.current.length === 0) return undefined;
     const request = ++requestRef.current;
     setLive((current) => ({
       status: 'loading',
       previous: current.status === 'done' && current.result.ok ? current.result : current.status === 'loading' ? current.previous : undefined,
     }));
     const timer = setTimeout(() => {
-      void onPreview(columnsRef.current).then((result) => {
+      const preview = onPreviewRef.current;
+      if (!preview) return;
+      void preview(columnsRef.current).then((result) => {
         // An older request that finishes late must not replace newer rows.
         if (request === requestRef.current) setLive({ status: 'done', result });
       });
     }, PREVIEW_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [key, onPreview]);
+  }, [key, hasPreview]);
 
   const liveRows =
     live.status === 'done' && live.result.ok ? live.result : live.status === 'loading' ? live.previous : undefined;
   const failure = live.status === 'done' && !live.result.ok ? live.result : undefined;
   const showLive = Boolean(onPreview) && liveRows !== undefined && !failure;
+  // While a refresh loads, the last answer still stands, so Start does not flicker back on.
+  const drifted =
+    (live.status === 'done' && live.result.ok && live.result.usedFallback) ||
+    (live.status === 'loading' && live.previous?.usedFallback === true);
+
+  useEffect(() => {
+    onDriftChange?.(drifted);
+  }, [drifted, onDriftChange]);
   const rows = samples.slice(0, PREVIEW_ROWS);
 
   return (
@@ -87,8 +107,8 @@ export const FieldPreview: React.FC<FieldPreviewProps> = ({ columns, samples, on
         <h3 id={headingId} className="text-xs font-semibold text-fg">
           Preview
         </h3>
-        <Badge variant={showLive ? 'brand' : 'neutral'} size="sm">
-          {showLive ? 'Live from the page' : 'Sample from detection'}
+        <Badge variant={drifted ? 'warning' : showLive ? 'brand' : 'neutral'} size="sm">
+          {drifted ? 'Found with a backup' : showLive ? 'Live from the page' : 'Sample from detection'}
         </Badge>
         <span aria-live="polite" className="text-2xs text-fg-subtle">
           {live.status === 'loading' ? 'Updating…' : ''}
@@ -96,6 +116,22 @@ export const FieldPreview: React.FC<FieldPreviewProps> = ({ columns, samples, on
       </div>
 
       {failure && <ErrorBanner error={{ code: failure.code, message: failure.message }} />}
+
+      {drifted && (
+        <Banner
+          tone="warning"
+          title="Matched using a backup"
+          actions={
+            onPickListAgain && (
+              <Button size="sm" variant="outline" onClick={onPickListAgain}>
+                Pick the list again
+              </Button>
+            )
+          }
+        >
+          The page layout changed. A run wouldn't find this list yet. Pick the list again to continue.
+        </Banner>
+      )}
 
       {columns.length === 0 ? (
         <p className="text-2xs text-fg-subtle">Choose at least one column to see the preview.</p>

@@ -62,5 +62,22 @@ describe('Downloads Platform Integration', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('User cancelled download');
     });
+
+    it('accepts string array content and creates a Blob from chunks', async () => {
+      const options: DownloadOptions = {
+        filename: 'products.csv',
+        content: ['Title,Price\n', '"Laptop",999.99\n'],
+        mimeType: 'text/csv',
+      };
+
+      const result = await triggerDownload(options);
+      expect(result.success).toBe(true);
+      expect(mockChrome.downloads.download).toHaveBeenCalled();
+
+      const callArgs = mockChrome.downloads.download.mock.calls[0][0];
+      expect(callArgs.filename).toBe('products.csv');
+      expect(callArgs.saveAs).toBe(true);
+      expect(callArgs.url).toMatch(/^(blob:|data:)/);
+    });
   });
 });

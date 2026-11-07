@@ -42,10 +42,32 @@ export function canonicalizeRecord(
     .filter((key) => !isRecordMetadataKey(key))
     .sort();
 
+  // Parse _valueNotes (a metadata field excluded from keys above) to recover
+  // per-field currency information so that $5 and €5 canonicalize differently.
+  let valueNotes: Record<string, { currency?: string }> = {};
+  const rawValueNotes = record._valueNotes;
+  if (typeof rawValueNotes === 'string') {
+    try {
+      valueNotes = JSON.parse(rawValueNotes);
+    } catch {
+      valueNotes = {};
+    }
+  }
+
   const pairs: Array<[string, string | number | boolean]> = [];
   for (const key of keys) {
-    const value = normalizeValue(record[key]);
-    if (value !== null) pairs.push([key, value]);
+    let value = normalizeValue(record[key]);
+    if (value !== null) {
+      // Include currency in the canonical representation when the field was
+      // parsed as a number with a known currency, so that $5 and €5 produce
+      // distinct canonical forms (and distinct SHA-256 fingerprints). The
+      // actual record field value is left unchanged as a number.
+      const note = valueNotes[key];
+      if (note?.currency && typeof value === 'number') {
+        value = `${value}|${note.currency}`;
+      }
+      pairs.push([key, value]);
+    }
   }
   return JSON.stringify(pairs);
 }

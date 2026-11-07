@@ -1,4 +1,5 @@
-import { ExtractionEngine } from '@/core/extraction/extractor';
+import { extractRecordsFromContainers } from '@/core/extraction/extractor';
+import { recoverContainerItems } from '@/core/detection/anchors';
 import {
   FieldPreviewResultSchema,
   type FieldPreviewResult,
@@ -16,8 +17,9 @@ function toCell(value: unknown): Cell {
 
 /**
  * Reads the first items of a list with the given fields (ADR-030). Strictly read-only: it
- * queries the DOM and runs the extraction engine, which only reads; it stores nothing,
- * sends nothing, and changes no job. The reply is validated before it leaves the page.
+ * queries the DOM and runs the shared extraction loop, which only reads. It stores nothing,
+ * sends nothing, changes no job, and never writes a healed selector or anchor anywhere; when
+ * the list is found only through its backup anchor, the reply says so.
  */
 export function previewFields(
   root: Document,
@@ -32,38 +34,43 @@ export function previewFields(
     };
   }
 
-  let matchCount: number;
+  let items: Element[] = [];
+  let selectorInvalid = false;
   try {
-    matchCount = root.querySelectorAll(payload.containerSelector).length;
+    items = Array.from(root.querySelectorAll(payload.containerSelector));
   } catch {
-    return {
-      ok: false,
-      code: 'VALIDATION_ERROR',
-      message: 'The saved position of the list is not valid. Pick the list on the page again.',
-    };
+    selectorInvalid = true;
   }
-  if (matchCount === 0) {
-    return {
-      ok: false,
-      code: 'CONTAINER_NOT_FOUND',
-      message: 'The list is no longer on this page. It may have changed or reloaded.',
-    };
+
+  let usedFallback = false;
+  if (items.length === 0 && payload.containerAnchor) {
+    const recovered = recoverContainerItems(root, payload.containerAnchor);
+    if (recovered.length > 0) {
+      items = recovered;
+      usedFallback = true;
+    }
+  }
+
+  if (items.length === 0) {
+    return selectorInvalid
+      ? {
+          ok: false,
+          code: 'VALIDATION_ERROR',
+          message: 'The saved position of the list is not valid. Pick the list on the page again.',
+        }
+      : {
+          ok: false,
+          code: 'CONTAINER_NOT_FOUND',
+          message: 'The list is no longer on this page. It may have changed or reloaded.',
+        };
   }
 
   // Required columns filter rows during a run; the preview shows every item instead.
   const fields = payload.fields.map((field) => ({ ...field, required: false }));
-  const output = new ExtractionEngine().extract({
-    root,
-    repeatedItemSelector: payload.containerSelector,
-    fields,
-    baseUrl: options.baseUrl,
-    deduplication: { enabled: false },
-    validation: { validateRequired: false },
-  });
+  const { records } = extractRecordsFromContainers(items.slice(0, payload.limit), fields, 1, undefined, options.baseUrl);
+  const rows = records.map((record) =>
+    Object.fromEntries(payload.fields.map((field) => [field.name, toCell(record[field.name])]))
+  );
 
-  const rows = output.records
-    .slice(0, payload.limit)
-    .map((record) => Object.fromEntries(payload.fields.map((field) => [field.name, toCell(record[field.name])])));
-
-  return FieldPreviewResultSchema.parse({ ok: true, rows, matchCount });
+  return FieldPreviewResultSchema.parse({ ok: true, rows, matchCount: items.length, usedFallback });
 }

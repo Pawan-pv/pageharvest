@@ -44,6 +44,9 @@
   - `Image / Thumbnail`: `img[src]`, `img[data-src]` -> Absolute URL
   - `Price / Numeric`: Currencies, numbers with decimals -> Float
   - `Description`: `p`, `[class*="desc"]` -> Text
+- **FR-2.5**: Auto-detect shows up to eight candidate lists with samples, columns, confidence and evidence, and never chooses silently. If nothing looks like data it says so.
+- **FR-3.2a**: Field discovery samples many records, so a field missing from the first is still offered, with how often it was found.
+- **FR-3.2b**: A number is stored only when it can be read with certainty. Otherwise the text is kept and marked ambiguous, and ranges keep both ends. The original text and currency stay with the row.
 - **FR-3.3**: Users can manually add, edit, reorder, or delete fields.
 - **FR-3.6**: A selected field with no value never removes a record. Only a field the user explicitly marks to skip empty rows filters records, and every outcome (detected, kept, missing fields, filtered, failed, duplicate) is shown.
 - **FR-3.4**: Supported extractors: `text`, `attribute`, `href`, `src`, `html`, `number`, `regex`.

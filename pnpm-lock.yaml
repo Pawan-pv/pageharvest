@@ -87,6 +87,9 @@ importers:
       jsdom:
         specifier: ^26.0.0
         version: 26.1.0
+      jszip:
+        specifier: ^3.10.2
+        version: 3.10.2
       postcss:
         specifier: ^8.5.3
         version: 8.5.32

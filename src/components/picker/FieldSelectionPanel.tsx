@@ -37,6 +37,8 @@ export interface FieldSelectionPanelProps {
   onMoveField?: (id: string, direction: -1 | 1) => void;
   /** Reads real rows for the chosen columns from the page, for the preview. */
   onPreviewFields?: (columns: FieldDefinition[]) => Promise<FieldPreviewResult>;
+  /** Opens the picker to choose the list again, when the page layout has changed. */
+  onPickListAgain?: () => void;
   onAddField: (field: FieldDefinition) => void;
   onRemoveField: (id: string) => void;
   onPaginationChange: (updates: Partial<ExtractionPaginationConfig>) => void;
@@ -60,6 +62,7 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
   onUpdateField,
   onMoveField,
   onPreviewFields,
+  onPickListAgain,
   onAddField,
   onRemoveField,
   onPaginationChange,
@@ -70,6 +73,8 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
   const [recipeName, setRecipeName] = useState('');
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
   const [recipeResult, setRecipeResult] = useState<{ ok: boolean; message: string } | null>(null);
+  // The list is found only with its backup: a run uses the saved selector and would find nothing.
+  const [listDrifted, setListDrifted] = useState(false);
 
   const selectedFields = fields.filter((f) => selectedFieldIds.has(f.id));
   const selectedCount = selectedFields.length;
@@ -125,11 +130,15 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
       size="lg"
       className="w-full justify-center font-semibold text-sm"
       iconLeft={<Play aria-hidden="true" className="w-4 h-4 fill-current" />}
-      disabled={selectedCount === 0 || !templateCheck.valid}
+      disabled={selectedCount === 0 || !templateCheck.valid || listDrifted}
       onClick={onStartHarvest}
     >
       Start extraction ({selectedCount} {selectedCount === 1 ? 'column' : 'columns'})
     </Button>
+  );
+
+  const driftNote = listDrifted && (
+    <p className="text-2xs text-warning-fg text-center mt-1.5">Pick the list again before you start.</p>
   );
 
   const noColumnsNote = selectedCount === 0 && (
@@ -197,6 +206,7 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
         <div className="pt-1">
           {startButton}
           {noColumnsNote}
+          {driftNote}
         </div>
       </div>
     );
@@ -278,7 +288,13 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
         )}
       </div>
 
-      <FieldPreview columns={selectedFields} samples={detectedList.sampleSnippets} onPreview={onPreviewFields} />
+      <FieldPreview
+        columns={selectedFields}
+        samples={detectedList.sampleSnippets}
+        onPreview={onPreviewFields}
+        onDriftChange={setListDrifted}
+        onPickListAgain={onPickListAgain}
+      />
 
       <div className="flex flex-col gap-2 pt-1">
         <p className="text-2xs text-fg-muted">More pages: {describePagination(pagination)}</p>
@@ -294,6 +310,7 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
         )}
         {startButton}
         {noColumnsNote}
+          {driftNote}
       </div>
 
       <AddFieldModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onAdd={onAddField} />

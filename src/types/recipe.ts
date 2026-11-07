@@ -1,4 +1,5 @@
 import { FieldDefinition } from './field';
+import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 
 export type PaginationType = 'none' | 'next_button' | 'infinite_scroll' | 'url_template';
 
@@ -26,8 +27,11 @@ export interface ExtractionRecipe {
   schemaId?: string;
   urlPattern: string;
   containerSelector: string;
+  /** Multi-tier fallback ladder for the repeating item selector; optional for legacy recipes. */
+  containerAnchor?: MultiAnchorSelector;
   fields: FieldDefinition[];
   pagination?: ExtractionPaginationConfig;
+  dedupeFields?: string[];
   createdAt: number;
   updatedAt: number;
 }

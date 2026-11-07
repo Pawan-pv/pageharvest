@@ -101,7 +101,10 @@ describe('Side panel as a view of stored state', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Datasets' }));
     fireEvent.click(await screen.findByText(/Simple Product Grid/));
 
-    expect(await screen.findByText('Row one')).toBeInTheDocument();
+    // DataTable is loaded through React.lazy. The production contract is that the
+    // saved row appears after the panel reopens, not that its module resolves within
+    // Testing Library's one-second default while the full suite is under load.
+    expect(await screen.findByText('Row one', {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(await screen.findByLabelText('Extraction summary')).toHaveTextContent('1 detected, 1 kept');
   });
 

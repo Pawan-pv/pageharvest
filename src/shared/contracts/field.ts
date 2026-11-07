@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MultiAnchorSelectorSchema } from './selector';
 
 /**
  * Extraction field extraction methods.
@@ -11,6 +12,8 @@ export const FieldExtractorTypeSchema = z.enum([
   'html',      // Raw innerHTML string
   'number',    // Cleaned floating point / integer number
   'regex',     // Regex pattern matched against textContent
+  'table_cell', // One column of a table row, aware of rowspan and colspan
+  'link_text',  // A link's text, or its image's alt text when it has none
 ]);
 
 export type FieldExtractorType = z.infer<typeof FieldExtractorTypeSchema>;
@@ -29,6 +32,20 @@ export const FieldTransformSchema = z.enum([
 export type FieldTransform = z.infer<typeof FieldTransformSchema>;
 
 /**
+ * What field discovery actually found for a field across the sampled records.
+ */
+export const FieldDiscoverySchema = z.object({
+  coverage: z.number().min(0).max(1), // Share of sampled records with a valid value
+  confidence: z.number().min(0).max(1), // Coverage, reduced when the selector found the wrong data
+  sampleSize: z.number().int().min(0),
+  occurrences: z.number().int().min(0), // Estimated records with a value, across the whole list
+  suggested: z.boolean(), // Whether the field is selected by default
+  sampleValue: z.string().optional(),
+});
+
+export type FieldDiscovery = z.infer<typeof FieldDiscoverySchema>;
+
+/**
  * Canonical ExtractionField definition schema.
  */
 export const ExtractionFieldSchema = z.object({
@@ -42,6 +59,10 @@ export const ExtractionFieldSchema = z.object({
   defaultValue: z.string().optional(),
   required: z.boolean().default(false),
   transform: FieldTransformSchema.default('trim'),
+  columnIndex: z.number().int().min(0).optional(), // Required by 'table_cell'
+  discovery: FieldDiscoverySchema.optional(),
+  /** Multi-anchor fallback ladder; every recipe without one keeps working. */
+  anchor: MultiAnchorSelectorSchema.optional(),
 }).refine(
   (data) => {
     if (data.extractor === 'attribute') {

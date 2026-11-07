@@ -1,11 +1,14 @@
 import { FieldDefinition, ExtractedRecord, ExtractionRecipe } from '@/types';
 import { ExtractionField, ExtractionSchema, FieldTransform } from '@/shared/contracts';
+import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 
 /**
  * Supported data types / extractors for the PageHarvest Extraction Engine.
  */
 export type ExtendedFieldExtractorType =
   | 'text'
+  | 'table_cell'
+  | 'link_text'
   | 'link'
   | 'links'
   | 'href'
@@ -39,6 +42,7 @@ export interface ExtractionFieldConfig {
   defaultValue?: string;
   required?: boolean;
   transform?: FieldTransform;
+  columnIndex?: number;
 }
 
 /**
@@ -65,6 +69,12 @@ export interface ExtractionInput {
    * CSS selector for the repeating item containers (e.g. '.product-card', 'table tr').
    */
   repeatedItemSelector?: string;
+
+  /**
+   * Multi-tier fallback ladder for the repeating containers. Applied when the
+   * primary selector finds nothing on the page.
+   */
+  containerAnchor?: MultiAnchorSelector;
 
   /**
    * Shorthand map of field name to relative CSS selector (e.g. `{ name: '.title', price: '.price' }`).

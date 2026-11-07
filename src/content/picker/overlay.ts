@@ -106,6 +106,17 @@ export class PickerOverlay {
     container.appendChild(this.selectionBox);
     container.appendChild(this.selectionBadge);
 
+    // Corner target accents: precision scanner corners on hover + selection boxes.
+    const decorateCorners = (parent: HTMLElement): void => {
+      for (const corner of ['tl', 'tr', 'bl', 'br']) {
+        const accent = document.createElement('div');
+        accent.className = `ph-corner-accent ph-corner-${corner}`;
+        parent.appendChild(accent);
+      }
+    };
+    if (this.hoverBox) decorateCorners(this.hoverBox);
+    if (this.selectionBox) decorateCorners(this.selectionBox);
+
     // Floating Toolbar
     if (this.options.showToolbar !== false) {
       this.toolbar = document.createElement('div');
@@ -419,8 +430,6 @@ export class PickerOverlay {
    * Completely isolated and reset so target website CSS cannot distort it.
    */
   private getOverlayStyles(): string {
-    const { highlightColor, selectedColor, similarColor } = this.options;
-
     return `
       :host {
         all: initial !important;
@@ -443,71 +452,156 @@ export class PickerOverlay {
         padding: 0 !important;
       }
 
-      .ph-hidden {
+      /* Scoped so it outranks later single-class rules that set display (.ph-toolbar). */
+      .ph-root-container .ph-hidden {
         display: none !important;
       }
 
-      /* Hover Highlight Box */
-      .ph-hover-box {
-        position: fixed !important;
-        border: 2px solid ${highlightColor} !important;
-        background-color: rgba(37, 99, 235, 0.12) !important;
-        border-radius: 4px !important;
+      /* Corner Target Accents (precision scanner corners) */
+      .ph-corner-accent {
+        position: absolute !important;
+        width: 12px !important;
+        height: 12px !important;
         pointer-events: none !important;
-        transition: top 0.05s ease-out, left 0.05s ease-out, width 0.05s ease-out, height 0.05s ease-out !important;
-        z-index: 2147483640 !important;
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4) inset !important;
+        border: 0 solid #00f5d4 !important;
+        filter: drop-shadow(0 0 5px rgba(0, 245, 212, 0.9)) !important;
+        z-index: 2147483641 !important;
       }
 
+      .ph-corner-tl {
+        top: -3px !important;
+        left: -3px !important;
+        border-top-width: 2.5px !important;
+        border-left-width: 2.5px !important;
+        border-top-left-radius: 6px !important;
+      }
+
+      .ph-corner-tr {
+        top: -3px !important;
+        right: -3px !important;
+        border-top-width: 2.5px !important;
+        border-right-width: 2.5px !important;
+        border-top-right-radius: 6px !important;
+      }
+
+      .ph-corner-bl {
+        bottom: -3px !important;
+        left: -3px !important;
+        border-bottom-width: 2.5px !important;
+        border-left-width: 2.5px !important;
+        border-bottom-left-radius: 6px !important;
+      }
+
+      .ph-corner-br {
+        bottom: -3px !important;
+        right: -3px !important;
+        border-bottom-width: 2.5px !important;
+        border-right-width: 2.5px !important;
+        border-bottom-right-radius: 6px !important;
+      }
+
+      /* Hover Highlight Box — electric cyan neon */
+      .ph-hover-box {
+        position: fixed !important;
+        border: 2px solid #00f5d4 !important;
+        /* Dark ring: keeps the neon outline visible (3:1) on light pages too. */
+        outline: 1px solid rgba(2, 6, 23, 0.85) !important;
+        outline-offset: 0 !important;
+        background: linear-gradient(135deg, rgba(0, 245, 212, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%) !important;
+        border-radius: 4px !important;
+        pointer-events: none !important;
+        transition: top 80ms ease-out, left 80ms ease-out, width 80ms ease-out, height 80ms ease-out !important;
+        z-index: 2147483640 !important;
+        box-shadow: 0 0 14px rgba(0, 245, 212, 0.75), inset 0 0 10px rgba(0, 245, 212, 0.2) !important;
+      }
+
+      /* Neon Floating Tooltip Badge — dark glassmorphic */
       .ph-hover-badge {
         position: fixed !important;
-        background-color: #1e293b !important;
-        color: #f8fafc !important;
+        background-color: rgba(10, 15, 28, 0.92) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        backdrop-filter: blur(8px) !important;
+        color: #00f5d4 !important;
+        text-shadow: 0 0 6px rgba(0, 245, 212, 0.6) !important;
         font-size: 11px !important;
         font-weight: 600 !important;
         padding: 3px 8px !important;
-        border-radius: 4px !important;
+        border-radius: 6px !important;
         pointer-events: none !important;
         z-index: 2147483645 !important;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+        box-shadow: 0 0 10px rgba(0, 245, 212, 0.35), 0 2px 6px rgba(0, 0, 0, 0.3) !important;
         white-space: nowrap !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border: 1px solid rgba(0, 245, 212, 0.55) !important;
       }
 
-      /* Selection Highlight Box */
+      /* Selection Highlight Box — neon emerald/violet locked pulse */
       .ph-selection-box {
         position: fixed !important;
-        border: 2.5px solid ${selectedColor} !important;
-        background-color: rgba(16, 185, 129, 0.15) !important;
+        border: 2.5px solid #10b981 !important;
+        outline: 1px solid rgba(2, 6, 23, 0.85) !important;
+        outline-offset: 0 !important;
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(168, 85, 247, 0.12) 100%) !important;
         border-radius: 4px !important;
         pointer-events: none !important;
         z-index: 2147483642 !important;
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) inset, 0 0 12px rgba(16, 185, 129, 0.3) !important;
+        box-shadow: 0 0 16px rgba(16, 185, 129, 0.75), 0 0 30px rgba(168, 85, 247, 0.5), inset 0 0 12px rgba(16, 185, 129, 0.3) !important;
+        animation: ph-selection-pulse 1.6s ease-in-out infinite !important;
+      }
+
+      @keyframes ph-selection-pulse {
+        0%, 100% {
+          box-shadow: 0 0 16px rgba(16, 185, 129, 0.75), 0 0 30px rgba(168, 85, 247, 0.5), inset 0 0 12px rgba(16, 185, 129, 0.3);
+        }
+        50% {
+          box-shadow: 0 0 22px rgba(16, 185, 129, 0.95), 0 0 44px rgba(168, 85, 247, 0.75), inset 0 0 16px rgba(168, 85, 247, 0.45);
+        }
+      }
+
+      .ph-selection-box .ph-corner-accent {
+        border-color: #a855f7 !important;
+        filter: drop-shadow(0 0 5px rgba(168, 85, 247, 0.9)) !important;
       }
 
       .ph-selection-badge {
         position: fixed !important;
-        background-color: #065f46 !important;
-        color: #ecfdf5 !important;
+        background-color: rgba(10, 15, 28, 0.92) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        backdrop-filter: blur(8px) !important;
+        color: #34d399 !important;
+        text-shadow: 0 0 8px rgba(16, 185, 129, 0.7) !important;
         font-size: 11px !important;
         font-weight: 700 !important;
         padding: 4px 10px !important;
-        border-radius: 4px !important;
+        border-radius: 6px !important;
         pointer-events: none !important;
         z-index: 2147483646 !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+        box-shadow: 0 0 12px rgba(16, 185, 129, 0.4), 0 2px 8px rgba(0, 0, 0, 0.35) !important;
         white-space: nowrap !important;
-        border: 1px solid rgba(167, 243, 208, 0.4) !important;
+        border: 1px solid rgba(168, 85, 247, 0.55) !important;
       }
 
-      /* Similar Elements Box */
+      /* Similar Elements Box — pulsing neon dashed outline */
       .ph-similar-box {
         position: fixed !important;
-        border: 1.5px dashed ${similarColor} !important;
-        background-color: rgba(99, 102, 241, 0.08) !important;
+        border: 1.5px dashed rgba(168, 85, 247, 0.75) !important;
+        outline: 1px solid rgba(2, 6, 23, 0.85) !important;
+        outline-offset: 0 !important;
+        background-color: rgba(168, 85, 247, 0.06) !important;
         border-radius: 3px !important;
         pointer-events: none !important;
         z-index: 2147483639 !important;
+        animation: ph-similar-pulse 2.4s ease-in-out infinite !important;
+      }
+
+      @keyframes ph-similar-pulse {
+        0%, 100% {
+          opacity: 0.55;
+          box-shadow: 0 0 6px rgba(168, 85, 247, 0.35);
+        }
+        50% {
+          opacity: 1;
+          box-shadow: 0 0 14px rgba(168, 85, 247, 0.8);
+        }
       }
 
       /* Floating Interactive Toolbar */
@@ -715,7 +809,7 @@ export class PickerOverlay {
       }
 
       @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after {
+        :host, *, *::before, *::after {
           animation: none !important;
           transition: none !important;
         }

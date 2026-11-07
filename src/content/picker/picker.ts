@@ -5,6 +5,7 @@
  */
 
 import { PickerOverlay } from './overlay';
+import { isPageHarvestOverlayMutation } from '@/utils/dom';
 import {
   generateBestSelector,
   generateSelectorCandidates,
@@ -308,7 +309,13 @@ export class ElementPicker {
   private setupMutationObserver(): void {
     if (typeof MutationObserver === 'undefined') return;
 
-    this.mutationObserver = new MutationObserver(() => {
+    this.mutationObserver = new MutationObserver((mutations) => {
+      // Overlay-caused mutations (e.g. extraction or animation hosts) never change
+      // what is selected, so recalculating for them would only read identical state.
+      if (mutations.every((mutation) => isPageHarvestOverlayMutation(mutation))) {
+        return;
+      }
+
       if (this.mode === 'selected' && this.selectedElement) {
         if (!this.selectedElement.isConnected) {
           // Element was removed from document

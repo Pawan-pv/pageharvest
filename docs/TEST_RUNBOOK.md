@@ -210,7 +210,18 @@ pnpm test:release:e2e
 
 A layered run is not the same evidence as one complete gate, so report it as such.
 
-## 10. Native Chrome side-panel verification
+## 10. Accuracy and performance
+
+```powershell
+pnpm build
+pnpm exec playwright test tests/e2e/extraction-accuracy.spec.ts
+pnpm benchmark:sites
+pnpm benchmark:performance
+```
+
+The site benchmark visits third-party practice sites, so run it occasionally, not in a loop. See [REAL_WORLD_TEST_BENCHMARK.md](REAL_WORLD_TEST_BENCHMARK.md) and [PERFORMANCE_AND_COVERAGE.md](PERFORMANCE_AND_COVERAGE.md). Coverage needs more memory than `pnpm test`, and may not finish on an 8 GB machine with other applications open. Pull requests measure it on GitHub.
+
+## 11. Native Chrome side-panel verification
 
 On Windows, this runs the real toolbar click locally. It takes over the mouse while it runs:
 

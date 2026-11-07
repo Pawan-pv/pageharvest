@@ -8,6 +8,7 @@ import {
 import {
   waitForDOMStability,
   waitForNewElements,
+  waitForNewElementsOrMutation,
   waitForUrlChange,
 } from './stability';
 import {
@@ -225,7 +226,6 @@ export async function runMultiPageExtraction(
     const batchDuplicates = extractionResult.duplicatesCount;
     const isCatchUp = strategy === 'infinite_scroll' && scrollsCompleted < catchUpScrolls;
     duplicatesSkipped += batchDuplicates;
-    totalExtracted += newRecords.length;
     allRecords.push(...newRecords);
 
     const batch: PageExtractionBatch = {
@@ -246,6 +246,7 @@ export async function runMultiPageExtraction(
 
     // 6. Commit before anything else happens. The next action may unload this document.
     const commit = await onPageExtracted?.(batch);
+    totalExtracted += commit?.inserted ?? newRecords.length;
     emitProgress('running');
 
     if (commit && commit.stop) {
@@ -337,6 +338,12 @@ export async function runMultiPageExtraction(
       }
 
       const initialCount = documentRoot.querySelectorAll(containerSelector).length;
+      const scrollActivity = waitForNewElementsOrMutation(
+        containerSelector,
+        initialCount,
+        { timeoutMs: Math.min(pageTimeoutMs, 2000), minNewCount: 1, pollIntervalMs: 50 },
+        documentRoot
+      );
       performScrollStep({
         distancePx: scrollDistancePx,
         containerSelector: scrollContainerSelector,
@@ -353,12 +360,7 @@ export async function runMultiPageExtraction(
       }
 
       // Wait for dynamic items to be appended or DOM stability
-      await waitForNewElements(
-        containerSelector,
-        initialCount,
-        { timeoutMs: Math.min(pageTimeoutMs, 2000), minNewCount: 1, pollIntervalMs: 50 },
-        documentRoot
-      );
+      await scrollActivity;
 
       currentPage++;
       continue;
@@ -561,13 +563,12 @@ export async function runMultiPageExtraction(
   };
 
   const priorPages = initialSessionState ? initialSessionState.currentPage : 0;
-  const priorRecords = initialSessionState ? initialSessionState.totalExtracted : 0;
 
   return {
     success: isFinalSuccess,
     strategy,
     totalPages: priorPages + pages.length,
-    totalRecords: priorRecords + allRecords.length,
+    totalRecords: totalExtracted,
     duplicatesSkipped,
     records: allRecords,
     pages,

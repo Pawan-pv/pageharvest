@@ -6,7 +6,13 @@ import { Dialog } from '@/components/common/Dialog';
 import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
 import { ExtractedRecord, FieldDefinition, Dataset } from '@/types';
-import { recordsToCsv, recordsToJson, generateExportFilename } from '@/core/export/exporter';
+import {
+  generateExportFilename,
+  recordsToCsvChunks,
+  recordsToJsonChunks,
+  recordsToNdjsonChunks,
+  withValueDetails,
+} from '@/core/export/exporter';
 import { triggerDownload } from '@/platform/downloads';
 import { SettingsRepository } from '@/storage/repositories/settings-repository';
 
@@ -19,11 +25,12 @@ export interface ExportDialogProps {
   activeColumnOrder?: string[];
 }
 
-type ExportFormat = 'csv' | 'json' | 'ndjson';
+type ExportFormat = 'csv' | 'xlsx' | 'json' | 'ndjson';
 type Delimiter = ',' | ';' | '\t';
 
 const FORMATS: { value: ExportFormat; label: string; description: string }[] = [
   { value: 'csv', label: 'CSV', description: 'For Excel, Numbers and Google Sheets.' },
+  { value: 'xlsx', label: 'Excel', description: 'An Excel workbook, with numbers kept as numbers.' },
   { value: 'json', label: 'JSON', description: 'For developers and other tools.' },
   { value: 'ndjson', label: 'NDJSON', description: 'One row per line, for large data tools.' },
 ];
@@ -33,6 +40,8 @@ const DELIMITERS: { value: Delimiter; label: string }[] = [
   { value: ';', label: 'Semicolon (;)' },
   { value: '\t', label: 'Tab' },
 ];
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 const FormatOption: React.FC<{
   option: (typeof FORMATS)[number];
@@ -83,6 +92,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   const [prettyJson, setPrettyJson] = useState(true);
   const [jsonIndent, setJsonIndent] = useState(2);
   const [includeMetadata, setIncludeMetadata] = useState(false);
+  const [includeValueDetails, setIncludeValueDetails] = useState(false);
   const [customFilename, setCustomFilename] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -112,35 +122,51 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   if (!isOpen) return null;
 
   const datasetName = dataset?.name || 'harvested-data';
-  const extension = format === 'ndjson' ? 'ndjson' : format;
   const autoFilename = generateExportFilename({ datasetName: customFilename.trim() || datasetName, format });
-  const filename = customFilename.trim() ? `${customFilename.trim()}.${extension}` : autoFilename;
+  const filename = customFilename.trim() ? `${customFilename.trim()}.${format}` : autoFilename;
   const columnCount = activeColumnOrder?.length ?? fields.length;
   const rows = records.length;
+  const extras = [includeValueDetails && 'how numbers were read', includeMetadata && 'row details'].filter(Boolean);
 
   const handleExport = async () => {
     setIsExporting(true);
     setExportError(null);
     try {
+      const details = includeValueDetails ? withValueDetails(records, fields) : null;
+      const exportRecords = details?.records ?? records;
+      const exportFields = details ? (details.fields ?? fields) : fields;
+      const orderedColumns = details
+        ? activeColumnOrder?.flatMap((column) => [
+            column,
+            ...details.detailColumns.filter((name) => name.startsWith(`${column} (`)),
+          ])
+        : activeColumnOrder;
+
       let result;
       if (format === 'csv') {
-        const csv = recordsToCsv(records, fields, {
-          useBom: includeBom,
-          delimiter,
-          includeMetadata,
-          orderedColumns: activeColumnOrder,
-        });
-        result = await triggerDownload({ content: csv, filename, mimeType: 'text/csv' });
+        // Chunks go straight into the Blob, so memory follows the chunk size, not the export size.
+        const content = Array.from(
+          recordsToCsvChunks(exportRecords, exportFields, { useBom: includeBom, delimiter, includeMetadata, orderedColumns })
+        );
+        result = await triggerDownload({ content, filename, mimeType: 'text/csv' });
+      } else if (format === 'xlsx') {
+        // The workbook writer is its own chunk, loaded only when someone exports to Excel.
+        const { recordsToXlsx } = await import('@/core/export/xlsx');
+        const content = recordsToXlsx(exportRecords, exportFields, { includeMetadata, orderedColumns });
+        result = await triggerDownload({ content, filename, mimeType: XLSX_MIME });
+      } else if (format === 'ndjson') {
+        const content = Array.from(recordsToNdjsonChunks(exportRecords, exportFields, { includeMetadata, orderedColumns }));
+        result = await triggerDownload({ content, filename, mimeType: 'application/x-ndjson' });
       } else {
-        const json = recordsToJson(records, fields, {
-          pretty: format === 'json' && prettyJson,
-          indent: jsonIndent || 2,
-          format,
-          includeMetadata,
-          orderedColumns: activeColumnOrder,
-        });
-        const mimeType = format === 'ndjson' ? 'application/x-ndjson' : 'application/json';
-        result = await triggerDownload({ content: json, filename, mimeType });
+        const content = Array.from(
+          recordsToJsonChunks(exportRecords, exportFields, {
+            pretty: prettyJson,
+            indent: jsonIndent || 2,
+            includeMetadata,
+            orderedColumns,
+          })
+        );
+        result = await triggerDownload({ content, filename, mimeType: 'application/json' });
       }
 
       // The dialog only closes once the browser has accepted the download.
@@ -163,7 +189,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
       title="Export data"
       description={`${rows.toLocaleString('en-US')} ${rows === 1 ? 'row' : 'rows'} × ${columnCount} ${
         columnCount === 1 ? 'column' : 'columns'
-      } will be exported${includeMetadata ? ', plus row details' : ''}.`}
+      } will be exported${extras.length ? `, plus ${extras.join(' and ')}` : ''}.`}
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -233,6 +259,12 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
           </div>
         )}
 
+        {format === 'xlsx' && (
+          <Banner tone="info">
+            Text is stored as text and numbers as numbers, so nothing in a cell runs as a formula.
+          </Banner>
+        )}
+
         {format === 'json' && (
           <label className="flex items-center gap-2 text-fg-muted cursor-pointer">
             <input
@@ -244,6 +276,21 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
             Indent the file so people can read it
           </label>
         )}
+
+        <label className="flex items-start gap-2 text-fg-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeValueDetails}
+            onChange={(e) => setIncludeValueDetails(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-brand"
+          />
+          <span>
+            Add columns showing how each number was read
+            <span className="block text-2xs text-fg-subtle">
+              Its original text, whether it was clear or ambiguous, and its currency or range.
+            </span>
+          </span>
+        </label>
 
         <label className="flex items-center gap-2 text-fg-muted cursor-pointer">
           <input

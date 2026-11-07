@@ -5,7 +5,9 @@ export type FieldExtractorType =
   | 'src'
   | 'html'
   | 'number'
-  | 'regex';
+  | 'regex'
+  | 'table_cell'
+  | 'link_text';
 
 export interface FieldDefinition {
   id: string;
@@ -18,6 +20,17 @@ export interface FieldDefinition {
   defaultValue?: string;
   required?: boolean;
   transform?: 'none' | 'trim' | 'lowercase' | 'uppercase' | 'capitalize';
+  columnIndex?: number;
+  /** Multi-tier fallback ladder + element fingerprint for self-healing. */
+  anchor?: import('@/shared/contracts/selector').MultiAnchorSelector;
+  discovery?: {
+    coverage: number;
+    confidence: number;
+    sampleSize: number;
+    occurrences: number;
+    suggested: boolean;
+    sampleValue?: string;
+  };
 }
 
 export interface DetectedFieldSuggestion {

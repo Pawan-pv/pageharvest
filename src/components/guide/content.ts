@@ -86,9 +86,10 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     id: 'auto-detect',
     title: 'Auto-detect',
     summary: 'Let PageHarvest look for repeated items and show you what it found.',
-    keywords: ['automatic', 'detect', 'find', 'list', 'similar', 'items', 'table', 'links'],
+    keywords: ['automatic', 'detect', 'find', 'list', 'similar', 'items', 'table', 'links', 'confidence', 'candidates', 'best match'],
     blocks: [
-      { kind: 'text', text: '"Find data automatically" looks for groups of items that repeat, such as cards in a grid or rows in a list. It shows how many similar items it found and a few sample rows.' },
+      { kind: 'text', text: '"Find data automatically" looks for groups of items that repeat, such as cards in a grid or rows in a list. When it finds more than one, it lists them best match first, each with how many similar items it found, its columns, a few sample rows and a confidence label.' },
+      { kind: 'text', text: 'Confidence says how sure PageHarvest is that a list is data rather than a menu or adverts. It is a guide, not a guarantee: check the sample rows. A list that looks like navigation needs a second click, "Use this list anyway".' },
       { kind: 'text', text: 'Nothing is used until you press "Use this list". If the sample rows are menus or adverts instead of your data, pick the items yourself.' },
       { kind: 'text', text: 'Under "More ways to start", "Extract a table" reads an HTML table, and "Extract all links" collects the links on the page.' },
     ],

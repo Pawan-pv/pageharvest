@@ -245,8 +245,8 @@ export const App: React.FC = () => {
             isDatasetsLoading={isDatasetsLoading}
             onSelectElements={() => startFlow('pick', workflow.startVisualPicker)}
             onAutoDetectLists={() => startFlow('auto', workflow.autoDetectLists)}
-            onExtractTable={() => startFlow('table', () => workflow.startPresetDetection('table tr, table tbody tr'))}
-            onExtractLinks={() => startFlow('links', () => workflow.startPresetDetection('a[href]'))}
+            onExtractTable={() => startFlow('table', () => workflow.startPresetDetection('table'))}
+            onExtractLinks={() => startFlow('links', () => workflow.startPresetDetection('links'))}
             onViewDataset={handleViewDataset}
             onViewAllHistory={() => handleNavChange('datasets')}
           />
@@ -277,6 +277,7 @@ export const App: React.FC = () => {
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading lists…</div>}>
             <DetectedListPreview
               detectedList={workflow.detectedList}
+              onSelectCandidate={workflow.selectListCandidate}
               onConfirm={() => {
                 setConfigStep('fields');
                 void workflow.confirmListCandidate(workflow.detectedList!);
@@ -305,6 +306,7 @@ export const App: React.FC = () => {
               onAddField={workflow.addField}
               onMoveField={workflow.moveField}
               onPreviewFields={workflow.previewFields}
+              onPickListAgain={() => startFlow('pick', workflow.startVisualPicker)}
               step={configStep}
               onStepChange={setConfigStep}
               onRemoveField={workflow.removeField}

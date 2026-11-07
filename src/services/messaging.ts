@@ -1,3 +1,5 @@
+import { CandidateKind } from '@/shared/contracts/message';
+import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 import {
   ExtensionMessage,
   FieldPreviewResult,
@@ -182,12 +184,12 @@ class ExtensionMessagingService {
     });
   }
 
-  public async detectRepeatedElements(targetSelector?: string): Promise<void> {
+  public async detectRepeatedElements(targetSelector?: string, mode?: 'table' | 'links'): Promise<void> {
     await this.sendToActiveTab({
       id: generateId(),
       timestamp: Date.now(),
       type: 'DETECT_REPEATED_ELEMENTS',
-      payload: { targetSelector },
+      payload: { targetSelector, mode },
     });
   }
 
@@ -198,13 +200,18 @@ class ExtensionMessagingService {
   public async previewFields(
     containerSelector: string,
     fields: FieldDefinition[],
-    options: { limit?: number; timeoutMs?: number } = {}
+    options: { limit?: number; timeoutMs?: number; containerAnchor?: MultiAnchorSelector } = {}
   ): Promise<FieldPreviewResult> {
     const message = extensionMessageSchema.safeParse({
       id: generateId(),
       timestamp: Date.now(),
       type: 'PREVIEW_FIELDS',
-      payload: { containerSelector, fields, limit: options.limit ?? PREVIEW_ROW_LIMIT },
+      payload: {
+        containerSelector,
+        containerAnchor: options.containerAnchor,
+        fields,
+        limit: options.limit ?? PREVIEW_ROW_LIMIT,
+      },
     });
     if (!message.success) {
       return {
@@ -240,12 +247,12 @@ class ExtensionMessagingService {
       : { ok: false, code: 'UNKNOWN_ERROR', message: 'The page sent a preview PageHarvest could not read.' };
   }
 
-  public async detectFields(containerSelector: string): Promise<void> {
+  public async detectFields(containerSelector: string, kind?: CandidateKind): Promise<void> {
     await this.sendToActiveTab({
       id: generateId(),
       timestamp: Date.now(),
       type: 'DETECT_FIELDS',
-      payload: { containerSelector },
+      payload: { containerSelector, kind },
     });
   }
 

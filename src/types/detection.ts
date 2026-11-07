@@ -1,4 +1,5 @@
 import { FieldExtractorType } from './field';
+import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 
 export type DiscoveredFieldType =
   | 'text'
@@ -40,7 +41,11 @@ export interface DiscoveredField {
   confidence: number;
   occurrences: number;
   coverage: number;
+  sampleSize: number;
+  suggested: boolean;
   required?: boolean;
+  /** Multi-tier fallback ladder + element fingerprint for self-healing. */
+  anchor?: MultiAnchorSelector;
 }
 
 export interface DetectedFieldSuggestion {
@@ -65,6 +70,10 @@ export interface RepeatedPatternCandidate {
 }
 
 export interface DetectedListResult {
+  /** Whether this looks like data rather than navigation or a promotion. */
+  credible: boolean;
+  /** The observations behind the confidence, in words a user can check. */
+  evidence: string[];
   name: string;
   containerSelector: string;
   parentSelector: string;
@@ -76,6 +85,8 @@ export interface DetectedListResult {
   availableFields: DiscoveredField[];
   sampleElements: CandidateSample[];
   matchedElements: Element[];
+  /** Multi-tier fallback ladder for the repeating item selector. */
+  containerAnchor?: MultiAnchorSelector;
 }
 
 export interface FieldPatternHeuristic {
