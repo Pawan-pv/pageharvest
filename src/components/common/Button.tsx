@@ -4,7 +4,8 @@ import { Loader2 } from 'lucide-react';
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'subtle';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+/** React 19 passes `ref` as a prop, so ButtonProps includes it and spreading forwards it. */
+export interface ButtonProps extends React.ComponentPropsWithRef<'button'> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   isLoading?: boolean;

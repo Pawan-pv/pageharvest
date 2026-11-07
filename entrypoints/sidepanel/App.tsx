@@ -1,8 +1,9 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
-import { Wheat, Settings as SettingsIcon } from 'lucide-react';
+import { Wheat, Settings as SettingsIcon, HelpCircle } from 'lucide-react';
 import { useActiveTab } from '@/hooks/useActiveTab';
 import { useDatasets } from '@/hooks/useDatasets';
 import { useExtractionWorkflow } from '@/hooks/useExtractionWorkflow';
+import { useOnboarding } from '@/components/guide/useOnboarding';
 import { MainDashboard } from '@/components/dashboard/MainDashboard';
 import { ErrorBanner } from '@/components/common/ErrorBanner';
 import { Stepper } from '@/components/common/Stepper';
@@ -33,11 +34,18 @@ const LibraryView = lazy(() =>
     default: module.LibraryView,
   }))
 );
+// The guide and the tour are only loaded when they open.
+const HelpView = lazy(() =>
+  import('@/components/guide/HelpView').then((module) => ({ default: module.HelpView }))
+);
+const Onboarding = lazy(() =>
+  import('@/components/guide/Onboarding').then((module) => ({ default: module.Onboarding }))
+);
 const SettingsView = lazy(() =>
   import('@/components/settings/SettingsView').then((module) => ({ default: module.SettingsView }))
 );
 
-type NavSection = 'harvest' | 'datasets' | 'settings';
+type NavSection = 'harvest' | 'datasets' | 'settings' | 'help';
 
 export const App: React.FC = () => {
   const { tab, isLoading: isTabLoading, refreshTab } = useActiveTab();
@@ -68,8 +76,16 @@ export const App: React.FC = () => {
     start();
   };
 
-  const activeSection: NavSection =
-    workflow.view === 'history' ? 'datasets' : workflow.view === 'settings' ? 'settings' : activeTabNav;
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const onboarding = useOnboarding();
+
+  const activeSection: NavSection = isHelpOpen
+    ? 'help'
+    : workflow.view === 'history'
+      ? 'datasets'
+      : workflow.view === 'settings'
+        ? 'settings'
+        : activeTabNav;
 
   // Jobs write datasets from the background, so the list is re-read when the view changes.
   useEffect(() => {
@@ -78,7 +94,8 @@ export const App: React.FC = () => {
     }
   }, [workflow.view, refreshDatasets]);
 
-  const handleNavChange = (tabName: NavSection) => {
+  const handleNavChange = (tabName: Exclude<NavSection, 'help'>) => {
+    setIsHelpOpen(false);
     setActiveTabNav(tabName);
     if (tabName === 'datasets') {
       workflow.setView('history');
@@ -115,6 +132,7 @@ export const App: React.FC = () => {
   };
 
   const handleResumeRecoverable = (jobId: string) => {
+    setIsHelpOpen(false);
     setActiveTabNav('harvest');
     setFlow(null);
     void workflow.recoverJob(jobId);
@@ -171,6 +189,16 @@ export const App: React.FC = () => {
           >
             <SettingsIcon aria-hidden="true" className="w-3.5 h-3.5" />
           </button>
+          <button
+            type="button"
+            onClick={() => setIsHelpOpen(true)}
+            aria-current={activeSection === 'help' ? 'page' : undefined}
+            aria-label="Help"
+            title="Help"
+            className={navButtonClass('help')}
+          >
+            <HelpCircle aria-hidden="true" className="w-3.5 h-3.5" />
+          </button>
         </nav>
       </header>
 
@@ -195,12 +223,18 @@ export const App: React.FC = () => {
 
       {datasetsError && <ErrorBanner error={{ message: datasetsError }} className="m-3 mb-0" />}
 
-      {activeFlow && currentStep && (
+      {!isHelpOpen && activeFlow && currentStep && (
         <Stepper steps={flowSteps(activeFlow)} currentId={currentStep} className="px-4 pt-3" />
       )}
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto flex flex-col">
+        {isHelpOpen ? (
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading the guide…</div>}>
+            <HelpView onClose={() => setIsHelpOpen(false)} onRestartTour={onboarding.open} />
+          </Suspense>
+        ) : (
+        <>
         {/* 1. Main Dashboard */}
         {workflow.view === 'dashboard' && (
           <MainDashboard
@@ -350,7 +384,15 @@ export const App: React.FC = () => {
             />
           </Suspense>
         )}
+        </>
+        )}
       </main>
+
+      {onboarding.isOpen && (
+        <Suspense fallback={null}>
+          <Onboarding onFinish={onboarding.finish} />
+        </Suspense>
+      )}
     </div>
   );
 };
