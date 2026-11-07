@@ -8,6 +8,7 @@ import {
 } from '@/shared/contracts/job';
 import { ExtractionProject } from '@/shared/contracts/project';
 import type { ExtractionErrorCode } from '@/shared/contracts/error';
+import { codeForCategory } from '@/core/resilience/error-reporter';
 import { ExtractionSchema } from '@/shared/contracts/schema';
 import {
   DatasetRepository,
@@ -94,6 +95,16 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * The code of the job's latest error. Errors stored before ADR-031 have no code, so they get
+ * the default for their category, the same one the reporter would give them today.
+ */
+function latestErrorCode(job: ExtractionJob): ExtractionErrorCode | undefined {
+  const latest = job.errors.at(-1);
+  if (!latest) return undefined;
+  return latest.code ?? codeForCategory(latest.category);
+}
+
 export function statsFromJob(job: ExtractionJob, now: number = Date.now()): ExtractionStats {
   const endedAt = job.finishedAt ?? job.pausedAt ?? now;
   return {
@@ -109,7 +120,7 @@ export function statsFromJob(job: ExtractionJob, now: number = Date.now()): Extr
     elapsedSeconds: Math.max(0, Math.floor((endedAt - job.startedAt - job.pausedMs) / 1000)),
     status: job.status,
     errorMessage: job.errorMessage,
-    errorCode: job.errors.at(-1)?.code,
+    errorCode: latestErrorCode(job),
     stopReason: job.stopReason,
   };
 }
