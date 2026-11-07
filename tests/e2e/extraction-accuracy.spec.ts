@@ -4,6 +4,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page } from '@playwright/test';
 import { expect, test } from './release-test';
+import {
+  choosePagination,
+  markTourSeen,
+  resultHeading,
+  setLimits,
+  startButton,
+  startWith,
+  type StartTool,
+} from './helpers/panel';
 
 /**
  * Extraction accuracy through the real unpacked extension: real content script, real
@@ -37,6 +46,8 @@ test.beforeAll(async () => {
   });
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker', { timeout: 15000 }));
   extensionId = worker.url().split('/')[2];
+  // The first-run tour has its own spec; here it would cover the panel.
+  await markTourSeen(worker);
 });
 
 test.afterAll(async () => {
@@ -123,17 +134,17 @@ async function finishedRows(panel: Page, status = 'COMPLETED'): Promise<{ job: S
   return { job: job as StoredJob, rows };
 }
 
-const detect = async (panel: Page, tool = 'Auto-Detect Lists') => {
-  await expect(panel.getByRole('button', { name: tool })).toBeEnabled({ timeout: 10000 });
-  await panel.getByRole('button', { name: tool }).click();
-  await expect(panel.getByText('Repeating Elements Found')).toBeVisible({ timeout: 10000 });
+const detect = async (panel: Page, tool: StartTool = 'auto') => {
+  await expect(await startButton(panel, tool)).toBeEnabled({ timeout: 10000 });
+  await startWith(panel, tool);
+  await expect(resultHeading(panel)).toBeVisible({ timeout: 10000 });
 };
 const chooseFields = async (panel: Page) => {
-  await panel.getByRole('button', { name: 'Next: Choose Fields' }).click();
-  await expect(panel.getByText('Columns to Extract')).toBeVisible();
-  await expect(panel.getByRole('button', { name: /Start Extraction/ })).toBeEnabled({ timeout: 10000 });
+  await panel.getByRole('button', { name: 'Use this list', exact: true }).click();
+  await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
+  await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeEnabled({ timeout: 10000 });
 };
-const start = (panel: Page) => panel.getByRole('button', { name: /Start Extraction/ }).click();
+const start = (panel: Page) => panel.getByRole('button', { name: /Start extraction/ }).click();
 
 async function extractWithDefaults(fixture: string) {
   const { panel, target } = await open(fixture);
@@ -145,7 +156,7 @@ async function extractWithDefaults(fixture: string) {
 
 async function downloadFile(panel: Page, setup: () => Promise<void>): Promise<string> {
   await panel.getByRole('button', { name: 'Export', exact: true }).click();
-  await expect(panel.getByText('Export Extracted Data')).toBeVisible();
+  await expect(panel.getByRole('dialog', { name: 'Export data' })).toBeVisible();
   await setup();
   const before = await panel.evaluate(async () => (await chrome.downloads.search({})).map((item) => item.id));
   await panel.getByRole('button', { name: 'Download File' }).click();
@@ -193,7 +204,7 @@ test.describe('numbers', () => {
     const { panel } = await extractWithDefaults('accuracy-prices.html');
 
     const csv = await downloadFile(panel, async () => {
-      await panel.getByLabel('Include original text and currency for numbers').check();
+      await panel.getByLabel(/Add columns showing how each number was read/).check();
     });
     const lines = csv.replace(/^\uFEFF/, '').split('\r\n');
 
@@ -207,12 +218,12 @@ test.describe('the picker', () => {
   test('the count shown is the count extracted, with the menu and recommendations left out', async () => {
     const { panel, target } = await open('accuracy-picker.html');
 
-    await panel.getByRole('button', { name: 'Select Elements' }).click();
+    await panel.getByRole('button', { name: 'Pick items myself', exact: true }).click();
     await expect(panel.getByText('Visual Element Picker Active')).toBeVisible();
     await target.locator('main li').first().hover();
     await target.locator('main li').first().click();
 
-    await expect(panel.getByText('6 items detected')).toBeVisible();
+    await expect(panel.getByText('6 similar items found').first()).toBeVisible();
     await chooseFields(panel);
     await expect(panel.getByText('6 items on page')).toBeVisible();
     await start(panel);
@@ -229,9 +240,9 @@ test.describe('field discovery', () => {
     await detect(panel);
     await chooseFields(panel);
 
-    await expect(panel.getByRole('checkbox', { name: 'Price' })).toBeChecked();
-    await expect(panel.getByRole('checkbox', { name: 'Link' })).toBeChecked();
-    await expect(panel.getByRole('checkbox', { name: 'Category' })).not.toBeChecked();
+    await expect(panel.getByRole('checkbox', { name: 'Include Price', exact: true })).toBeChecked();
+    await expect(panel.getByRole('checkbox', { name: 'Include Link', exact: true })).toBeChecked();
+    await expect(panel.getByRole('checkbox', { name: 'Include Category', exact: true })).not.toBeChecked();
     await expect(panel.getByText(/Found in 7 of 8 sampled items/).first()).toBeVisible();
 
     await start(panel);
@@ -249,8 +260,8 @@ test.describe('field discovery', () => {
     await chooseFields(panel);
 
     await panel.getByRole('button', { name: 'Add Column' }).first().click();
-    await panel.getByLabel(/Column Name/).fill('Reference');
-    await panel.getByLabel(/Relative CSS Selector/).fill('.sku');
+    await panel.getByLabel('Column name', { exact: true }).fill('Reference');
+    await panel.getByLabel('CSS selector inside each item', { exact: true }).fill('.sku');
     await panel.getByRole('button', { name: 'Add Column' }).last().click();
     await start(panel);
 
@@ -264,11 +275,11 @@ test.describe('field discovery', () => {
     await chooseFields(panel);
 
     await panel.getByRole('button', { name: 'Add Column' }).first().click();
-    await panel.getByLabel(/Column Name/).fill('Code');
-    await panel.getByLabel(/Relative CSS Selector/).fill('.sku');
-    await panel.getByLabel('Extractor Type').selectOption('regex');
-    await panel.getByLabel(/Regex Pattern/).fill('SKU-(\\d+)');
-    await panel.getByLabel(/Capture Group/).fill('1');
+    await panel.getByLabel('Column name', { exact: true }).fill('Code');
+    await panel.getByLabel('CSS selector inside each item', { exact: true }).fill('.sku');
+    await panel.getByLabel('What to collect', { exact: true }).selectOption('regex');
+    await panel.getByLabel('Pattern', { exact: true }).fill('SKU-(\\d+)');
+    await panel.getByLabel('Part to keep', { exact: true }).fill('1');
     await panel.getByRole('button', { name: 'Add Column' }).last().click();
     await start(panel);
 
@@ -280,12 +291,12 @@ test.describe('field discovery', () => {
 test.describe('Extract Tables', () => {
   test('headers become columns, and only data rows become records', async () => {
     const { panel } = await open('accuracy-tables.html');
-    await detect(panel, 'Extract Tables');
+    await detect(panel, 'table');
 
-    await expect(panel.getByText('4 items detected')).toBeVisible();
+    await expect(panel.getByText('4 similar items found').first()).toBeVisible();
     await chooseFields(panel);
     for (const name of ['Team', 'City', 'Score', 'Score 2']) {
-      await expect(panel.getByRole('checkbox', { name, exact: true })).toBeChecked();
+      await expect(panel.getByRole('checkbox', { name: `Include ${name}`, exact: true })).toBeChecked();
     }
     await start(panel);
 
@@ -301,10 +312,10 @@ test.describe('Extract Tables', () => {
 
   test('a page with several tables offers a choice, and a table with no headers still works', async () => {
     const { panel } = await open('accuracy-tables.html');
-    await detect(panel, 'Extract Tables');
+    await detect(panel, 'table');
 
     await panel.getByRole('radio').nth(1).check();
-    await expect(panel.getByText('2 items detected')).toBeVisible();
+    await expect(panel.getByText('2 similar items found').first()).toBeVisible();
     await chooseFields(panel);
     await start(panel);
 
@@ -317,17 +328,21 @@ test.describe('Extract Tables', () => {
 
   test('a page with no table says so', async () => {
     const { panel } = await open('accuracy-blog.html');
-    await expect(panel.getByRole('button', { name: 'Extract Tables' })).toBeEnabled({ timeout: 10000 });
-    await panel.getByRole('button', { name: 'Extract Tables' }).click();
+    await expect(await startButton(panel, 'table')).toBeEnabled({ timeout: 10000 });
+    await startWith(panel, 'table');
 
-    await expect(panel.getByText('No data table was found on this page.')).toBeVisible();
+    // Explained by its code (CONTAINER_NOT_FOUND); the page's own sentence is under Technical details.
+    const banner = panel.getByRole('alert').filter({ hasText: 'PageHarvest could not find those items' });
+    await expect(banner).toBeVisible();
+    await banner.getByText('Technical details').click();
+    await expect(banner.getByText(/No data table was found on this page\./)).toBeVisible();
   });
 });
 
 test.describe('Extract Links', () => {
   test('reads links in the content once each, with absolute URLs, and leaves out navigation', async () => {
     const { panel } = await open('accuracy-links.html');
-    await detect(panel, 'Extract Links');
+    await detect(panel, 'links');
     await chooseFields(panel);
     await start(panel);
 
@@ -344,7 +359,7 @@ test.describe('Extract Links', () => {
 
   test('navigation links can still be chosen, deliberately', async () => {
     const { panel } = await open('accuracy-links.html');
-    await detect(panel, 'Extract Links');
+    await detect(panel, 'links');
 
     await panel.getByRole('radio', { name: /Links in the footer/ }).check();
     await chooseFields(panel);
@@ -361,15 +376,17 @@ test.describe('choosing a list', () => {
     const { panel } = await open('accuracy-ranked.html');
     await detect(panel);
 
-    await expect(panel.getByText('10 items detected')).toBeVisible();
+    await expect(panel.getByText('10 similar items found').first()).toBeVisible();
     const options = panel.getByRole('radio');
     expect(await options.count()).toBeGreaterThan(1);
     expect(await options.count()).toBeLessThanOrEqual(8);
     await expect(options.first()).toBeChecked();
+    // Evidence is behind each card's Technical details.
+    for (const details of await panel.getByText('Technical details').all()) await details.click();
     await expect(panel.getByText(/labelled as recommendations or promotions/).first()).toBeVisible();
 
-    await panel.getByRole('radio', { name: /24 items/ }).check();
-    await expect(panel.getByText('24 items detected')).toBeVisible();
+    await panel.getByRole('radio', { name: /24 similar items/ }).check();
+    await expect(panel.getByText('24 similar items found').first()).toBeVisible();
     await chooseFields(panel);
     await start(panel);
 
@@ -382,8 +399,8 @@ test.describe('choosing a list', () => {
     const { panel } = await open('accuracy-blog.html');
     await detect(panel);
 
-    await expect(panel.getByRole('alert')).toContainText('No data list was found');
-    await expect(panel.getByRole('button', { name: 'Next: Choose Fields' })).toBeDisabled();
+    await expect(panel.getByRole('status').filter({ hasText: 'No data list was found' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Use this list', exact: true })).toBeDisabled();
   });
 });
 
@@ -403,16 +420,15 @@ test.describe('images', () => {
   test('images that load only when scrolled to are read after they load', async () => {
     const { panel } = await open('accuracy-lazy-scroll.html');
     await detect(panel);
-    await panel.getByRole('button', { name: 'Next: Choose Fields' }).click();
-    await expect(panel.getByText('Columns to Extract')).toBeVisible();
-    await panel.getByRole('button', { name: /Infinite Scroll/ }).click();
-    await panel.getByLabel('Max Scrolls').fill('12');
-    await panel.getByLabel('Scroll Delay (ms)').fill('400');
+    await panel.getByRole('button', { name: 'Use this list', exact: true }).click();
+    await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
     await panel.getByRole('button', { name: 'Add Column' }).first().click();
-    await panel.getByLabel(/Column Name/).fill('Picture');
-    await panel.getByLabel(/Relative CSS Selector/).fill('img');
-    await panel.getByLabel('Extractor Type').selectOption('src');
+    await panel.getByLabel('Column name', { exact: true }).fill('Picture');
+    await panel.getByLabel('CSS selector inside each item', { exact: true }).fill('img');
+    await panel.getByLabel('What to collect', { exact: true }).selectOption('src');
     await panel.getByRole('button', { name: 'Add Column' }).last().click();
+    await choosePagination(panel, 'infinite_scroll');
+    await setLimits(panel, { maxScrolls: 12, scrollDelayMs: 400 });
     await start(panel);
 
     const { rows } = await finishedRows(panel);
@@ -429,9 +445,9 @@ test.describe('pagination', () => {
     const { panel } = await open('load-more-pagination.html');
     await detect(panel);
     await chooseFields(panel);
-    await panel.getByRole('button', { name: /Next Button/ }).click();
-    await panel.getByLabel('Max Pages to Crawl').fill('6');
-    await panel.getByLabel('Delay Between Pages (ms)').fill('300');
+    await choosePagination(panel, 'next_button');
+    await setLimits(panel, { maxPages: 6 });
+    await setLimits(panel, { delayMs: 300 });
     await start(panel);
 
     const { rows } = await finishedRows(panel);
@@ -446,9 +462,9 @@ test.describe('pagination', () => {
     const { panel, target } = await open('accuracy-spa.html');
     await detect(panel);
     await chooseFields(panel);
-    await panel.getByRole('button', { name: /Next Button/ }).click();
-    await panel.getByLabel('Max Pages to Crawl').fill('5');
-    await panel.getByLabel('Delay Between Pages (ms)').fill('300');
+    await choosePagination(panel, 'next_button');
+    await setLimits(panel, { maxPages: 5 });
+    await setLimits(panel, { delayMs: 300 });
     await start(panel);
 
     const { rows } = await finishedRows(panel);
@@ -465,7 +481,7 @@ test.describe('working with results', () => {
     const { panel } = await extractWithDefaults('accuracy-clean.html');
 
     const text = await downloadFile(panel, async () => {
-      await panel.getByRole('button', { name: /NDJSON/i }).click();
+      await panel.getByRole('radio', { name: 'NDJSON', exact: true }).click();
     });
     const lines = text.trim().split('\n').map((line) => JSON.parse(line));
 
@@ -590,8 +606,8 @@ test.describe('the library', () => {
     await expect(use).toBeVisible();
     await use.click();
 
-    await expect(panel.getByText('Columns to Extract')).toBeVisible();
-    await expect(panel.getByRole('button', { name: /Start Extraction/ })).toBeEnabled({ timeout: 10000 });
+    await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
+    await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeEnabled({ timeout: 10000 });
     await start(panel);
 
     await expect
