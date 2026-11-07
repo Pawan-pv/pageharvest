@@ -136,7 +136,7 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
                 {!isSelected && <span className="text-2xs text-fg-subtle">Left out</span>}
               </div>
               {field.discovery && (
-                <p className="text-2xs text-fg-subtle mt-0.5 truncate">
+                <p className="text-2xs text-fg-subtle mt-0.5 line-clamp-2 break-words">
                   Found in {Math.round(field.discovery.coverage * field.discovery.sampleSize)} of{' '}
                   {field.discovery.sampleSize} sampled items
                   {field.discovery.sampleValue ? `, such as "${field.discovery.sampleValue}"` : ''}

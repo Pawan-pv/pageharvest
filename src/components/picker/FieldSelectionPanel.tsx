@@ -230,14 +230,15 @@ export const FieldSelectionPanel: React.FC<FieldSelectionPanelProps> = ({
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-2">
+      {/* At the narrowest panel the buttons move under the heading instead of squeezing it. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
         <div>
           <h2 className="text-sm font-semibold text-fg leading-tight">Choose your columns</h2>
           <p className="text-xs text-fg-subtle mt-0.5">
             {selectedCount} of {fields.length} columns selected
           </p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 whitespace-nowrap">
           {fields.length > 0 && (
             <Button
               variant="ghost"

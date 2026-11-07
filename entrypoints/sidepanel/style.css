@@ -15,7 +15,8 @@ body {
   color: rgb(var(--ph-fg));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  min-width: 320px;
+  /* No min-width: Chrome already keeps the panel at least 320px wide, and a min-width here made
+     every long screen 6px too wide once its scrollbar appeared. */
   overflow-x: hidden;
 }
 

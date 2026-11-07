@@ -43,7 +43,7 @@ export const Stepper: React.FC<StepperProps> = ({ steps, currentId, className = 
                 }`}
               />
               <span
-                className={`text-2xs truncate ${
+                className={`text-2xs leading-tight break-words ${
                   state === 'current' ? 'font-semibold text-fg' : state === 'done' ? 'text-fg-muted' : 'text-fg-subtle'
                 }`}
               >

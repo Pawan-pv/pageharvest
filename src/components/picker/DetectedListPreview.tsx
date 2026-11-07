@@ -177,7 +177,8 @@ export const DetectedListPreview: React.FC<DetectedListPreviewProps> = ({
       )}
 
       {candidates.length > 1 ? (
-        <fieldset className="flex flex-col gap-2">
+        <fieldset className="min-w-0 flex flex-col gap-2">
+          {/* min-w-0: a fieldset is otherwise as wide as its longest sample row, past the panel edge. */}
           <legend className="text-xs text-fg-muted mb-1">
             PageHarvest found {candidates.length} lists on this page. The best match is first; choose the one you want.
           </legend>

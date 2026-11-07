@@ -107,7 +107,7 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({ co
 
   return (
     <div className="flex flex-col gap-3 text-left">
-      <fieldset aria-labelledby={legendId} className="flex flex-col gap-1.5">
+      <fieldset aria-labelledby={legendId} className="min-w-0 flex flex-col gap-1.5">
         <div className="flex items-center gap-1 mb-0.5">
           <span id={legendId} className="text-sm font-semibold text-fg">
             How does this site show more items?
@@ -155,7 +155,8 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({ co
       <p className="text-2xs text-fg-subtle">{describeLimits(config)}</p>
 
       <Disclosure label="Advanced" aside={<HelpTip tipId="pagination-limits" />}>
-        <div className="grid grid-cols-2 gap-2">
+        {/* items-end: a label that wraps to two lines must not push its input below its neighbour's. */}
+        <div className="grid grid-cols-2 gap-2 items-end">
           {config.type === 'next_button' && (
             <div className="col-span-2">
               <Input

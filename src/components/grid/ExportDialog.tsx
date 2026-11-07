@@ -222,7 +222,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
           </Banner>
         )}
 
-        <fieldset aria-labelledby={legendId} className="flex flex-col gap-1.5">
+        <fieldset aria-labelledby={legendId} className="min-w-0 flex flex-col gap-1.5">
           <span id={legendId} className="font-semibold text-fg-muted">
             Format
           </span>
