@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
-import { beforeEach, afterEach } from 'vitest';
+import { beforeEach, afterEach, vi } from 'vitest';
 import { configure } from '@testing-library/react';
 import { GUIDE_STORAGE_KEY } from '@/components/guide/preferences';
 import { createChromeMock, ChromeMock } from './utils/chrome-mock';
@@ -12,6 +12,9 @@ declare global {
 // Side panel screens are lazy-loaded chunks (ADR-014). Under a full parallel run, loading one
 // can take longer than Testing Library's 1s default, which made findBy/waitFor flaky.
 configure({ asyncUtilTimeout: 5000 });
+// A test that waits on several lazy views needs more than Vitest's 5s default, which
+// equals one findBy wait. This only allows slow runs to finish; no assertion changes.
+vi.setConfig({ testTimeout: 15000 });
 
 // Initialize Chrome extension API mock
 const mockChrome = createChromeMock();
