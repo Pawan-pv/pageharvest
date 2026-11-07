@@ -12,6 +12,7 @@ import {
   readLimit,
   setLimits,
   setUrlTemplate,
+  waitForCompletedDownload,
 } from './helpers/panel';
 
 /**
@@ -801,18 +802,7 @@ test.describe('PageHarvest production workflows', () => {
     });
     await panel.getByRole('button', { name: 'Download File' }).click();
 
-    let filename = '';
-    await expect
-      .poll(async () => {
-        const items = await panel.evaluate(async () => {
-          const found = await chrome.downloads.search({ orderBy: ['-startTime'], limit: 5 });
-          return found.map((item) => ({ id: item.id, state: item.state, filename: item.filename }));
-        });
-        const done = items.find((item) => !before.includes(item.id) && item.state === 'complete');
-        filename = done?.filename ?? '';
-        return filename.length > 0;
-      })
-      .toBe(true);
+    const { filename } = await waitForCompletedDownload(panel, before);
 
     const csv = await fs.readFile(filename, 'utf8');
     const lines = csv.replace(/^\uFEFF/, '').split('\r\n');

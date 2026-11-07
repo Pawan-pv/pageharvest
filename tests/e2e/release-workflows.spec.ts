@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { expect, test } from './release-test';
-import { choosePagination, setLimits, markTourSeen } from './helpers/panel';
+import { choosePagination, setLimits, markTourSeen, waitForCompletedDownload } from './helpers/panel';
 
 const fixtureBaseUrl = 'http://127.0.0.1:3456';
 const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
@@ -71,19 +71,8 @@ async function queryDownloads(page: Page): Promise<DownloadSnapshot[]> {
   });
 }
 
-async function waitForDownload(
-  page: Page,
-  previousIds: Set<number>
-): Promise<DownloadSnapshot> {
-  let latest: DownloadSnapshot[] = [];
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    latest = await queryDownloads(page);
-    const completed = latest.find((item) => !previousIds.has(item.id) && item.state === 'complete');
-    if (completed) return completed;
-    await page.waitForTimeout(250);
-  }
-  throw new Error(`No completed release-test download was observed: ${JSON.stringify(latest)}`);
-}
+const waitForDownload = (page: Page, previousIds: Set<number>): Promise<DownloadSnapshot> =>
+  waitForCompletedDownload(page, previousIds);
 
 function message(type: string, payload: Record<string, unknown>): ContentMessage {
   return {

@@ -146,3 +146,42 @@ export const exportDialog = (panel: Page) => panel.getByRole('dialog', { name: '
 /** "N similar items found" on the result card. */
 export const itemsFound = (panel: Page, count: number) =>
   panel.getByText(`${count} similar ${count === 1 ? 'item' : 'items'} found`).first();
+
+export interface DownloadSnapshot {
+  id: number;
+  state: string;
+  filename: string;
+  error?: string;
+}
+
+/**
+ * Waits for a download that is not in `before` to finish, and returns it. Chrome on Windows
+ * scans each file before it marks the download complete, which can take several seconds on a
+ * busy machine, so this allows 30 seconds. A download Chrome reports as interrupted fails at once.
+ */
+export async function waitForCompletedDownload(
+  page: Page,
+  before: Iterable<number>,
+  timeoutMs = 30000
+): Promise<DownloadSnapshot> {
+  const known = new Set(before);
+  const deadline = Date.now() + timeoutMs;
+  let latest: DownloadSnapshot[] = [];
+  while (Date.now() < deadline) {
+    latest = await page.evaluate(async () =>
+      (await chrome.downloads.search({ orderBy: ['-startTime'], limit: 20 })).map((item) => ({
+        id: item.id,
+        state: item.state,
+        filename: item.filename,
+        error: item.error,
+      }))
+    );
+    const fresh = latest.filter((item) => !known.has(item.id));
+    const interrupted = fresh.find((item) => item.state === 'interrupted');
+    if (interrupted) throw new Error(`The download was interrupted: ${interrupted.error ?? 'no reason given'}`);
+    const completed = fresh.find((item) => item.state === 'complete');
+    if (completed) return completed;
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`No download completed within ${timeoutMs} ms: ${JSON.stringify(latest)}`);
+}

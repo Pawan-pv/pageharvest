@@ -11,6 +11,7 @@ import {
   setLimits,
   startButton,
   startWith,
+  waitForCompletedDownload,
   type StartTool,
 } from './helpers/panel';
 
@@ -160,20 +161,7 @@ async function downloadFile(panel: Page, setup: () => Promise<void>): Promise<st
   await setup();
   const before = await panel.evaluate(async () => (await chrome.downloads.search({})).map((item) => item.id));
   await panel.getByRole('button', { name: 'Download File' }).click();
-  let filename = '';
-  await expect
-    .poll(async () => {
-      const items = await panel.evaluate(async () =>
-        (await chrome.downloads.search({ orderBy: ['-startTime'], limit: 5 })).map((item) => ({
-          id: item.id,
-          state: item.state,
-          filename: item.filename,
-        }))
-      );
-      filename = items.find((item) => !before.includes(item.id) && item.state === 'complete')?.filename ?? '';
-      return filename.length > 0;
-    })
-    .toBe(true);
+  const { filename } = await waitForCompletedDownload(panel, before);
   return fs.readFile(filename, 'utf8');
 }
 
