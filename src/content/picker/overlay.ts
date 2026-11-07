@@ -668,13 +668,14 @@ export class PickerOverlay {
         transition: all 0.15s ease !important;
       }
 
+      /* The side panel's brand colour: white text on it meets WCAG AA (5.5:1). */
       .ph-btn-primary {
-        background-color: #10b981 !important;
+        background-color: #047857 !important;
         color: #ffffff !important;
       }
 
       .ph-btn-primary:hover {
-        background-color: #059669 !important;
+        background-color: #065f46 !important;
       }
 
       .ph-btn-secondary {
@@ -693,13 +694,31 @@ export class PickerOverlay {
 
       .ph-btn-cancel {
         background-color: transparent !important;
-        color: #ef4444 !important;
-        border: 1px solid rgba(239, 68, 68, 0.4) !important;
+        color: #f87171 !important;
+        border: 1px solid rgba(248, 113, 113, 0.5) !important;
       }
 
       .ph-btn-cancel:hover {
-        background-color: rgba(239, 68, 68, 0.1) !important;
-        border-color: #ef4444 !important;
+        background-color: rgba(248, 113, 113, 0.12) !important;
+        border-color: #f87171 !important;
+      }
+
+      /* Keyboard users see where they are; a mouse click shows no ring. */
+      .ph-btn:focus-visible {
+        outline: 2px solid #93c5fd !important;
+        outline-offset: 2px !important;
+      }
+
+      .ph-breadcrumb-item:focus-visible {
+        outline: 2px solid #93c5fd !important;
+        outline-offset: 1px !important;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation: none !important;
+          transition: none !important;
+        }
       }
     `;
   }
