@@ -255,9 +255,15 @@ async function watchOverlayExit(page: Page): Promise<() => Promise<FadeLog>> {
         if (record.type === 'attributes' && target.id === hostId && target.style.opacity === '0') {
           if (log.fadeStartedAt === null) {
             log.fadeStartedAt = performance.now();
-            setTimeout(() => {
-              log.midFadeOpacity = Number(getComputedStyle(target).opacity);
-            }, 150);
+            // A transition starts at the first style update after the change. On a busy machine
+            // that can be the first read itself, which then sees 1, so the lowest of three is kept.
+            for (const delay of [150, 250, 350]) {
+              setTimeout(() => {
+                if (!target.isConnected) return;
+                const opacity = Number(getComputedStyle(target).opacity);
+                log.midFadeOpacity = log.midFadeOpacity === null ? opacity : Math.min(log.midFadeOpacity, opacity);
+              }, delay);
+            }
           }
         }
         for (const node of Array.from(record.removedNodes)) {

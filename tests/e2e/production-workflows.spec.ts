@@ -476,13 +476,18 @@ test.describe('PageHarvest production workflows', () => {
     await openTarget(session.context, `${FIXTURES}/long-scroll.html`);
     await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
-    // Slow enough that the job is still running when the browser closes (the restart must be mid-job).
-    await setLimits(panel, { maxScrolls: 6, scrollDelayMs: 1500 });
+    // The restart must be mid-job. After scroll 2 about 24s of work is left, more than the
+    // longest stall seen on a machine short of memory (13.5s), which once let the job finish first.
+    await setLimits(panel, { maxScrolls: 6, scrollDelayMs: 6000 });
     await start(panel);
 
     const interrupted = await waitForJob(panel, (job) => job.status === 'RUNNING' && job.scrollsCompleted >= 2);
     const rowsBefore = await readRows(panel, interrupted.datasetId);
     expect(rowsBefore.length).toBeGreaterThanOrEqual(5);
+    const atClose = (await readJobs(panel)).find((job) => job.id === interrupted.id);
+    expect(atClose?.status, 'The job must still be running when the browser closes, or there is nothing to recover').toBe(
+      'RUNNING'
+    );
 
     await session.context.close();
     session = await launch(recoveryProfile);
@@ -508,7 +513,8 @@ test.describe('PageHarvest production workflows', () => {
       }
 
       await panel.getByRole('button', { name: 'Resume', exact: true }).click();
-      const finished = await waitForJob(panel, (job) => job.id === interrupted.id && job.status === 'COMPLETED', 60000);
+      // Up to four scrolls 6s apart are left after the restart.
+      const finished = await waitForJob(panel, (job) => job.id === interrupted.id && job.status === 'COMPLETED', 90000);
 
       const jobs = await readJobs(panel);
       expect(jobs).toHaveLength(1);
