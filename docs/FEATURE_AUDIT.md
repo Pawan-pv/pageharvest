@@ -52,7 +52,7 @@ The `native-side-panel` job does this automatically in Chrome for Testing. Use t
 1. Run `pnpm build` and open `chrome://extensions` in a headed Chrome profile.
 2. Enable Developer mode, choose **Load unpacked**, and select `C:\myProject\extension\.output\chrome-mv3`.
 3. Pin PageHarvest, open `http://127.0.0.1:3456/simple-grid.html` (start `pnpm serve:fixtures` if needed), and click the PageHarvest toolbar action. Confirm the native side panel opens with the active fixture tab.
-4. Run Auto-Detect Lists, confirm fields, start extraction, and verify records appear in the grid.
-5. On `long-scroll.html`, start an Infinite Scroll job and close the side panel mid-run. Reopen it and confirm the job is still running and its rows are present.
-6. Switch tabs, reload the fixture, and run a URL Template job on `catalog-1.html` with `http://127.0.0.1:3456/catalog-{page}.html`.
+4. On a fresh profile the first-run tour opens; finish or skip it. Choose **Find data automatically**, then **Use this list**, check the columns, choose **Next: Pagination**, then **Start extraction**, and verify records appear in the grid.
+5. On `long-scroll.html`, choose **Scroll to load more** under pagination, start the job and close the side panel mid-run. Reopen it and confirm the job is still running and its rows are present.
+6. Switch tabs, reload the fixture, and run a **Page numbers in the URL** job on `catalog-1.html` with `http://127.0.0.1:3456/catalog-{page}.html`.
 7. This procedure is the evidence for toolbar behavior. Playwright opens `sidepanel.html` directly and does not claim it.
