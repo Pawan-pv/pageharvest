@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FieldEditorRow } from '@/components/picker/FieldEditorRow';
@@ -10,6 +10,7 @@ import { useExtractionWorkflow } from '@/hooks/useExtractionWorkflow';
 import type { TabInfo } from '@/services/messaging';
 import type { ExtractionPaginationConfig, FieldDefinition } from '@/types';
 import { makeRecipe } from '../../utils/job-harness';
+import { ProjectRepository } from '@/storage/repositories';
 
 const title: FieldDefinition = { id: 'f_title', name: 'Title', selector: 'h2.title', extractor: 'text' };
 const price: FieldDefinition = { id: 'f_price', name: 'Price', selector: '.price', extractor: 'number' };
@@ -263,10 +264,29 @@ function ReorderProbe() {
   );
 }
 
+/**
+ * loadSchema also loads projects in the background. Answer it at once and flush it inside the
+ * test, so no state update lands after the test environment is torn down.
+ */
+async function settleBackgroundLoads() {
+  await act(async () => {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function answerProjectsAtOnce() {
+  vi.spyOn(ProjectRepository.prototype, 'getAllProjects').mockResolvedValue([]);
+}
+
 describe('useExtractionWorkflow.moveField', () => {
-  it('swaps a column with its neighbour and ignores moves past the ends', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('swaps a column with its neighbour and ignores moves past the ends', async () => {
+    answerProjectsAtOnce();
     render(<ReorderProbe />);
     act(() => screen.getByRole('button', { name: 'Load' }).click());
+    await settleBackgroundLoads();
     expect(screen.getByTestId('order')).toHaveTextContent('Title,Price');
     act(() => screen.getByRole('button', { name: 'Move' }).click());
     expect(screen.getByTestId('order')).toHaveTextContent('Price,Title');

@@ -11,7 +11,8 @@ declare global {
 
 // Side panel screens are lazy-loaded chunks (ADR-014). Under a full parallel run, loading one
 // can take longer than Testing Library's 1s default, which made findBy/waitFor flaky.
-configure({ asyncUtilTimeout: 5000 });
+// A lazy view is transformed on first import, which can take several seconds on a busy machine.
+configure({ asyncUtilTimeout: 10000 });
 // A test that waits on several lazy views needs more than Vitest's 5s default, which
 // equals one findBy wait. This only allows slow runs to finish; no assertion changes.
 vi.setConfig({ testTimeout: 15000 });

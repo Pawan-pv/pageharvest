@@ -11,6 +11,7 @@ import { messagingService, type MessageListener, type TabInfo } from '@/services
 import type { ExtensionMessage } from '@/contracts/messages';
 import type { ErrorCategory } from '@/types';
 import { db } from '@/storage/db';
+import { ProjectRepository } from '@/storage/repositories';
 import { ExtensionHarness, makeRecipe, renderCards, BASE_URL } from '../utils/job-harness';
 
 describe('Error codes in the contract', () => {
@@ -146,6 +147,21 @@ function Probe() {
   );
 }
 
+/**
+ * loadSchema also loads projects in the background. Answer it at once and flush it inside the
+ * test, so no state update lands after the test environment is torn down.
+ */
+async function settleBackgroundLoads() {
+  await act(async () => {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function answerProjectsAtOnce() {
+  vi.spyOn(ProjectRepository.prototype, 'getAllProjects').mockResolvedValue([]);
+}
+
 describe('The panel receives codes', () => {
   let listener: MessageListener | undefined;
 
@@ -185,6 +201,7 @@ describe('The panel receives codes', () => {
   });
 
   it('marks the panel’s own setup checks as VALIDATION_ERROR', async () => {
+    answerProjectsAtOnce();
     render(<Probe />);
     act(() => screen.getByRole('button', { name: 'Load' }).click());
     await waitFor(() => expect(Number(screen.getByTestId('fields').textContent)).toBeGreaterThan(0));
@@ -193,6 +210,7 @@ describe('The panel receives codes', () => {
     act(() => screen.getByRole('button', { name: 'Start' }).click());
     await waitFor(() => expect(screen.getByTestId('code')).toHaveTextContent('VALIDATION_ERROR'));
     expect(screen.getByTestId('message')).toHaveTextContent('Select at least one field to extract.');
+    await settleBackgroundLoads();
   });
 });
 
