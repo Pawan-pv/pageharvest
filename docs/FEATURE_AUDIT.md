@@ -23,7 +23,9 @@ Assessment: **functional MVP**.
 | Picker and closed Shadow DOM | PASS | `overlay-closed-shadow.test.ts`, E2E "picker" | |
 | Production wiring | PASS | `production-wiring.test.ts` | Fails if a module is unreachable from an entry point |
 | Auto-detect on real page layouts | PASS | `detection-real-pages.test.ts`, trial on two scraping practice sites | Commercial sites not tried |
-| Native toolbar and real side panel | PASS in Chrome for Testing | `native-side-panel` job, [3 of 3 runs](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028); [fails when broken](https://github.com/Pawan-pv/pageharvest/actions/runs/41364264985) | Branded Chrome is manual, below |
+| Native toolbar and real side panel | PASS in Chrome for Testing | `native-side-panel` job, [3 of 3 runs](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028); [fails when broken](https://github.com/Pawan-pv/pageharvest/actions/runs/41364264985); local Windows run with the redesigned panel, 2026-11-07, Chrome for Testing 156 | Branded Chrome is manual, below. The check now passes the first-run tour as a new user would |
+| In-app guide: first-run tour, Help, `?` tips | PASS | `first-run-tour.spec.ts`, guide unit tests | Progress is stored in `chrome.storage.local` only |
+| Side panel at its real width (320 to 360 px) | PASS | `panel-width.spec.ts`, native check screenshot | The other specs open the panel as a 1280 px tab, so only this spec checks width |
 | Complete release gate | PASS, as two jobs | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028) | Linux runs the automated layers, Windows the native check |
 
 ## Extraction accuracy
