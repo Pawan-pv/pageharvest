@@ -231,9 +231,15 @@ async function collectEvidence({ browser, port, evidence, artifactDirectory, not
   evidence.panelOpened = panel !== null && notes.panelsBeforeClick.length === 0;
   if (!evidence.panelOpened) return;
 
-  await clickPanelButton(panel, 'Auto-Detect Lists');
-  await clickPanelButton(panel, 'Next: Choose Fields');
-  await clickPanelButton(panel, 'Start Extraction');
+  // A fresh profile opens the first-run tour over the panel, as it would for a new user.
+  notes.tourShown = await clickPanelButton(panel, 'Skip tour').then(
+    () => true,
+    () => false
+  );
+  await clickPanelButton(panel, 'Find data automatically');
+  await clickPanelButton(panel, 'Use this list');
+  await clickPanelButton(panel, 'Next: Pagination');
+  await clickPanelButton(panel, 'Start extraction');
   await waitFor('the job to complete', async () =>
     (await readFromDatabase(panel, 'jobs')).some((job) => job.status === 'COMPLETED')
   );
