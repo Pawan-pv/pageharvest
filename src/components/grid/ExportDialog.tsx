@@ -11,6 +11,7 @@ import {
   recordsToCsvChunks,
   recordsToJsonChunks,
   recordsToNdjsonChunks,
+  resolveColumns,
   withValueDetails,
 } from '@/core/export/exporter';
 import { triggerDownload } from '@/platform/downloads';
@@ -124,7 +125,8 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   const datasetName = dataset?.name || 'harvested-data';
   const autoFilename = generateExportFilename({ datasetName: customFilename.trim() || datasetName, format });
   const filename = customFilename.trim() ? `${customFilename.trim()}.${format}` : autoFilename;
-  const columnCount = activeColumnOrder?.length ?? fields.length;
+  // The exporter's own rule, so the count always matches the file. An empty order means "as the fields are".
+  const columnCount = resolveColumns(records, fields, { orderedColumns: activeColumnOrder }).length;
   const rows = records.length;
   const extras = [includeValueDetails && 'how numbers were read', includeMetadata && 'row details'].filter(Boolean);
 

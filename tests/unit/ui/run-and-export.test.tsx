@@ -109,6 +109,17 @@ describe('Export dialog', () => {
     expect(dialog).toHaveAccessibleDescription('3 rows × 2 columns will be exported.');
   });
 
+  it('counts the columns that will be written, before the grid has a column order', async () => {
+    // The grid passes TanStack's columnOrder, which is empty until someone reorders a column.
+    render(<ExportDialog isOpen onClose={vi.fn()} records={records} fields={fields} activeColumnOrder={[]} />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(screen.getByRole('dialog', { name: 'Export data' })).toHaveAccessibleDescription(
+      '3 rows × 2 columns will be exported.'
+    );
+  });
+
   it('offers CSV, JSON and NDJSON as described radios', async () => {
     await openExport();
     const group = screen.getByRole('group', { name: 'Format' });
