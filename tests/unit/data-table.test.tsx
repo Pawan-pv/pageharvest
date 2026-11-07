@@ -31,8 +31,8 @@ describe('DataTable Spreadsheet Workspace Component', () => {
   it('renders empty state when there are 0 records', () => {
     render(<DataTable records={[]} fields={sampleFields} />);
 
-    expect(screen.getByText('No records extracted yet')).toBeInTheDocument();
-    expect(screen.getByText(/Pick elements on the active web page/i)).toBeInTheDocument();
+    expect(screen.getByText('No rows yet')).toBeInTheDocument();
+    expect(screen.getByText(/Run an extraction to fill this table/i)).toBeInTheDocument();
   });
 
   it('renders loading state when isLoading is true', () => {

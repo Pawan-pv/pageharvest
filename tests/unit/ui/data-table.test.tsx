@@ -203,6 +203,6 @@ describe('UI: Data Table & Spreadsheet Management', () => {
       />
     );
 
-    expect(screen.getByText(/No records extracted/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No rows yet' })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Clock, ArrowRight, FileSpreadsheet } from 'lucide-react';
 import { Card } from '@/components/common/Card';
+import { EmptyState } from '@/components/common/EmptyState';
 import { Badge } from '@/components/common/Badge';
 import { Dataset } from '@/types';
 
@@ -22,9 +23,9 @@ export const RecentProjectsCard: React.FC<RecentProjectsCardProps> = ({
   return (
     <div className="flex flex-col gap-2 text-left">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold text-fg-muted uppercase tracking-wider">
+        <h2 className="text-xs font-semibold text-fg-muted uppercase tracking-wider">
           Recent Extractions
-        </h4>
+        </h2>
         {datasets.length > 0 && (
           <button
             onClick={onViewAllHistory}
@@ -41,13 +42,13 @@ export const RecentProjectsCard: React.FC<RecentProjectsCardProps> = ({
           Loading saved datasets...
         </Card>
       ) : recentItems.length === 0 ? (
-        <Card variant="flat" className="p-4 text-center">
-          <FileSpreadsheet className="w-6 h-6 text-fg-faint mx-auto mb-1.5" />
-          <p className="text-xs font-medium text-fg-muted">No recent extractions</p>
-          <p className="text-2xs text-fg-subtle mt-0.5">
-            Start a new extraction above to save your first dataset.
-          </p>
-        </Card>
+        <EmptyState
+          icon={<FileSpreadsheet className="w-5 h-5" />}
+          title="No recent extractions"
+          description="Choose how to start above. Your datasets will appear here."
+          action={null}
+          className="p-4"
+        />
       ) : (
         <div className="flex flex-col gap-1.5">
           {recentItems.map((dataset) => (

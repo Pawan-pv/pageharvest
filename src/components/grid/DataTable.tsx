@@ -843,15 +843,9 @@ export const DataTable: React.FC<DataTableProps> = ({
         /* Empty State */
         <EmptyState
           icon={<FileSpreadsheet className="w-8 h-8 text-fg-subtle" />}
-          title="No records extracted yet"
-          description="Pick elements on the active web page and run an extraction to populate this workspace."
-          action={
-            onNewExtraction && (
-              <Button variant="primary" size="sm" onClick={onNewExtraction}>
-                Start New Extraction
-              </Button>
-            )
-          }
+          title="No rows yet"
+          description="Run an extraction to fill this table. Rows appear here as soon as they are saved."
+          action={onNewExtraction ? { label: 'Start an extraction', onClick: onNewExtraction } : null}
         />
       ) : (
         /* Spreadsheet Data Table */

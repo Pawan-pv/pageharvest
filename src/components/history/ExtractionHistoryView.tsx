@@ -158,17 +158,15 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
         <EmptyState
           icon={<Database className="w-6 h-6" />}
           title="No saved datasets yet"
-          description="Harvest websites to build and store clean spreadsheets entirely offline."
-          action={
-            <Button variant="primary" size="sm" onClick={onNewExtraction}>
-              Start First Extraction
-            </Button>
-          }
+          description="Every extraction you run is saved here, on this computer, ready to view or export."
+          action={{ label: 'Start an extraction', onClick: onNewExtraction }}
         />
       ) : filtered.length === 0 ? (
-        <div className="p-6 text-center text-xs text-fg-subtle">
-          No datasets matching "{search}".
-        </div>
+        <EmptyState
+          title={`No datasets match "${search}"`}
+          description="Try another word from the dataset's name or website."
+          action={{ label: 'Clear search', onClick: () => setSearch('') }}
+        />
       ) : (
         <div className="flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-170px)]">
           {filtered.map((dataset) => (
