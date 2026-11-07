@@ -188,7 +188,8 @@ export const DetectedListPreview: React.FC<DetectedListPreviewProps> = ({
               rank={rank}
               isSelected={candidate.containerSelector === selected?.containerSelector}
               onSelect={() => {
-                setChosenAnyway(false);
+                // Choosing a list from the alternatives is itself the deliberate choice (ADR-027).
+                setChosenAnyway(true);
                 onSelectCandidate?.(candidate);
               }}
             />

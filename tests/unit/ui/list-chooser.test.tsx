@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { DetectedListPreview } from '@/components/picker/DetectedListPreview';
@@ -104,6 +105,38 @@ describe('choosing a list', () => {
     fireEvent.click(screen.getByRole('button', { name: /Use this list anyway/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Use this list' }));
 
+    expect(onConfirm).toHaveBeenCalled();
+  });
+
+  it('treats choosing a weak list from the alternatives as the deliberate click', () => {
+    const footer = candidate({ containerSelector: 'footer a', credible: false, name: 'Links in the footer', confidence: 0.1 });
+    const onConfirm = vi.fn();
+    // Like the real hook: choosing a candidate makes it the list in use.
+    function Harness() {
+      const [selector, setSelector] = useState(RESULTS.containerSelector);
+      const current = selector === footer.containerSelector ? footer : RESULTS;
+      return (
+        <DetectedListPreview
+          detectedList={{
+            containerSelector: current.containerSelector,
+            matchCount: current.matchCount,
+            sampleSnippets: current.sampleSnippets,
+            candidates: [RESULTS, footer],
+            credible: true,
+          }}
+          onSelectCandidate={(chosen) => setSelector(chosen.containerSelector)}
+          onConfirm={onConfirm}
+          onPickAgain={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      );
+    }
+    render(<Harness />);
+
+    fireEvent.click(screen.getAllByRole('radio')[1]);
+    expect(screen.getAllByRole('radio')[1]).toBeChecked();
+    expect(screen.queryByRole('button', { name: 'Use this list anyway' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Use this list' }));
     expect(onConfirm).toHaveBeenCalled();
   });
 
