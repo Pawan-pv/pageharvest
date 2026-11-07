@@ -184,6 +184,9 @@ export function useExtractionWorkflow(tab: TabInfo) {
   // only decides which job's state is on screen.
   const followedJobIdRef = useRef<string | null>(null);
   const pickerActiveRef = useRef(false);
+  // Pagination settings the person, or a recipe they loaded, has set. Saved defaults arrive
+  // asynchronously when the panel opens and must never overwrite these.
+  const setPaginationKeysRef = useRef(new Set<keyof ExtractionPaginationConfig>());
 
   const handleOperationError = useCallback((error: unknown, fallbackView: WorkflowView) => {
     const message = errorText(error);
@@ -264,13 +267,16 @@ export function useExtractionWorkflow(tab: TabInfo) {
       try {
         const settings = await repositories.settings.getSettings();
         if (cancelled) return;
-        setPagination((prev) => ({
-          ...prev,
-          maxPages: settings.defaultMaxPages,
-          delayMs: settings.defaultDelayMs,
-          scrollCount: settings.defaultMaxScrolls,
-          scrollDelayMs: settings.defaultScrollDelayMs,
-        }));
+        setPagination((prev) => {
+          const chosen = setPaginationKeysRef.current;
+          return {
+            ...prev,
+            maxPages: chosen.has('maxPages') ? prev.maxPages : settings.defaultMaxPages,
+            delayMs: chosen.has('delayMs') ? prev.delayMs : settings.defaultDelayMs,
+            scrollCount: chosen.has('scrollCount') ? prev.scrollCount : settings.defaultMaxScrolls,
+            scrollDelayMs: chosen.has('scrollDelayMs') ? prev.scrollDelayMs : settings.defaultScrollDelayMs,
+          };
+        });
         setRecordWarningThreshold(settings.maxRecordsWarningThreshold);
       } catch (err) {
         console.warn('Could not load settings:', err);
@@ -834,7 +840,11 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setFields(config.fields);
       setSelectedFieldIds(new Set(config.fields.map((f) => f.id)));
       if (config.pagination) {
-        setPagination(config.pagination);
+        const loaded = config.pagination;
+        (Object.keys(loaded) as (keyof ExtractionPaginationConfig)[]).forEach((key) =>
+          setPaginationKeysRef.current.add(key)
+        );
+        setPagination(loaded);
       }
       setSelectedProjectId(config.projectId);
       void loadProjects();
@@ -842,6 +852,14 @@ export function useExtractionWorkflow(tab: TabInfo) {
     },
     [loadProjects]
   );
+
+  /** A change made on the Pagination step. What it sets is kept over the saved defaults. */
+  const updatePagination = useCallback((updates: Partial<ExtractionPaginationConfig>) => {
+    (Object.keys(updates) as (keyof ExtractionPaginationConfig)[]).forEach((key) =>
+      setPaginationKeysRef.current.add(key)
+    );
+    setPagination((prev) => ({ ...prev, ...updates }));
+  }, []);
 
   const loadRecipe = useCallback(
     (recipe: ExtractionRecipe) => {
@@ -867,7 +885,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
     fields,
     selectedFieldIds,
     pagination,
-    setPagination,
+    updatePagination,
     records,
     recordsRevision,
     currentDataset,

@@ -310,9 +310,7 @@ export const App: React.FC = () => {
               step={configStep}
               onStepChange={setConfigStep}
               onRemoveField={workflow.removeField}
-              onPaginationChange={(updates) =>
-                workflow.setPagination((prev) => ({ ...prev, ...updates }))
-              }
+              onPaginationChange={workflow.updatePagination}
               onBack={() => workflow.setView('review_list')}
               onStartHarvest={workflow.startExtraction}
             />
