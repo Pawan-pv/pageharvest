@@ -126,7 +126,9 @@ describe('UI: Field Selection & Configuration', () => {
       const submitBtn = screen.getByRole('button', { name: 'Add Column' });
       fireEvent.click(submitBtn);
 
-      expect(screen.getByText(/please provide a column name/i)).toBeInTheDocument();
+      const name = screen.getByLabelText('Column name');
+      expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveAccessibleDescription('Give the column a name.');
       expect(onAdd).not.toHaveBeenCalled();
     });
 
@@ -142,10 +144,10 @@ describe('UI: Field Selection & Configuration', () => {
         />
       );
 
-      fireEvent.change(screen.getByPlaceholderText('e.g. Product Rating'), {
+      fireEvent.change(screen.getByLabelText('Column name'), {
         target: { value: 'Discount Price' },
       });
-      fireEvent.change(screen.getByPlaceholderText(/span.rating/i), {
+      fireEvent.change(screen.getByLabelText('CSS selector inside each item'), {
         target: { value: '.discount' },
       });
 
@@ -248,5 +250,33 @@ describe('UI: Field Selection & Configuration', () => {
       fireEvent.click(harvestBtn);
       expect(onStartHarvest).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('Add Column dialog', () => {
+  it('uses the same words as the column editor, and shows the pattern example as written', () => {
+    render(<AddFieldModal isOpen onClose={vi.fn()} onAdd={vi.fn()} />);
+    expect(screen.getByRole('dialog', { name: 'Add a column' })).toBeInTheDocument();
+    const type = screen.getByLabelText('What to collect');
+    const options = Array.from(type.querySelectorAll('option')).map((option) => option.textContent);
+    expect(options).toEqual(['Text', 'Link (URL)', 'Image (URL)', 'Number', 'Attribute', 'Pattern (regex)', 'HTML (advanced)']);
+    fireEvent.change(type, { target: { value: 'regex' } });
+    expect(screen.getByLabelText('Pattern')).toHaveAttribute('placeholder', String.raw`e.g. SKU-(\d+)`);
+    expect(screen.getByRole('button', { name: 'Help: Pattern (regex)' })).toBeInTheDocument();
+  });
+
+  it('ties each problem to its own field', () => {
+    const onAdd = vi.fn();
+    render(<AddFieldModal isOpen onClose={vi.fn()} onAdd={onAdd} />);
+    fireEvent.change(screen.getByLabelText('Column name'), { target: { value: 'Code' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Column' }));
+    expect(screen.getByLabelText('CSS selector inside each item')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Column name')).not.toHaveAttribute('aria-invalid');
+
+    fireEvent.change(screen.getByLabelText('CSS selector inside each item'), { target: { value: '.sku' } });
+    fireEvent.change(screen.getByLabelText('What to collect'), { target: { value: 'attribute' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Column' }));
+    expect(screen.getByLabelText('Attribute name')).toHaveAccessibleDescription(/Name the attribute/);
+    expect(onAdd).not.toHaveBeenCalled();
   });
 });

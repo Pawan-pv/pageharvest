@@ -223,11 +223,11 @@ describe('regex fields can actually be configured', () => {
     const onAdd = vi.fn();
     render(<AddFieldModal isOpen onClose={vi.fn()} onAdd={onAdd} />);
 
-    fireEvent.change(screen.getByLabelText(/Column Name/), { target: { value: 'Code' } });
-    fireEvent.change(screen.getByLabelText(/Relative CSS Selector/), { target: { value: '.sku' } });
-    fireEvent.change(screen.getByLabelText('Extractor Type'), { target: { value: 'regex' } });
-    fireEvent.change(screen.getByLabelText(/Regex Pattern/), { target: { value: 'SKU-(\\d+)' } });
-    fireEvent.change(screen.getByLabelText(/Capture Group/), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('Column name'), { target: { value: 'Code' } });
+    fireEvent.change(screen.getByLabelText('CSS selector inside each item'), { target: { value: '.sku' } });
+    fireEvent.change(screen.getByLabelText('What to collect'), { target: { value: 'regex' } });
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'SKU-(\\d+)' } });
+    fireEvent.change(screen.getByLabelText('Part to keep'), { target: { value: '1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add Column' }));
 
     expect(onAdd).toHaveBeenCalledWith(
@@ -239,9 +239,9 @@ describe('regex fields can actually be configured', () => {
     const onAdd = vi.fn();
     render(<AddFieldModal isOpen onClose={vi.fn()} onAdd={onAdd} />);
 
-    fireEvent.change(screen.getByLabelText(/Column Name/), { target: { value: 'Code' } });
-    fireEvent.change(screen.getByLabelText(/Relative CSS Selector/), { target: { value: '.sku' } });
-    fireEvent.change(screen.getByLabelText('Extractor Type'), { target: { value: 'regex' } });
+    fireEvent.change(screen.getByLabelText('Column name'), { target: { value: 'Code' } });
+    fireEvent.change(screen.getByLabelText('CSS selector inside each item'), { target: { value: '.sku' } });
+    fireEvent.change(screen.getByLabelText('What to collect'), { target: { value: 'regex' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add Column' }));
 
     expect(onAdd).not.toHaveBeenCalled();

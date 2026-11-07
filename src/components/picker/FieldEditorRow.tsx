@@ -33,7 +33,8 @@ export const EXTRACTOR_LABELS: Record<FieldExtractorType, string> = {
   link_text: 'Link text',
 };
 
-const EXTRACTOR_ORDER: FieldExtractorType[] = ['text', 'href', 'src', 'number', 'attribute', 'regex', 'html'];
+/** The types a person can choose, in the order they are offered. */
+export const EXTRACTOR_ORDER: FieldExtractorType[] = ['text', 'href', 'src', 'number', 'attribute', 'regex', 'html'];
 
 /** Why a pattern cannot be used, or an empty string if it can. */
 export function regexProblem(pattern: string): string {
