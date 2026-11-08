@@ -256,10 +256,9 @@ describe('App: first run and Help', () => {
     cleanup();
     render(<App />);
     await screen.findByText('Get data from this page');
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole('button', { name: 'Help' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Help' }));
     expect(await screen.findByRole('heading', { name: 'Help and guide' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Help' })).toHaveAttribute('aria-current', 'page');
     await userEvent.click(screen.getByRole('button', { name: 'Show the welcome tour again' }));

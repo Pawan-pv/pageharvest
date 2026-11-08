@@ -64,9 +64,7 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     render(<App />);
 
     await screen.findByText('Get data from this page');
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument());
   });
 
   it('displays the recovery banner for a stored recoverable job, with its real progress', async () => {
