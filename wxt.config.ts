@@ -17,9 +17,11 @@ export default defineConfig({
   }),
   manifest: {
     name: 'PageHarvest',
-    description: 'Local-first website data extraction Chrome extension',
+    // The Chrome Web Store short description: 132 characters at most.
+    description:
+      'Extract lists and tables from web pages into a spreadsheet, then export CSV, JSON or Excel. Runs locally; nothing is uploaded.',
     version: '1.0.0',
-    version_name: '1.0.0-rc1',
+    version_name: '1.0.0',
     // chrome.sidePanel requires Chrome 114; 116 adds the open behavior this extension relies on.
     minimum_chrome_version: '116',
     icons: {
