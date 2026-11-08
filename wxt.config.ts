@@ -28,9 +28,9 @@ export default defineConfig({
       48: 'icon/48.png',
       128: 'icon/128.png'
     },
+    // No `scripting`: the content script is declared below, and nothing injects one (ADR-034).
     permissions: [
       'activeTab',
-      'scripting',
       'sidePanel',
       'storage',
       'downloads'

@@ -1,6 +1,6 @@
+/** Must equal the manifest's `permissions`; `manifest-assets.test.ts` checks both lists. */
 export const REQUIRED_PERMISSIONS = [
   'activeTab',
-  'scripting',
   'sidePanel',
   'storage',
   'downloads',
