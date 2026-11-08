@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Play, Pencil, Trash2, Plus } from 'lucide-react';
-import { Alert } from '@/components/common/Alert';
+import { Banner } from '@/components/common/Banner';
 import { Badge } from '@/components/common/Badge';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Input } from '@/components/common/Input';
-import { Modal } from '@/components/common/Modal';
+import { Dialog } from '@/components/common/Dialog';
 import { ExtractionHistoryView, ExtractionHistoryViewProps } from '@/components/history/ExtractionHistoryView';
 import { JobStatus } from '@/shared/contracts/job';
 import { ExtractionProject } from '@/shared/contracts/project';
@@ -62,7 +62,7 @@ function useLoadedList<T>(load: () => Promise<T[]>) {
 // Projects
 // ---------------------------------------------------------------------------
 
-const ProjectsPanel: React.FC = () => {
+const ProjectsPanel: React.FC<{ onNewExtraction: () => void }> = ({ onNewExtraction }) => {
   const repository = useMemo(() => new ProjectRepository(), []);
   const load = useCallback(() => repository.getAllProjects(), [repository]);
   const { items: projects, isLoading, error, setError, reload } = useLoadedList(load);
@@ -139,7 +139,7 @@ const ProjectsPanel: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-3">
-      {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
+      {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
 
       <div className="flex items-end gap-2">
         <div className="flex-1">
@@ -162,23 +162,25 @@ const ProjectsPanel: React.FC = () => {
       </div>
 
       {!isLoading && projects.length === 0 && (
-        <p className="p-4 text-center text-xs text-slate-400">
-          No projects yet. Extractions are grouped by website automatically.
-        </p>
+        <EmptyState
+          title="No projects yet"
+          description="Projects group your extractions. One is made for each website when you run an extraction, or you can create one above."
+          action={{ label: 'Start an extraction', onClick: onNewExtraction }}
+        />
       )}
 
       {projects.map((project) => (
         <Card key={project.id} variant="flat" className="p-3 flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h3 className="text-xs font-semibold text-slate-900 truncate">{project.name}</h3>
+            <h3 className="text-xs font-semibold text-fg truncate">{project.name}</h3>
             {project.targetUrl && (
-              <p className="text-[11px] text-slate-400 truncate">{project.targetUrl}</p>
+              <p className="text-2xs text-fg-subtle truncate">{project.targetUrl}</p>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button
               aria-label={`Rename project ${project.name}`}
-              className="p-1 text-slate-400 hover:text-slate-700 rounded"
+              className="p-1 text-fg-subtle hover:text-fg-muted rounded"
               onClick={() => {
                 setEditing(project);
                 setEditName(project.name);
@@ -188,7 +190,7 @@ const ProjectsPanel: React.FC = () => {
             </button>
             <button
               aria-label={`Delete project ${project.name}`}
-              className="p-1 text-slate-400 hover:text-rose-600 rounded"
+              className="p-1 text-fg-subtle hover:text-danger-fg rounded"
               onClick={() => void askToDelete(project)}
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -197,7 +199,7 @@ const ProjectsPanel: React.FC = () => {
         </Card>
       ))}
 
-      <Modal
+      <Dialog
         isOpen={editing !== null}
         onClose={() => setEditing(null)}
         title="Rename Project"
@@ -211,9 +213,9 @@ const ProjectsPanel: React.FC = () => {
         }
       >
         <Input label="Project Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
-      </Modal>
+      </Dialog>
 
-      <Modal
+      <Dialog
         isOpen={deleting !== null}
         onClose={() => setDeleting(null)}
         title="Delete Project?"
@@ -231,8 +233,8 @@ const ProjectsPanel: React.FC = () => {
           </>
         }
       >
-        <p className="text-xs text-slate-600">This action cannot be undone.</p>
-      </Modal>
+        <p className="text-xs text-fg-muted">This action cannot be undone.</p>
+      </Dialog>
     </div>
   );
 };
@@ -241,7 +243,10 @@ const ProjectsPanel: React.FC = () => {
 // Recipes
 // ---------------------------------------------------------------------------
 
-const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }> = ({ onRunRecipe }) => {
+const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void; onNewExtraction: () => void }> = ({
+  onRunRecipe,
+  onNewExtraction,
+}) => {
   const repository = useMemo(() => new RecipeRepository(), []);
   const load = useCallback(() => repository.getAllRecipes(), [repository]);
   const { items: recipes, isLoading, error, setError, reload } = useLoadedList(load);
@@ -300,21 +305,22 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
 
   return (
     <div className="flex flex-col gap-3">
-      {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
+      {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
 
       {!isLoading && recipes.length === 0 && (
         <EmptyState
           title="No saved recipes"
-          description='Use "Save Recipe" when configuring an extraction to reuse it later.'
+          description='A recipe runs the same extraction again later. Save one with "Save Recipe" on the Pagination step.'
+          action={{ label: 'Start an extraction', onClick: onNewExtraction }}
         />
       )}
 
       {recipes.map((recipe) => (
         <Card key={recipe.id} variant="flat" className="p-3 flex flex-col gap-2">
           <div className="min-w-0">
-            <h3 className="text-xs font-semibold text-slate-900 truncate">{recipe.name}</h3>
-            <p className="text-[11px] text-slate-400 truncate">{recipe.urlPattern}</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <h3 className="text-xs font-semibold text-fg truncate">{recipe.name}</h3>
+            <p className="text-2xs text-fg-subtle truncate">{recipe.urlPattern}</p>
+            <p className="text-2xs text-fg-subtle mt-0.5">
               {recipe.fields.length} columns, {recipe.pagination?.type ?? 'none'}
             </p>
           </div>
@@ -348,7 +354,7 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
         </Card>
       ))}
 
-      <Modal
+      <Dialog
         isOpen={editing !== null}
         onClose={() => setEditing(null)}
         title="Edit Recipe"
@@ -378,9 +384,9 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
             onChange={(e) => setDraft((prev) => ({ ...prev, containerSelector: e.target.value }))}
           />
         </div>
-      </Modal>
+      </Dialog>
 
-      <Modal
+      <Dialog
         isOpen={deleting !== null}
         onClose={() => setDeleting(null)}
         title="Delete Recipe?"
@@ -394,8 +400,8 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
           </>
         }
       >
-        <p className="text-xs text-slate-600">This action cannot be undone.</p>
-      </Modal>
+        <p className="text-xs text-fg-muted">This action cannot be undone.</p>
+      </Dialog>
     </div>
   );
 };
@@ -404,7 +410,10 @@ const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void }
 // Schemas
 // ---------------------------------------------------------------------------
 
-const SchemasPanel: React.FC<{ onUseSchema: (schema: ExtractionSchema) => void }> = ({ onUseSchema }) => {
+const SchemasPanel: React.FC<{ onUseSchema: (schema: ExtractionSchema) => void; onNewExtraction: () => void }> = ({
+  onUseSchema,
+  onNewExtraction,
+}) => {
   const repository = useMemo(() => new SchemaRepository(), []);
   const load = useCallback(() => repository.getAllSchemas(), [repository]);
   const { items: schemas, isLoading, error, setError, reload } = useLoadedList(load);
@@ -446,21 +455,22 @@ const SchemasPanel: React.FC<{ onUseSchema: (schema: ExtractionSchema) => void }
 
   return (
     <div className="flex flex-col gap-3">
-      {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
+      {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
 
       {!isLoading && schemas.length === 0 && (
         <EmptyState
           title="No schemas yet"
           description="Every extraction saves the list and columns it used here, so you can use them again."
+          action={{ label: 'Start an extraction', onClick: onNewExtraction }}
         />
       )}
 
       {schemas.map((schema) => (
         <Card key={schema.id} variant="flat" className="p-3 flex flex-col gap-2">
           <div className="min-w-0">
-            <h3 className="text-xs font-semibold text-slate-900 truncate">{schema.name}</h3>
-            <p className="text-[11px] font-mono text-slate-400 truncate">{schema.containerSelector}</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
+            <h3 className="text-xs font-semibold text-fg truncate">{schema.name}</h3>
+            <p className="text-2xs font-mono text-fg-subtle truncate">{schema.containerSelector}</p>
+            <p className="text-2xs text-fg-subtle mt-0.5">
               {schema.fields.map((field) => field.name).join(', ')}
             </p>
           </div>
@@ -496,7 +506,7 @@ const SchemasPanel: React.FC<{ onUseSchema: (schema: ExtractionSchema) => void }
         </Card>
       ))}
 
-      <Modal
+      <Dialog
         isOpen={editing !== null}
         onClose={() => setEditing(null)}
         title="Edit Schema"
@@ -521,7 +531,7 @@ const SchemasPanel: React.FC<{ onUseSchema: (schema: ExtractionSchema) => void }
             onChange={(e) => setDraft((prev) => ({ ...prev, containerSelector: e.target.value }))}
           />
         </div>
-      </Modal>
+      </Dialog>
     </div>
   );
 };
@@ -537,35 +547,39 @@ const STATUS_VARIANT: Partial<Record<JobStatus, 'success' | 'danger' | 'warning'
   EXPIRED: 'neutral',
 };
 
-const RunHistoryPanel: React.FC = () => {
+const RunHistoryPanel: React.FC<{ onNewExtraction: () => void }> = ({ onNewExtraction }) => {
   const repository = useMemo(() => new HistoryRepository(), []);
   const load = useCallback(() => repository.getAllHistory(), [repository]);
   const { items: runs, isLoading, error, setError } = useLoadedList<ExtractionRunHistory>(load);
 
   return (
     <div className="flex flex-col gap-2">
-      {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
+      {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
 
       {!isLoading && runs.length === 0 && (
-        <EmptyState title="No runs yet" description="Finished, failed and cancelled extractions appear here." />
+        <EmptyState
+          title="No runs yet"
+          description="Finished, failed and cancelled extractions appear here."
+          action={{ label: 'Start an extraction', onClick: onNewExtraction }}
+        />
       )}
 
       {runs.map((run) => (
         <Card key={run.id} variant="flat" className="p-3 flex flex-col gap-1">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-xs font-semibold text-slate-900 truncate">{run.name ?? run.url ?? run.id}</h3>
+            <h3 className="text-xs font-semibold text-fg truncate">{run.name ?? run.url ?? run.id}</h3>
             <Badge variant={STATUS_VARIANT[run.status] ?? 'neutral'} size="sm">{run.status}</Badge>
           </div>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-2xs text-fg-subtle">
             {run.totalExtracted} rows, {run.duplicatesSkipped} duplicates skipped
             {run.recordsFiltered ? `, ${run.recordsFiltered} filtered` : ''}
             {run.recordsFailed ? `, ${run.recordsFailed} failed` : ''}
           </p>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-2xs text-fg-subtle">
             {new Date(run.startedAt).toLocaleString()}
             {run.finishedAt ? ` (${Math.max(0, Math.round((run.finishedAt - run.startedAt) / 1000))}s)` : ''}
           </p>
-          {run.errorMessage && <p className="text-[11px] text-rose-600">{run.errorMessage}</p>}
+          {run.errorMessage && <p className="text-2xs text-danger-fg">{run.errorMessage}</p>}
         </Card>
       ))}
     </div>
@@ -593,7 +607,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onRunRecipe, onUseSche
             onClick={() => setTab(item.id)}
             aria-current={tab === item.id ? 'page' : undefined}
             className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-              tab === item.id ? 'bg-emerald-50 text-emerald-800' : 'text-slate-500 hover:text-slate-800'
+              tab === item.id ? 'bg-brand-soft text-brand-emphasis' : 'text-fg-subtle hover:text-fg'
             }`}
           >
             {item.label}
@@ -605,10 +619,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onRunRecipe, onUseSche
         <ExtractionHistoryView {...datasetProps} />
       ) : (
         <div className="p-4">
-          {tab === 'projects' && <ProjectsPanel />}
-          {tab === 'recipes' && <RecipesPanel onRunRecipe={onRunRecipe} />}
-          {tab === 'schemas' && <SchemasPanel onUseSchema={onUseSchema} />}
-          {tab === 'history' && <RunHistoryPanel />}
+          {tab === 'projects' && <ProjectsPanel onNewExtraction={datasetProps.onNewExtraction} />}
+          {tab === 'recipes' && (
+            <RecipesPanel onRunRecipe={onRunRecipe} onNewExtraction={datasetProps.onNewExtraction} />
+          )}
+          {tab === 'schemas' && (
+            <SchemasPanel onUseSchema={onUseSchema} onNewExtraction={datasetProps.onNewExtraction} />
+          )}
+          {tab === 'history' && <RunHistoryPanel onNewExtraction={datasetProps.onNewExtraction} />}
         </div>
       )}
     </div>

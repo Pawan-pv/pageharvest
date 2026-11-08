@@ -11,6 +11,42 @@ permissions:
   contents: read
 
 jobs:
+  independent-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Require an independent approval
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pullRequest = context.payload.pull_request;
+            const reviews = await github.paginate(
+              github.rest.pulls.listReviews,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pullRequest.number,
+                per_page: 100,
+              }
+            );
+            const latestByReviewer = new Map();
+            for (const review of reviews) {
+              if (review.user?.login) latestByReviewer.set(review.user.login, review.state);
+            }
+            const approvedBy = [...latestByReviewer.entries()]
+              .filter(([login, state]) => login !== pullRequest.user.login && state === 'APPROVED')
+              .map(([login]) => login);
+            if (approvedBy.length === 0) {
+              core.setFailed(
+                'An approval from a reviewer other than the pull request author is required. '
+                  + 'That reviewer must use docs/INDEPENDENT_REVIEW_CHECKLIST.md.'
+              );
+            } else {
+              core.info(`Independent approval recorded from: ${approvedBy.join(', ')}`);
+            }
+
   release-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 40

@@ -8,7 +8,7 @@ export const DetectedItemSampleSchema = z.object({
   tag: z.string(),
   previewText: z.string(),
   classes: z.array(z.string()).default([]),
-  attributes: z.record(z.string()).default({}),
+  attributes: z.record(z.string(), z.string()).default({}),
 });
 
 export type DetectedItemSample = z.infer<typeof DetectedItemSampleSchema>;

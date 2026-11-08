@@ -77,8 +77,8 @@ describe('Side Panel UI Shell (App.tsx)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Select Elements/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Auto-Detect Lists/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Pick items myself/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Find data automatically/i })).toBeInTheDocument();
     });
   });
 });

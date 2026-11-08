@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 export interface SelectOption {
@@ -24,12 +24,15 @@ export const Select: React.FC<SelectProps> = ({
   disabled,
   ...props
 }) => {
-  const selectId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+  const generatedId = useId();
+  const selectId = id ?? generatedId;
+  const messageId = `${selectId}-message`;
+  const hasMessage = Boolean(error || helperText);
 
   return (
     <div className="w-full flex flex-col gap-1 text-left">
       {label && (
-        <label htmlFor={selectId} className="text-xs font-semibold text-slate-700 tracking-tight">
+        <label htmlFor={selectId} className="text-xs font-semibold text-fg-muted tracking-tight">
           {label}
         </label>
       )}
@@ -37,10 +40,12 @@ export const Select: React.FC<SelectProps> = ({
         <select
           id={selectId}
           disabled={disabled}
-          className={`w-full appearance-none rounded-lg border bg-white px-3 py-2 pr-9 text-sm text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed ${
+          aria-invalid={error ? true : undefined}
+          aria-describedby={hasMessage ? messageId : undefined}
+          className={`w-full appearance-none rounded-lg border bg-surface px-3 py-2 pr-9 text-sm text-fg transition-colors focus:outline-none focus:ring-1 focus:ring-offset-0 disabled:bg-surface-sunken disabled:text-fg-subtle disabled:cursor-not-allowed ${
             error
-              ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-200'
-              : 'border-slate-300 focus:border-emerald-500 focus:ring-emerald-200'
+              ? 'border-danger focus:border-danger focus:ring-danger'
+              : 'border-line-strong focus:border-focus focus:ring-focus'
           } ${className}`}
           {...props}
         >
@@ -50,14 +55,14 @@ export const Select: React.FC<SelectProps> = ({
             </option>
           ))}
         </select>
-        <div className="absolute right-3 flex items-center pointer-events-none text-slate-400">
+        <div className="absolute right-3 flex items-center pointer-events-none text-fg-subtle">
           <ChevronDown className="w-4 h-4" />
         </div>
       </div>
       {error ? (
-        <span className="text-xs text-rose-600 font-medium">{error}</span>
+        <span id={messageId} className="text-xs text-danger-fg font-medium">{error}</span>
       ) : helperText ? (
-        <span className="text-xs text-slate-500">{helperText}</span>
+        <span id={messageId} className="text-xs text-fg-subtle">{helperText}</span>
       ) : null}
     </div>
   );

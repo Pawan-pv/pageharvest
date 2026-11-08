@@ -1,9 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { FileSpreadsheet, FileJson, Download, X } from 'lucide-react';
-import { Alert } from '@/components/common/Alert';
+import React, { useEffect, useId, useState } from 'react';
+import { Download } from 'lucide-react';
+import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
+import { Dialog } from '@/components/common/Dialog';
+import { Input } from '@/components/common/Input';
+import { Select } from '@/components/common/Select';
 import { ExtractedRecord, FieldDefinition, Dataset } from '@/types';
-import { recordsToCsv, recordsToJson, generateExportFilename, withValueDetails } from '@/core/export/exporter';
+import {
+  generateExportFilename,
+  recordsToCsvChunks,
+  recordsToJsonChunks,
+  recordsToNdjsonChunks,
+  resolveColumns,
+  withValueDetails,
+} from '@/core/export/exporter';
 import { triggerDownload } from '@/platform/downloads';
 import { SettingsRepository } from '@/storage/repositories/settings-repository';
 
@@ -16,6 +26,58 @@ export interface ExportDialogProps {
   activeColumnOrder?: string[];
 }
 
+type ExportFormat = 'csv' | 'xlsx' | 'json' | 'ndjson';
+type Delimiter = ',' | ';' | '\t';
+
+const FORMATS: { value: ExportFormat; label: string; description: string }[] = [
+  { value: 'csv', label: 'CSV', description: 'For Excel, Numbers and Google Sheets.' },
+  { value: 'xlsx', label: 'Excel', description: 'An Excel workbook, with numbers kept as numbers.' },
+  { value: 'json', label: 'JSON', description: 'For developers and other tools.' },
+  { value: 'ndjson', label: 'NDJSON', description: 'One row per line, for large data tools.' },
+];
+
+const DELIMITERS: { value: Delimiter; label: string }[] = [
+  { value: ',', label: 'Comma (,)' },
+  { value: ';', label: 'Semicolon (;)' },
+  { value: '\t', label: 'Tab' },
+];
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+const FormatOption: React.FC<{
+  option: (typeof FORMATS)[number];
+  checked: boolean;
+  onSelect: () => void;
+}> = ({ option, checked, onSelect }) => {
+  const inputId = useId();
+  const descriptionId = useId();
+  return (
+    <div
+      className={`flex items-start gap-2 p-2.5 rounded-control border ${
+        checked ? 'border-brand bg-brand-soft' : 'border-line bg-surface hover:border-line-strong'
+      }`}
+    >
+      <input
+        id={inputId}
+        type="radio"
+        name="export-format"
+        checked={checked}
+        onChange={onSelect}
+        aria-describedby={descriptionId}
+        className="mt-0.5 h-4 w-4 accent-brand"
+      />
+      <div>
+        <label htmlFor={inputId} className="block text-xs font-semibold text-fg cursor-pointer">
+          {option.label}
+        </label>
+        <span id={descriptionId} className="block text-2xs text-fg-muted">
+          {option.description}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 export const ExportDialog: React.FC<ExportDialogProps> = ({
   isOpen,
   onClose,
@@ -24,9 +86,10 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   dataset,
   activeColumnOrder,
 }) => {
-  const [format, setFormat] = useState<'csv' | 'json' | 'ndjson'>('csv');
+  const legendId = useId();
+  const [format, setFormat] = useState<ExportFormat>('csv');
   const [includeBom, setIncludeBom] = useState(true);
-  const [delimiter, setDelimiter] = useState<',' | ';' | '\t'>(',');
+  const [delimiter, setDelimiter] = useState<Delimiter>(',');
   const [prettyJson, setPrettyJson] = useState(true);
   const [jsonIndent, setJsonIndent] = useState(2);
   const [includeMetadata, setIncludeMetadata] = useState(false);
@@ -60,45 +123,52 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   if (!isOpen) return null;
 
   const datasetName = dataset?.name || 'harvested-data';
-  const autoFilename = generateExportFilename({
-    datasetName: customFilename.trim() || datasetName,
-    format,
-  });
+  const autoFilename = generateExportFilename({ datasetName: customFilename.trim() || datasetName, format });
+  const filename = customFilename.trim() ? `${customFilename.trim()}.${format}` : autoFilename;
+  // The exporter's own rule, so the count always matches the file. An empty order means "as the fields are".
+  const columnCount = resolveColumns(records, fields, { orderedColumns: activeColumnOrder }).length;
+  const rows = records.length;
+  const extras = [includeValueDetails && 'how numbers were read', includeMetadata && 'row details'].filter(Boolean);
 
   const handleExport = async () => {
-    const filename = customFilename.trim() ? `${customFilename.trim()}.${format === 'ndjson' ? 'ndjson' : format}` : autoFilename;
-
     setIsExporting(true);
     setExportError(null);
     try {
       const details = includeValueDetails ? withValueDetails(records, fields) : null;
       const exportRecords = details?.records ?? records;
-      const exportFields = details ? details.fields ?? fields : fields;
+      const exportFields = details ? (details.fields ?? fields) : fields;
       const orderedColumns = details
         ? activeColumnOrder?.flatMap((column) => [
             column,
             ...details.detailColumns.filter((name) => name.startsWith(`${column} (`)),
           ])
         : activeColumnOrder;
+
       let result;
       if (format === 'csv') {
-        const csv = recordsToCsv(exportRecords, exportFields, {
-          useBom: includeBom,
-          delimiter,
-          includeMetadata,
-          orderedColumns,
-        });
-        result = await triggerDownload({ content: csv, filename, mimeType: 'text/csv' });
+        // Chunks go straight into the Blob, so memory follows the chunk size, not the export size.
+        const content = Array.from(
+          recordsToCsvChunks(exportRecords, exportFields, { useBom: includeBom, delimiter, includeMetadata, orderedColumns })
+        );
+        result = await triggerDownload({ content, filename, mimeType: 'text/csv' });
+      } else if (format === 'xlsx') {
+        // The workbook writer is its own chunk, loaded only when someone exports to Excel.
+        const { recordsToXlsx } = await import('@/core/export/xlsx');
+        const content = recordsToXlsx(exportRecords, exportFields, { includeMetadata, orderedColumns });
+        result = await triggerDownload({ content, filename, mimeType: XLSX_MIME });
+      } else if (format === 'ndjson') {
+        const content = Array.from(recordsToNdjsonChunks(exportRecords, exportFields, { includeMetadata, orderedColumns }));
+        result = await triggerDownload({ content, filename, mimeType: 'application/x-ndjson' });
       } else {
-        const json = recordsToJson(exportRecords, exportFields, {
-          pretty: format === 'json' && prettyJson,
-          indent: jsonIndent || 2,
-          format,
-          includeMetadata,
-          orderedColumns,
-        });
-        const mimeType = format === 'ndjson' ? 'application/x-ndjson' : 'application/json';
-        result = await triggerDownload({ content: json, filename, mimeType });
+        const content = Array.from(
+          recordsToJsonChunks(exportRecords, exportFields, {
+            pretty: prettyJson,
+            indent: jsonIndent || 2,
+            includeMetadata,
+            orderedColumns,
+          })
+        );
+        result = await triggerDownload({ content, filename, mimeType: 'application/json' });
       }
 
       // The dialog only closes once the browser has accepted the download.
@@ -115,179 +185,133 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden text-left flex flex-col animate-in fade-in zoom-in-95 duration-150">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700">
-              <Download className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Export Extracted Data</h3>
-              <p className="text-xs text-slate-500">
-                {records.length} records ready to export
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-5 flex flex-col gap-4 text-xs">
-          {exportError && (
-            <Alert variant="error" title="Export failed">
-              {exportError}
-            </Alert>
-          )}
-
-          {/* Format Selection */}
-          <div className="flex flex-col gap-1.5">
-            <label className="font-semibold text-slate-700">Format</label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setFormat('csv')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                  format === 'csv'
-                    ? 'border-emerald-600 bg-emerald-50/50 text-emerald-900 font-semibold shadow-xs'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <FileSpreadsheet className="w-5 h-5 mb-1 text-emerald-600" />
-                <span>CSV</span>
-                <span className="text-[10px] text-slate-500 font-normal">Excel / Sheets</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormat('json')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                  format === 'json'
-                    ? 'border-emerald-600 bg-emerald-50/50 text-emerald-900 font-semibold shadow-xs'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <FileJson className="w-5 h-5 mb-1 text-emerald-600" />
-                <span>JSON</span>
-                <span className="text-[10px] text-slate-500 font-normal">Standard Array</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormat('ndjson')}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                  format === 'ndjson'
-                    ? 'border-emerald-600 bg-emerald-50/50 text-emerald-900 font-semibold shadow-xs'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <FileJson className="w-5 h-5 mb-1 text-emerald-600" />
-                <span>NDJSON</span>
-                <span className="text-[10px] text-slate-500 font-normal">Line-Delimited</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Options depending on format */}
-          {format === 'csv' && (
-            <div className="flex flex-col gap-3 p-3 bg-slate-50/80 rounded-xl border border-slate-100">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-700">Include UTF-8 BOM (for Excel)</span>
-                <input
-                  type="checkbox"
-                  checked={includeBom}
-                  onChange={(e) => setIncludeBom(e.target.checked)}
-                  className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-700">Delimiter</span>
-                <select
-                  value={delimiter}
-                  onChange={(e) => setDelimiter(e.target.value as ',' | ';' | '\t')}
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
-                >
-                  <option value=",">Comma (,)</option>
-                  <option value=";">Semicolon (;)</option>
-                  <option value="&#9;">Tab (\t)</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {format === 'json' && (
-            <div className="flex items-center justify-between p-3 bg-slate-50/80 rounded-xl border border-slate-100">
-              <span className="text-slate-700">Pretty Indentation (2 spaces)</span>
-              <input
-                type="checkbox"
-                checked={prettyJson}
-                onChange={(e) => setPrettyJson(e.target.checked)}
-                className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500"
-              />
-            </div>
-          )}
-
-          {/* Include provenance metadata */}
-          <div className="flex items-center justify-between">
-            <span className="text-slate-700">Include metadata (_id, _page, _extractedAt)</span>
-            <input
-              type="checkbox"
-              checked={includeMetadata}
-              onChange={(e) => setIncludeMetadata(e.target.checked)}
-              className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500"
-            />
-          </div>
-
-          {/* How numbers were read */}
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-slate-700">Include original text and currency for numbers</span>
-            <input
-              type="checkbox"
-              checked={includeValueDetails}
-              onChange={(e) => setIncludeValueDetails(e.target.checked)}
-              className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500"
-            />
-          </label>
-
-          {/* Filename Preview */}
-          <div className="flex flex-col gap-1">
-            <label className="font-semibold text-slate-700">Custom Filename (optional)</label>
-            <input
-              type="text"
-              placeholder={autoFilename}
-              value={customFilename}
-              onChange={(e) => setCustomFilename(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
-            />
-            <span className="text-[11px] text-slate-400">
-              File will be saved as: <code className="text-slate-600">{customFilename.trim() ? `${customFilename.trim()}.${format === 'ndjson' ? 'ndjson' : format}` : autoFilename}</code>
-            </span>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-100 bg-slate-50/50">
-          <Button variant="outline" size="sm" onClick={onClose}>
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Export data"
+      description={`${rows.toLocaleString('en-US')} ${rows === 1 ? 'row' : 'rows'} × ${columnCount} ${
+        columnCount === 1 ? 'column' : 'columns'
+      } will be exported${extras.length ? `, plus ${extras.join(' and ')}` : ''}.`}
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
           <Button
-            variant="primary"
             size="sm"
-            iconLeft={<Download className="w-3.5 h-3.5" />}
+            iconLeft={<Download aria-hidden="true" className="w-3.5 h-3.5" />}
             isLoading={isExporting}
+            disabled={rows === 0}
             onClick={() => void handleExport()}
           >
             Download File
           </Button>
-        </div>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-xs">
+        {exportError && (
+          <Banner
+            tone="danger"
+            title="The file was not saved"
+            dataSafety="Your rows are still saved in PageHarvest."
+            nextStep="Try again. If you closed the save window, press Download File again."
+            details={exportError}
+          >
+            The browser did not start the download.
+          </Banner>
+        )}
+
+        <fieldset aria-labelledby={legendId} className="min-w-0 flex flex-col gap-1.5">
+          <span id={legendId} className="font-semibold text-fg-muted">
+            Format
+          </span>
+          {FORMATS.map((option) => (
+            <FormatOption
+              key={option.value}
+              option={option}
+              checked={format === option.value}
+              onSelect={() => setFormat(option.value)}
+            />
+          ))}
+        </fieldset>
+
+        {format === 'csv' && (
+          <div className="flex flex-col gap-2">
+            <Select
+              label="Delimiter"
+              value={delimiter}
+              options={DELIMITERS}
+              onChange={(e) => setDelimiter(e.target.value as Delimiter)}
+              helperText="If Excel puts everything in one column, export again with Semicolon."
+            />
+            <label className="flex items-center gap-2 text-fg-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeBom}
+                onChange={(e) => setIncludeBom(e.target.checked)}
+                className="w-4 h-4 accent-brand"
+              />
+              Mark the file as UTF-8, so Excel shows accents and symbols correctly
+            </label>
+            <Banner tone="info">
+              Cells that start like a formula, such as =, + or @, get a ' in front, so a spreadsheet will not run
+              them. Numbers are written as they are.
+            </Banner>
+          </div>
+        )}
+
+        {format === 'xlsx' && (
+          <Banner tone="info">
+            Text is stored as text and numbers as numbers, so nothing in a cell runs as a formula.
+          </Banner>
+        )}
+
+        {format === 'json' && (
+          <label className="flex items-center gap-2 text-fg-muted cursor-pointer">
+            <input
+              type="checkbox"
+              checked={prettyJson}
+              onChange={(e) => setPrettyJson(e.target.checked)}
+              className="w-4 h-4 accent-brand"
+            />
+            Indent the file so people can read it
+          </label>
+        )}
+
+        <label className="flex items-start gap-2 text-fg-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeValueDetails}
+            onChange={(e) => setIncludeValueDetails(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-brand"
+          />
+          <span>
+            Add columns showing how each number was read
+            <span className="block text-2xs text-fg-subtle">
+              Its original text, whether it was clear or ambiguous, and its currency or range.
+            </span>
+          </span>
+        </label>
+
+        <label className="flex items-center gap-2 text-fg-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeMetadata}
+            onChange={(e) => setIncludeMetadata(e.target.checked)}
+            className="w-4 h-4 accent-brand"
+          />
+          Include row details (row id, page, time collected)
+        </label>
+
+        <Input
+          label="File name (optional)"
+          placeholder={autoFilename}
+          value={customFilename}
+          onChange={(e) => setCustomFilename(e.target.value)}
+          helperText={`Saved as ${filename}`}
+        />
       </div>
-    </div>
+    </Dialog>
   );
 };

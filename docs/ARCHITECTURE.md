@@ -262,11 +262,10 @@ Errors are typed using `ExtractionErrorCode` in `src/shared/contracts/error.ts`:
 
 ### 3.10 Extension Permission Model
 Manifest V3 operates under a strict principle of least privilege:
-- `activeTab`: Provides temporary script execution and DOM access only to the tab the user actively invokes.
+- `activeTab`: Exposes the URL and title of the tab the user opens PageHarvest on.
 - `sidePanel`: Grants access to mount the extension inside Chrome's side panel.
-- `storage`: Grants access to `chrome.storage.local` for lightweight session cache.
-- `scripting`: Allows dynamic script injection into the active tab.
+- `storage`: Grants access to `chrome.storage.local` for the first-run tour preference (ADR-032).
 - `downloads`: Allows direct triggering of file exports to the user's local disk.
 - `<all_urls>` (content script match): Enables extraction across target web domains. There are no `host_permissions`, and no `tabs` permission.
 
-`src/platform/permissions.ts` confirms the required permissions before a job starts.
+There is no `scripting` permission, because nothing injects scripts programmatically (ADR-034). `src/platform/permissions.ts` confirms the required permissions before a job starts, and `tests/unit/manifest-assets.test.ts` keeps its list equal to the manifest's. What each permission is for, in the words the Chrome Web Store asks for, is in [STORE_LISTING.md](STORE_LISTING.md).

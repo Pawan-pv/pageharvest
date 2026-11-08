@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { expect, test } from './release-test';
+import { choosePagination, setLimits, markTourSeen, waitForCompletedDownload } from './helpers/panel';
 
 const fixtureBaseUrl = 'http://127.0.0.1:3456';
 const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
@@ -70,19 +71,8 @@ async function queryDownloads(page: Page): Promise<DownloadSnapshot[]> {
   });
 }
 
-async function waitForDownload(
-  page: Page,
-  previousIds: Set<number>
-): Promise<DownloadSnapshot> {
-  let latest: DownloadSnapshot[] = [];
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    latest = await queryDownloads(page);
-    const completed = latest.find((item) => !previousIds.has(item.id) && item.state === 'complete');
-    if (completed) return completed;
-    await page.waitForTimeout(250);
-  }
-  throw new Error(`No completed release-test download was observed: ${JSON.stringify(latest)}`);
-}
+const waitForDownload = (page: Page, previousIds: Set<number>): Promise<DownloadSnapshot> =>
+  waitForCompletedDownload(page, previousIds);
 
 function message(type: string, payload: Record<string, unknown>): ContentMessage {
   return {
@@ -118,6 +108,8 @@ async function getExtensionId(context: BrowserContext): Promise<{ id: string; wo
     worker = await context.waitForEvent('serviceworker', { timeout: 10000 });
   }
   const id = worker.url().split('/')[2];
+  // The first-run tour has its own spec; here it would cover the panel.
+  await markTourSeen(worker);
   if (!id) throw new Error(`Could not determine the unpacked extension ID from ${worker.url()}.`);
   return { id, worker };
 }
@@ -162,13 +154,13 @@ test.describe('PageHarvest release workflows', () => {
     await targetPage.bringToFront();
 
     await expect(sidePanelPage.getByText('127.0.0.1')).toBeVisible();
-    await expect(sidePanelPage.getByRole('button', { name: 'Auto-Detect Lists' })).toBeEnabled({ timeout: 10000 });
-    await sidePanelPage.getByRole('button', { name: 'Auto-Detect Lists' }).click();
-    await expect(sidePanelPage.getByText('20 items detected')).toBeVisible();
-    await sidePanelPage.getByRole('button', { name: 'Next: Choose Fields' }).click();
-    await expect(sidePanelPage.getByText('Columns to Extract')).toBeVisible();
+    await expect(sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
+    await sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true }).click();
+    await expect(sidePanelPage.getByText('20 similar items found').first()).toBeVisible();
+    await sidePanelPage.getByRole('button', { name: 'Use this list', exact: true }).click();
+    await expect(sidePanelPage.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
 
-    const startButton = sidePanelPage.getByRole('button', { name: /Start Extraction/ });
+    const startButton = sidePanelPage.getByRole('button', { name: /Start extraction/ });
     await expect(startButton).toBeEnabled();
     await startButton.click();
     await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 30000 });
@@ -189,7 +181,7 @@ test.describe('PageHarvest release workflows', () => {
 
     const beforeCsv = new Set((await queryDownloads(sidePanelPage)).map((item) => item.id));
     await sidePanelPage.getByRole('button', { name: 'Export', exact: true }).click();
-    await expect(sidePanelPage.getByText('Export Extracted Data')).toBeVisible();
+    await expect(sidePanelPage.getByRole('dialog', { name: 'Export data' })).toBeVisible();
     await sidePanelPage.getByRole('button', { name: 'Download File' }).click();
     const csvDownload = await waitForDownload(sidePanelPage, beforeCsv);
     const csvContent = await fs.readFile(csvDownload.filename, 'utf8');
@@ -199,7 +191,7 @@ test.describe('PageHarvest release workflows', () => {
 
     const beforeJson = new Set((await queryDownloads(sidePanelPage)).map((item) => item.id));
     await sidePanelPage.getByRole('button', { name: 'Export', exact: true }).click();
-    await sidePanelPage.getByRole('button', { name: /^JSON/ }).click();
+    await sidePanelPage.getByRole('radio', { name: 'JSON', exact: true }).click();
     await sidePanelPage.getByRole('button', { name: 'Download File' }).click();
     const jsonDownload = await waitForDownload(sidePanelPage, beforeJson);
     const jsonContent = await fs.readFile(jsonDownload.filename, 'utf8');
@@ -220,13 +212,13 @@ test.describe('PageHarvest release workflows', () => {
     await targetPage.waitForLoadState('domcontentloaded');
     await targetPage.bringToFront();
 
-    await sidePanelPage.getByRole('button', { name: 'Select Elements' }).click();
+    await sidePanelPage.getByRole('button', { name: 'Pick items myself', exact: true }).click();
     await expect(sidePanelPage.getByText('Visual Element Picker Active')).toBeVisible();
     await targetPage.locator('.product-card').first().hover();
     await expect(targetPage.locator('#pageharvest-picker-overlay-host')).toBeAttached();
     await targetPage.locator('.product-card').first().click();
-    await expect(sidePanelPage.getByText('Repeating Elements Found')).toBeVisible();
-    await expect(sidePanelPage.getByText('3 items detected')).toBeVisible();
+    await expect(sidePanelPage.getByRole('heading', { name: 'Is this the data you want?' })).toBeVisible();
+    await expect(sidePanelPage.getByText('3 similar items found').first()).toBeVisible();
 
     await targetPage.keyboard.press('Escape');
     await expect(targetPage.locator('#pageharvest-picker-overlay-host')).toHaveCount(0);
@@ -272,6 +264,8 @@ test.describe('PageHarvest release workflows', () => {
   });
 
   test('E: harvests dynamically appended records with the infinite-scroll runner', async () => {
+    // Its own waits add up to more than the default 30s (the run alone may take 45s on a busy machine).
+    test.setTimeout(90000);
     const sidePanelPage = await context.newPage();
     await sidePanelPage.goto(`chrome-extension://${extensionId}/sidepanel.html`);
     const targetPage = await context.newPage();
@@ -279,14 +273,14 @@ test.describe('PageHarvest release workflows', () => {
     await targetPage.waitForLoadState('domcontentloaded');
     await targetPage.bringToFront();
 
-    await expect(sidePanelPage.getByRole('button', { name: 'Auto-Detect Lists' })).toBeEnabled({ timeout: 10000 });
-    await sidePanelPage.getByRole('button', { name: 'Auto-Detect Lists' }).click();
-    await sidePanelPage.getByRole('button', { name: 'Next: Choose Fields' }).click();
-    await expect(sidePanelPage.getByText('Columns to Extract')).toBeVisible();
-    await sidePanelPage.getByRole('button', { name: /Infinite Scroll/ }).click();
-    await sidePanelPage.getByLabel('Max Scrolls').fill('8');
-    await sidePanelPage.getByLabel('Scroll Delay (ms)').fill('400');
-    await sidePanelPage.getByRole('button', { name: /Start Extraction/ }).click();
+    await expect(sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
+    await sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true }).click();
+    await sidePanelPage.getByRole('button', { name: 'Use this list', exact: true }).click();
+    await expect(sidePanelPage.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
+    await choosePagination(sidePanelPage, 'infinite_scroll');
+    await setLimits(sidePanelPage, { maxScrolls: 8 });
+    await setLimits(sidePanelPage, { scrollDelayMs: 400 });
+    await sidePanelPage.getByRole('button', { name: /Start extraction/ }).click();
     await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 45000 });
 
     const records = await readRecords(sidePanelPage);

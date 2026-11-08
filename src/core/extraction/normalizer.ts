@@ -223,15 +223,15 @@ function realSourceOf(element: Element): { source: string | null; embedded: stri
   const found = (() => {
     const current = consider((element as HTMLImageElement).currentSrc);
     if (current) return current;
+    for (const attribute of SRCSET_ATTRIBUTES) {
+      const fromSet = consider(largestSrcsetCandidate(element.getAttribute(attribute)));
+      if (fromSet) return fromSet;
+    }
     const src = consider(element.getAttribute('src'));
     if (src) return src;
     for (const attribute of LAZY_IMAGE_ATTRIBUTES) {
       const lazy = consider(element.getAttribute(attribute));
       if (lazy) return lazy;
-    }
-    for (const attribute of SRCSET_ATTRIBUTES) {
-      const fromSet = consider(largestSrcsetCandidate(element.getAttribute(attribute)));
-      if (fromSet) return fromSet;
     }
     const picture = element.parentElement?.tagName === 'PICTURE' ? element.parentElement : null;
     for (const source of Array.from(picture?.querySelectorAll('source') ?? [])) {

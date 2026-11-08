@@ -11,6 +11,9 @@ import { JobIdentity } from '@/shared/contracts/job';
 import { ExtractionSchema } from '@/shared/contracts/schema';
 import { PaginationConfig } from '@/shared/contracts/pagination';
 import { PageHarvestDB } from '@/storage/db';
+import { codeForCategory } from '@/core/resilience/error-reporter';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
+import type { ErrorCategory } from '@/types';
 
 /**
  * Runs the real background coordinator against the real content runtime, over real
@@ -143,11 +146,17 @@ export class ExtensionHarness {
   ): HarnessPage {
     this.currentUrls.set(tabId, url);
     this.tabsWithoutContent.delete(tabId);
+    const page = { tabId } as HarnessPage;
     const coordinator = createContentWorkflowCoordinator(
       () => undefined,
       document,
       {
-        sendToBackground: (message) => this.deliverFromPage(tabId, message),
+        // jsdom keeps one document, so a replaced page's run can keep going. In a browser that
+        // document is destroyed and sends nothing; this makes the harness behave the same way.
+        sendToBackground: (message) =>
+          this.pages.get(tabId) === page
+            ? this.deliverFromPage(tabId, message)
+            : Promise.reject(new Error('This document was unloaded and can no longer send.')),
         getCurrentUrl: () => this.currentUrls.get(tabId) ?? url,
         navigateUrl: (target) => {
           this.navigations.push({ tabId, url: target });
@@ -159,7 +168,7 @@ export class ExtensionHarness {
         ...options,
       }
     );
-    const page = { coordinator, tabId };
+    page.coordinator = coordinator;
     this.pages.set(tabId, page);
     return page;
   }
@@ -256,12 +265,18 @@ export class ExtensionHarness {
   }
 }
 
-function quietReporter(category: string, error: unknown) {
+/** The real reporter's output, without its console noise or shared history. */
+function quietReporter(
+  category: ErrorCategory,
+  error: unknown,
+  options: { code?: ExtractionErrorCode } = {}
+) {
   const message = error instanceof Error ? error.message : String(error);
   return {
     id: `err_${Math.random().toString(36).slice(2, 10)}`,
-    category: category as never,
+    category,
     severity: 'ERROR' as const,
+    code: options.code ?? codeForCategory(category),
     message,
     timestamp: Date.now(),
   };

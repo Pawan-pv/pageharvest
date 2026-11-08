@@ -46,6 +46,7 @@ import {
   SettingsRepository,
 } from '@/storage/repositories';
 import { ErrorCategory, ExtractionRunHistory, HarvestError, RecordEntity } from '@/types';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
 
 /**
  * Background job coordinator: the only owner of durable extraction state.
@@ -779,7 +780,7 @@ export class JobCoordinator {
   }
 
   public async reportJobFailure(payload: JobFailedPayload, sender: MessageSenderInfo): Promise<BatchAck> {
-    const { identity, message, category, recoverable } = payload;
+    const { identity, message, category, code, recoverable } = payload;
     const current = await this.jobs.getJob(identity.jobId);
     const rejection = this.validateSender(current, identity, sender);
     if (rejection || !current) {
@@ -789,7 +790,7 @@ export class JobCoordinator {
     if (recoverable) {
       await this.interruptJob(identity.jobId, message);
     } else {
-      await this.failJob(identity.jobId, message, category);
+      await this.failJob(identity.jobId, message, category, code);
     }
     return { status: 'committed', sequence: current.lastSequence, inserted: 0, duplicates: 0 };
   }
@@ -889,8 +890,27 @@ export class JobCoordinator {
     const status = await this.transport.getTabLoadStatus(tabId);
     if (status === 'loading') return; // Another load event will check again.
 
+    // A Next click can change the address without loading a new document (a client-side
+    // route). Then the page is still there and still running this job, and nothing failed
+    // to load (ADR-033). Only that exact run counts: same job, same generation.
+    if (await this.tabIsRunning(tabId, job)) {
+      const latest = await this.jobs.getJob(jobId);
+      if (latest && latest.generation === job.generation) return;
+    }
+
     const page = checkpoint.expectedUrl ? `The page ${checkpoint.expectedUrl}` : 'The next page';
     await this.interruptJob(jobId, `${page} failed to load.`);
+  }
+
+  /** Whether the content script in this tab answers that it is running this run of the job. */
+  private async tabIsRunning(tabId: number, job: ExtractionJob): Promise<boolean> {
+    try {
+      const reply = await this.transport.sendToTab(tabId, this.buildMessage({ type: 'QUERY_JOB_RUN', payload: {} }));
+      const parsed = JobRunStatusSchema.safeParse(reply);
+      return parsed.success && parsed.data.active && parsed.data.jobId === job.id && parsed.data.generation === job.generation;
+    } catch {
+      return false; // No document answered: the load really did fail.
+    }
   }
 
   /**
@@ -1018,8 +1038,13 @@ export class JobCoordinator {
     }
   }
 
-  private async failJob(jobId: string, message: string, category: ErrorCategory): Promise<void> {
-    const reported = this.report(category, message, { jobId });
+  private async failJob(
+    jobId: string,
+    message: string,
+    category: ErrorCategory,
+    code?: ExtractionErrorCode
+  ): Promise<void> {
+    const reported = this.report(category, message, { jobId }, code);
     const job = await this.db.transaction(
       'rw',
       [this.db.jobs, this.db.checkpoints, this.db.history],
@@ -1276,6 +1301,7 @@ export class JobCoordinator {
           resume: {
             page: checkpoint.nextPage,
             nextSequence: job.lastSequence + 1,
+            recordsExtracted: job.totalExtracted,
             scrollsCompleted: checkpoint.scrollsCompleted,
             catchUpScrolls: checkpoint.catchUpScrolls,
             visitedUrls: checkpoint.visitedUrls,
@@ -1341,9 +1367,10 @@ export class JobCoordinator {
   private report(
     category: ErrorCategory,
     error: unknown,
-    context: Record<string, unknown>
+    context: Record<string, unknown>,
+    code?: ExtractionErrorCode
   ): HarvestError {
-    return this.reporter.report(category, error, { context });
+    return this.reporter.report(category, error, { context, code });
   }
 
   private buildError(

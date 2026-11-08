@@ -1,4 +1,5 @@
 import { CandidateKind, ListCandidate } from '@/shared/contracts/message';
+import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { messagingService, TabInfo } from '@/services/messaging';
 import {
@@ -8,6 +9,8 @@ import {
   isTerminalJobStatus,
 } from '@/shared/contracts/job';
 import { ExtractionProject } from '@/shared/contracts/project';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
+import { codeForCategory } from '@/core/resilience/error-reporter';
 import { ExtractionSchema } from '@/shared/contracts/schema';
 import {
   DatasetRepository,
@@ -25,7 +28,7 @@ import {
   ExtractionPaginationConfig,
   ExtractionStatus,
 } from '@/types';
-import { ExtensionMessage } from '@/contracts/messages';
+import { ExtensionMessage, FieldPreviewResult } from '@/contracts/messages';
 
 export type WorkflowView =
   | 'dashboard'
@@ -46,6 +49,8 @@ export interface InspectedElement {
 
 export interface DetectedList {
   containerSelector: string;
+  /** Multi-tier fallback ladder of the detected repeating item selector. */
+  containerAnchor?: MultiAnchorSelector;
   matchCount: number;
   sampleSnippets: string[];
   /** Everything on the page the user could choose instead, best first. */
@@ -54,6 +59,12 @@ export interface DetectedList {
   credible?: boolean;
   kind?: CandidateKind;
   dedupeFields?: string[];
+}
+
+/** An error the panel shows. The code picks the explanation; the message is detail. */
+export interface OperationError {
+  message: string;
+  code?: ExtractionErrorCode;
 }
 
 export interface ExtractionStats {
@@ -69,6 +80,8 @@ export interface ExtractionStats {
   elapsedSeconds: number;
   status: ExtractionStatus;
   errorMessage?: string;
+  /** The code of the job's latest error, for the panel's explanation (ADR-031). */
+  errorCode?: ExtractionErrorCode;
   stopReason?: string;
 }
 
@@ -92,6 +105,16 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * The code of the job's latest error. Errors stored before ADR-031 have no code, so they get
+ * the default for their category, the same one the reporter would give them today.
+ */
+function latestErrorCode(job: ExtractionJob): ExtractionErrorCode | undefined {
+  const latest = job.errors.at(-1);
+  if (!latest) return undefined;
+  return latest.code ?? codeForCategory(latest.category);
+}
+
 export function statsFromJob(job: ExtractionJob, now: number = Date.now()): ExtractionStats {
   const endedAt = job.finishedAt ?? job.pausedAt ?? now;
   return {
@@ -107,6 +130,7 @@ export function statsFromJob(job: ExtractionJob, now: number = Date.now()): Extr
     elapsedSeconds: Math.max(0, Math.floor((endedAt - job.startedAt - job.pausedMs) / 1000)),
     status: job.status,
     errorMessage: job.errorMessage,
+    errorCode: latestErrorCode(job),
     stopReason: job.stopReason,
   };
 }
@@ -147,7 +171,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const [recordsRevision, setRecordsRevision] = useState(0);
   const [currentDataset, setCurrentDataset] = useState<Dataset | null>(null);
   const [stats, setStats] = useState<ExtractionStats>(IDLE_STATS);
-  const [operationError, setOperationError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<OperationError | null>(null);
   const [recoverableJobs, setRecoverableJobs] = useState<ExtractionJob[]>([]);
   const [activeJob, setActiveJob] = useState<ExtractionJob | null>(null);
   const [projects, setProjects] = useState<ExtractionProject[]>([]);
@@ -160,11 +184,14 @@ export function useExtractionWorkflow(tab: TabInfo) {
   // only decides which job's state is on screen.
   const followedJobIdRef = useRef<string | null>(null);
   const pickerActiveRef = useRef(false);
+  // Pagination settings the person, or a recipe they loaded, has set. Saved defaults arrive
+  // asynchronously when the panel opens and must never overwrite these.
+  const setPaginationKeysRef = useRef(new Set<keyof ExtractionPaginationConfig>());
 
   const handleOperationError = useCallback((error: unknown, fallbackView: WorkflowView) => {
     const message = errorText(error);
     console.warn('PageHarvest operation failed:', message);
-    setOperationError(message);
+    setOperationError({ message });
     setView(fallbackView);
   }, []);
 
@@ -240,13 +267,16 @@ export function useExtractionWorkflow(tab: TabInfo) {
       try {
         const settings = await repositories.settings.getSettings();
         if (cancelled) return;
-        setPagination((prev) => ({
-          ...prev,
-          maxPages: settings.defaultMaxPages,
-          delayMs: settings.defaultDelayMs,
-          scrollCount: settings.defaultMaxScrolls,
-          scrollDelayMs: settings.defaultScrollDelayMs,
-        }));
+        setPagination((prev) => {
+          const chosen = setPaginationKeysRef.current;
+          return {
+            ...prev,
+            maxPages: chosen.has('maxPages') ? prev.maxPages : settings.defaultMaxPages,
+            delayMs: chosen.has('delayMs') ? prev.delayMs : settings.defaultDelayMs,
+            scrollCount: chosen.has('scrollCount') ? prev.scrollCount : settings.defaultMaxScrolls,
+            scrollDelayMs: chosen.has('scrollDelayMs') ? prev.scrollDelayMs : settings.defaultScrollDelayMs,
+          };
+        });
         setRecordWarningThreshold(settings.maxRecordsWarningThreshold);
       } catch (err) {
         console.warn('Could not load settings:', err);
@@ -294,7 +324,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
 
           // Auto-trigger list detection using this selected element
           messagingService.detectRepeatedElements(selector).catch((err: unknown) => {
-            setOperationError(errorText(err));
+            setOperationError({ message: errorText(err) });
           });
           break;
         }
@@ -314,10 +344,12 @@ export function useExtractionWorkflow(tab: TabInfo) {
         }
 
         case 'REPEATED_ELEMENTS_DETECTED': {
-          const { containerSelector, matchCount, sampleSnippets, candidates, credible } = message.payload;
+          const { containerSelector, containerAnchor, matchCount, sampleSnippets, candidates, credible } =
+            message.payload;
           setOperationError(null);
           setDetectedList({
             containerSelector,
+            containerAnchor,
             matchCount,
             sampleSnippets,
             candidates,
@@ -350,7 +382,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         }
 
         case 'EXTRACTION_ERROR': {
-          setOperationError(message.payload.message);
+          setOperationError({ message: message.payload.message, code: message.payload.code });
           // Detection failed with no picker open, so there is nothing left to wait for.
           if (!pickerActiveRef.current) {
             setView((current) => (current === 'inspecting' ? 'dashboard' : current));
@@ -416,6 +448,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
     setDetectedList((current) => ({
       ...(current ?? {}),
       containerSelector: candidate.containerSelector,
+      containerAnchor: candidate.containerAnchor,
       matchCount: candidate.matchCount,
       sampleSnippets: candidate.sampleSnippets,
       kind: candidate.kind,
@@ -487,6 +520,42 @@ export function useExtractionWorkflow(tab: TabInfo) {
     setSelectedFieldIds((prev) => new Set(prev).add(newField.id));
   }, []);
 
+  /** Swaps a column with its neighbour. The recipe keeps this order, so the export does too. */
+  const moveField = useCallback((id: string, direction: -1 | 1) => {
+    setFields((prev) => {
+      const from = prev.findIndex((f) => f.id === id);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+  }, []);
+
+  /**
+   * Reads real rows for these columns from the page (PREVIEW_FIELDS, ADR-030). Read-only:
+   * nothing is stored and no job changes. Refused while this panel follows a job in this tab.
+   */
+  const previewFields = useCallback(
+    async (columns: FieldDefinition[]): Promise<FieldPreviewResult> => {
+      if (!detectedList) {
+        return { ok: false, code: 'CONTAINER_NOT_FOUND', message: 'Choose a list on the page first.' };
+      }
+      if (activeJob && isActiveJobStatus(activeJob.status) && activeJob.tabId === tab.id) {
+        return {
+          ok: false,
+          code: 'VALIDATION_ERROR',
+          message: 'An extraction is running in this tab. The preview is available again when it finishes.',
+        };
+      }
+      // The backup anchor is sent only so the page can say the list moved; nothing is written back.
+      return messagingService.previewFields(detectedList.containerSelector, columns, {
+        containerAnchor: detectedList.containerAnchor,
+      });
+    },
+    [activeJob, detectedList, tab.id]
+  );
+
   const removeField = useCallback((id: string) => {
     setFields((prev) => prev.filter((f) => f.id !== id));
     setSelectedFieldIds((prev) => {
@@ -505,6 +574,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         name,
         urlPattern: tab.url,
         containerSelector: detectedList.containerSelector,
+        containerAnchor: detectedList.containerAnchor,
         fields: fields.filter((f) => selectedFieldIds.has(f.id)),
         pagination,
         dedupeFields: detectedList.dedupeFields,
@@ -524,11 +594,11 @@ export function useExtractionWorkflow(tab: TabInfo) {
     if (!recipe) return;
 
     if (recipe.fields.length === 0) {
-      setOperationError('Select at least one field to extract.');
+      setOperationError({ message: 'Select at least one field to extract.', code: 'VALIDATION_ERROR' });
       return;
     }
     if (typeof tab.id !== 'number') {
-      setOperationError('There is no active tab to extract from.');
+      setOperationError({ message: 'There is no active tab to extract from.', code: 'VALIDATION_ERROR' });
       return;
     }
 
@@ -583,7 +653,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       await messagingService.pauseJob(jobId);
       await refreshFollowedJob();
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [refreshFollowedJob]);
 
@@ -594,7 +664,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       await messagingService.resumeJob(jobId);
       await refreshFollowedJob();
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [refreshFollowedJob]);
 
@@ -614,7 +684,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       }
       setView('results');
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [loadDataset, repositories]);
 
@@ -637,7 +707,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setRecords([]);
       setView('dashboard');
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [repositories]);
 
@@ -652,7 +722,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
           await followJob(job);
         }
       } catch (err) {
-        setOperationError(errorText(err));
+        setOperationError({ message: errorText(err) });
         await refreshRecoverableJobs();
       }
     },
@@ -666,7 +736,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         await messagingService.discardJob(jobId);
         await refreshRecoverableJobs();
       } catch (err) {
-        setOperationError(errorText(err));
+        setOperationError({ message: errorText(err) });
       }
     },
     [refreshRecoverableJobs]
@@ -681,7 +751,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         await loadDataset(dataset.id);
         setView('results');
       } catch (err) {
-        setOperationError(errorText(err));
+        setOperationError({ message: errorText(err) });
       }
     },
     [loadDataset]
@@ -752,6 +822,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const applyConfiguration = useCallback(
     (config: {
       containerSelector: string;
+      containerAnchor?: MultiAnchorSelector;
       fields: FieldDefinition[];
       pagination?: ExtractionPaginationConfig;
       projectId?: string;
@@ -760,6 +831,8 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setOperationError(null);
       setDetectedList({
         containerSelector: config.containerSelector,
+        // Kept so a run, a preview and a re-saved recipe still have the list's backup ladder.
+        containerAnchor: config.containerAnchor,
         matchCount: 0,
         sampleSnippets: [],
         dedupeFields: config.dedupeFields,
@@ -767,7 +840,11 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setFields(config.fields);
       setSelectedFieldIds(new Set(config.fields.map((f) => f.id)));
       if (config.pagination) {
-        setPagination(config.pagination);
+        const loaded = config.pagination;
+        (Object.keys(loaded) as (keyof ExtractionPaginationConfig)[]).forEach((key) =>
+          setPaginationKeysRef.current.add(key)
+        );
+        setPagination(loaded);
       }
       setSelectedProjectId(config.projectId);
       void loadProjects();
@@ -775,6 +852,14 @@ export function useExtractionWorkflow(tab: TabInfo) {
     },
     [loadProjects]
   );
+
+  /** A change made on the Pagination step. What it sets is kept over the saved defaults. */
+  const updatePagination = useCallback((updates: Partial<ExtractionPaginationConfig>) => {
+    (Object.keys(updates) as (keyof ExtractionPaginationConfig)[]).forEach((key) =>
+      setPaginationKeysRef.current.add(key)
+    );
+    setPagination((prev) => ({ ...prev, ...updates }));
+  }, []);
 
   const loadRecipe = useCallback(
     (recipe: ExtractionRecipe) => {
@@ -800,7 +885,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
     fields,
     selectedFieldIds,
     pagination,
-    setPagination,
+    updatePagination,
     records,
     recordsRevision,
     currentDataset,
@@ -822,6 +907,8 @@ export function useExtractionWorkflow(tab: TabInfo) {
     toggleFieldSelection,
     updateField,
     addField,
+    moveField,
+    previewFields,
     removeField,
     startExtraction,
     pauseExtraction,

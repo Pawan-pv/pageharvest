@@ -10,6 +10,9 @@
 // Field
 export * from './field';
 
+// Selector anchors (multi-tier fallback ladder + element fingerprints)
+export * from './selector';
+
 // Pagination
 export * from './pagination';
 

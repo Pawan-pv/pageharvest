@@ -23,7 +23,9 @@ Assessment: **functional MVP**.
 | Picker and closed Shadow DOM | PASS | `overlay-closed-shadow.test.ts`, E2E "picker" | |
 | Production wiring | PASS | `production-wiring.test.ts` | Fails if a module is unreachable from an entry point |
 | Auto-detect on real page layouts | PASS | `detection-real-pages.test.ts`, trial on two scraping practice sites | Commercial sites not tried |
-| Native toolbar and real side panel | PASS in Chrome for Testing | `native-side-panel` job, [3 of 3 runs](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028); [fails when broken](https://github.com/Pawan-pv/pageharvest/actions/runs/41364264985) | Branded Chrome is manual, below |
+| Native toolbar and real side panel | PASS in Chrome for Testing | `native-side-panel` job, [3 of 3 runs](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028); [fails when broken](https://github.com/Pawan-pv/pageharvest/actions/runs/41364264985); local Windows run with the redesigned panel, 2026-11-07, Chrome for Testing 156 | Branded Chrome is manual, below. The check now passes the first-run tour as a new user would |
+| In-app guide: first-run tour, Help, `?` tips | PASS | `first-run-tour.spec.ts`, guide unit tests | Progress is stored in `chrome.storage.local` only |
+| Side panel at its real width (320 to 360 px) | PASS | `panel-width.spec.ts`, native check screenshot | The other specs open the panel as a 1280 px tab, so only this spec checks width |
 | Complete release gate | PASS, as two jobs | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028) | Linux runs the automated layers, Windows the native check |
 
 ## Extraction accuracy
@@ -52,7 +54,7 @@ The `native-side-panel` job does this automatically in Chrome for Testing. Use t
 1. Run `pnpm build` and open `chrome://extensions` in a headed Chrome profile.
 2. Enable Developer mode, choose **Load unpacked**, and select `C:\myProject\extension\.output\chrome-mv3`.
 3. Pin PageHarvest, open `http://127.0.0.1:3456/simple-grid.html` (start `pnpm serve:fixtures` if needed), and click the PageHarvest toolbar action. Confirm the native side panel opens with the active fixture tab.
-4. Run Auto-Detect Lists, confirm fields, start extraction, and verify records appear in the grid.
-5. On `long-scroll.html`, start an Infinite Scroll job and close the side panel mid-run. Reopen it and confirm the job is still running and its rows are present.
-6. Switch tabs, reload the fixture, and run a URL Template job on `catalog-1.html` with `http://127.0.0.1:3456/catalog-{page}.html`.
+4. On a fresh profile the first-run tour opens; finish or skip it. Choose **Find data automatically**, then **Use this list**, check the columns, choose **Next: Pagination**, then **Start extraction**, and verify records appear in the grid.
+5. On `long-scroll.html`, choose **Scroll to load more** under pagination, start the job and close the side panel mid-run. Reopen it and confirm the job is still running and its rows are present.
+6. Switch tabs, reload the fixture, and run a **Page numbers in the URL** job on `catalog-1.html` with `http://127.0.0.1:3456/catalog-{page}.html`.
 7. This procedure is the evidence for toolbar behavior. Playwright opens `sidepanel.html` directly and does not claim it.

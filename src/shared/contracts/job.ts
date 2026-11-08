@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HarvestErrorSchema } from './error';
 import { ExtractionSchemaSchema } from './schema';
+import { SelectorDriftSchema } from './selector';
 
 /**
  * Extraction job lifecycle.
@@ -108,6 +109,23 @@ export const ExtractionJobSchema = z.object({
   updatedAt: z.number().int().default(() => Date.now()),
   errorMessage: z.string().optional(),
   errors: z.array(HarvestErrorSchema).default([]),
+  /**
+   * Value fill rates of the first committed batch per field name (0..1). The
+   * reference the drift gate compares later pages against.
+   */
+  baselineFillRates: z.record(z.string(), z.number().min(0).max(1)).optional(),
+  /** Repeating containers found on the baseline page. */
+  baselineContainerCount: z.number().int().min(0).optional(),
+  /**
+   * A RECORD_BATCH payload the drift gate refused to commit. The user either
+   * accepts it (it is committed as-is) or re-picks the broken field and the
+   * page is extracted freshly from the live DOM.
+   */
+  stagedBatch: z.unknown().optional(),
+  /** Why the job is paused when the pause came from a resilience gate. */
+  pausedReason: z.string().optional(),
+  /** Details of the selector drift that triggered the current pause. */
+  selectorDrift: SelectorDriftSchema.optional(),
 });
 
 export type ExtractionJob = z.infer<typeof ExtractionJobSchema>;

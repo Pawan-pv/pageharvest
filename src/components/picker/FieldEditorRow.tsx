@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
-import { Edit3, Trash2, Check, X } from 'lucide-react';
+import React, { useId, useState } from 'react';
+import { Edit3, Trash2, Check, X, ArrowUp, ArrowDown } from 'lucide-react';
 import { Badge } from '@/components/common/Badge';
+import { IconButton } from '@/components/common/IconButton';
+import { HelpTip } from '@/components/common/Tooltip';
 import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
+import { Disclosure } from '@/components/common/Disclosure';
 import { FieldDefinition, FieldExtractorType } from '@/types';
 
 export interface FieldEditorRowProps {
@@ -11,16 +14,36 @@ export interface FieldEditorRowProps {
   onToggleSelect: () => void;
   onUpdate: (updates: Partial<FieldDefinition>) => void;
   onRemove: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  isFirst?: boolean;
+  isLast?: boolean;
 }
+
+/** Plain names for what a column collects. */
+export const EXTRACTOR_LABELS: Record<FieldExtractorType, string> = {
+  text: 'Text',
+  href: 'Link (URL)',
+  src: 'Image (URL)',
+  number: 'Number',
+  attribute: 'Attribute',
+  regex: 'Pattern (regex)',
+  html: 'HTML (advanced)',
+  table_cell: 'Table column',
+  link_text: 'Link text',
+};
+
+/** The types a person can choose, in the order they are offered. */
+export const EXTRACTOR_ORDER: FieldExtractorType[] = ['text', 'href', 'src', 'number', 'attribute', 'regex', 'html'];
 
 /** Why a pattern cannot be used, or an empty string if it can. */
 export function regexProblem(pattern: string): string {
-  if (!pattern.trim()) return 'A regex field needs a pattern.';
+  if (!pattern.trim()) return 'This type needs a pattern.';
   try {
     new RegExp(pattern);
     return '';
   } catch {
-    return `"${pattern}" is not a valid regular expression.`;
+    return `"${pattern}" is not a valid pattern.`;
   }
 }
 
@@ -30,232 +53,233 @@ export const FieldEditorRow: React.FC<FieldEditorRowProps> = ({
   onToggleSelect,
   onUpdate,
   onRemove,
+  onMoveUp,
+  onMoveDown,
+  isFirst = false,
+  isLast = false,
 }) => {
+  const checkboxId = useId();
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(field.name);
   const [editSelector, setEditSelector] = useState(field.selector);
   const [editExtractor, setEditExtractor] = useState<FieldExtractorType>(field.extractor);
   const [editAttr, setEditAttr] = useState(field.attributeName || '');
-  const [editRequired, setEditRequired] = useState(field.required === true);
   const [editRegex, setEditRegex] = useState(field.regexPattern || '');
   const [editRegexGroup, setEditRegexGroup] = useState(String(field.regexGroup ?? 0));
-  const [editError, setEditError] = useState('');
+  const [editRequired, setEditRequired] = useState(field.required === true);
+  const [errors, setErrors] = useState<{ attribute?: string; regex?: string }>({});
 
-  const extractorOptions: { value: FieldExtractorType; label: string }[] = [
-    { value: 'text', label: 'Text content' },
-    { value: 'href', label: 'Link URL (href)' },
-    { value: 'src', label: 'Image URL (src)' },
-    { value: 'number', label: 'Number / Price' },
-    { value: 'html', label: 'Raw HTML' },
-    { value: 'attribute', label: 'HTML Attribute' },
-    { value: 'regex', label: 'Regex Pattern' },
-    ...(field.extractor === 'table_cell' ? [{ value: 'table_cell' as const, label: 'Table column' }] : []),
-    ...(field.extractor === 'link_text' ? [{ value: 'link_text' as const, label: 'Link text' }] : []),
-  ];
+  const resetEdits = () => {
+    setEditName(field.name);
+    setEditSelector(field.selector);
+    setEditExtractor(field.extractor);
+    setEditAttr(field.attributeName || '');
+    setEditRegex(field.regexPattern || '');
+    setEditRegexGroup(String(field.regexGroup ?? 0));
+    setEditRequired(field.required === true);
+    setErrors({});
+  };
 
   const handleSave = () => {
+    const nextErrors: { attribute?: string; regex?: string } = {};
+    if (editExtractor === 'attribute' && !editAttr.trim()) {
+      nextErrors.attribute = 'Name the attribute to read, such as data-id.';
+    }
     if (editExtractor === 'regex') {
       const problem = regexProblem(editRegex);
-      if (problem) {
-        setEditError(problem);
-        return;
-      }
+      if (problem) nextErrors.regex = problem;
     }
-    setEditError('');
+    setErrors(nextErrors);
+    if (nextErrors.attribute || nextErrors.regex) return;
     onUpdate({
       name: editName.trim() || field.name,
       selector: editSelector.trim() || field.selector,
       extractor: editExtractor,
       attributeName: editExtractor === 'attribute' ? editAttr.trim() : undefined,
       regexPattern: editExtractor === 'regex' ? editRegex : undefined,
-      regexGroup: editExtractor === 'regex' ? Number(editRegexGroup) || 0 : undefined,
+      regexGroup: editExtractor === 'regex' ? Math.max(0, Number.parseInt(editRegexGroup, 10) || 0) : undefined,
       required: editRequired,
     });
     setIsEditing(false);
   };
 
-  const handleCancel = () => {
-    setEditName(field.name);
-    setEditSelector(field.selector);
-    setEditExtractor(field.extractor);
-    setEditAttr(field.attributeName || '');
-    setEditRequired(field.required === true);
-    setEditRegex(field.regexPattern || '');
-    setEditRegexGroup(String(field.regexGroup ?? 0));
-    setEditError('');
-    setIsEditing(false);
-  };
-
-  const badgeVariantForExtractor: Record<FieldExtractorType, 'brand' | 'info' | 'warning' | 'neutral' | 'success' | 'danger'> = {
-    text: 'neutral',
-    href: 'info',
-    src: 'brand',
-    number: 'success',
-    html: 'warning',
-    attribute: 'neutral',
-    regex: 'danger',
-    table_cell: 'neutral',
-    link_text: 'neutral',
-  };
-
   return (
     <div
-      className={`p-3 rounded-xl border transition-all duration-150 text-left ${
-        isSelected
-          ? 'bg-white border-slate-200/90 shadow-xs'
-          : 'bg-slate-50/60 border-slate-200/60 opacity-60'
+      className={`p-3 rounded-card border text-left ${
+        isSelected ? 'bg-surface border-line shadow-xs' : 'bg-surface-sunken border-line-subtle'
       }`}
     >
       {!isEditing ? (
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-start gap-2.5 min-w-0">
             <input
               type="checkbox"
-              id={`field-toggle-${field.id}`}
+              id={checkboxId}
               checked={isSelected}
               onChange={onToggleSelect}
-              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              aria-label={`Include ${field.name}`}
+              className="mt-0.5 w-4 h-4 rounded border-line-strong accent-brand cursor-pointer shrink-0"
             />
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <label
-                  htmlFor={`field-toggle-${field.id}`}
-                  className="text-xs font-semibold text-slate-900 cursor-pointer hover:text-emerald-700 truncate"
-                >
-                  {field.name}
-                </label>
-                <Badge variant={badgeVariantForExtractor[(field.extractor as FieldExtractorType) || 'text'] || 'neutral'} size="sm">
-                  {field.extractor}
+              <label htmlFor={checkboxId} className="block text-xs font-semibold text-fg cursor-pointer truncate">
+                {field.name}
+              </label>
+              <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                <Badge variant="neutral" size="sm">
+                  {EXTRACTOR_LABELS[field.extractor]}
                 </Badge>
                 {field.required && (
                   <Badge variant="warning" size="sm">
-                    filters rows
+                    Required
                   </Badge>
                 )}
-              </div>
-              <div className="text-[11px] text-slate-400 font-mono truncate mt-0.5" title={field.selector}>
-                {field.selector}
+                {!isSelected && <span className="text-2xs text-fg-subtle">Left out</span>}
               </div>
               {field.discovery && (
-                <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                <p className="text-2xs text-fg-subtle mt-0.5 line-clamp-2 break-words">
                   Found in {Math.round(field.discovery.coverage * field.discovery.sampleSize)} of{' '}
                   {field.discovery.sampleSize} sampled items
                   {field.discovery.sampleValue ? `, such as "${field.discovery.sampleValue}"` : ''}
-                </div>
+                </p>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
-            <button
+          <div className="flex items-center shrink-0">
+            {(onMoveUp || onMoveDown) && (
+              <>
+                <IconButton
+                  label={`Move ${field.name} up`}
+                  icon={<ArrowUp className="w-3.5 h-3.5" />}
+                  onClick={onMoveUp}
+                  disabled={isFirst || !onMoveUp}
+                />
+                <IconButton
+                  label={`Move ${field.name} down`}
+                  icon={<ArrowDown className="w-3.5 h-3.5" />}
+                  onClick={onMoveDown}
+                  disabled={isLast || !onMoveDown}
+                />
+              </>
+            )}
+            <IconButton
+              label={`Edit field ${field.name}`}
+              icon={<Edit3 className="w-3.5 h-3.5" />}
               onClick={() => setIsEditing(true)}
-              aria-label={`Edit field ${field.name}`}
-              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-            </button>
-            <button
+            />
+            <IconButton
+              label={`Remove field ${field.name}`}
+              variant="danger"
+              icon={<Trash2 className="w-3.5 h-3.5" />}
               onClick={onRemove}
-              aria-label={`Remove field ${field.name}`}
-              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            />
           </div>
         </div>
       ) : (
-        /* Edit Mode */
-        <div className="flex flex-col gap-2.5 pt-1">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <span className="text-xs font-semibold text-slate-800">Edit Column Definition</span>
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center justify-between border-b border-line-subtle pb-2">
+            <span className="text-xs font-semibold text-fg">Edit column</span>
             <div className="flex items-center gap-1">
-              <button
-                onClick={handleCancel}
-                aria-label="Cancel edit"
-                className="p-1 text-slate-400 hover:text-slate-600 rounded"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-              <button
+              <IconButton
+                label="Cancel edit"
+                icon={<X className="w-3.5 h-3.5" />}
+                onClick={() => {
+                  resetEdits();
+                  setIsEditing(false);
+                }}
+              />
+              <IconButton
+                label="Save field edits"
+                variant="brand"
+                icon={<Check className="w-3.5 h-3.5" />}
                 onClick={handleSave}
-                aria-label="Save field edits"
-                className="p-1 text-emerald-600 hover:text-emerald-700 rounded bg-emerald-50"
-              >
-                <Check className="w-3.5 h-3.5" />
-              </button>
+              />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              label="Column Name"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              placeholder="e.g. Price"
-            />
-            <Select
-              label="Data Type"
-              value={editExtractor}
-              options={extractorOptions}
-              onChange={(e) => setEditExtractor(e.target.value as FieldExtractorType)}
-            />
           </div>
 
           <Input
-            label="Relative CSS Selector"
-            value={editSelector}
-            onChange={(e) => setEditSelector(e.target.value)}
-            placeholder="e.g. .price-value"
-            helperText="Selector relative to the item container"
+            label="Column name"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="e.g. Price"
+          />
+          <Select
+            label="What to collect"
+            value={editExtractor}
+            options={[
+              ...EXTRACTOR_ORDER,
+              // Detection assigns these to table columns and link texts; they are kept, not offered.
+              ...(field.extractor === 'table_cell' || field.extractor === 'link_text' ? [field.extractor] : []),
+            ].map((value) => ({ value, label: EXTRACTOR_LABELS[value] }))}
+            onChange={(e) => {
+              setEditExtractor(e.target.value as FieldExtractorType);
+              setErrors({});
+            }}
           />
 
           {editExtractor === 'attribute' && (
-            <Input
-              label="Attribute Name"
-              value={editAttr}
-              onChange={(e) => setEditAttr(e.target.value)}
-              placeholder="e.g. data-asin or aria-label"
-            />
+            <div className="flex items-start gap-1">
+              <Input
+                label="Attribute name"
+                value={editAttr}
+                onChange={(e) => setEditAttr(e.target.value)}
+                placeholder="e.g. data-id or aria-label"
+                error={errors.attribute}
+              />
+              <HelpTip tipId="attribute-extractor" className="mt-5" />
+            </div>
           )}
 
           {editExtractor === 'regex' && (
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                label="Regex Pattern"
-                value={editRegex}
-                onChange={(e) => setEditRegex(e.target.value)}
-                placeholder="e.g. SKU-(\\d+)"
-              />
+            <div className="flex flex-col gap-2">
+              <div className="flex items-start gap-1">
+                <Input
+                  label="Pattern"
+                  value={editRegex}
+                  onChange={(e) => setEditRegex(e.target.value)}
+                  placeholder="e.g. SKU-(\d+)"
+                  error={errors.regex}
+                />
+                <HelpTip tipId="regex-extractor" className="mt-5" />
+              </div>
               <Input
                 type="number"
                 min={0}
-                label="Capture Group"
+                label="Part to keep"
                 value={editRegexGroup}
                 onChange={(e) => setEditRegexGroup(e.target.value)}
+                helperText="0 keeps the whole match; 1 keeps the first part in brackets."
               />
             </div>
           )}
 
-          {editError && (
-            <p role="alert" className="text-[11px] text-rose-600">
-              {editError}
-            </p>
-          )}
-
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={editRequired}
-              onChange={(e) => setEditRequired(e.target.checked)}
-              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            <span className="text-xs text-slate-700">
-              Skip rows where this column is empty
-              <span className="block text-[11px] text-slate-500">
-                Off by default, so rows with a missing value are kept. Skipped rows are counted.
+          <div className="flex items-start gap-1">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editRequired}
+                onChange={(e) => setEditRequired(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-line-strong accent-brand"
+              />
+              <span className="text-xs text-fg-muted">
+                Skip rows where this column is empty
+                <span className="block text-2xs text-fg-subtle">
+                  Off by default, so rows with a missing value are kept. Skipped rows are counted.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+            <HelpTip tipId="required-field" />
+          </div>
+
+          <Disclosure label="Where to find it on the page">
+            <Input
+              label="CSS selector inside each item"
+              value={editSelector}
+              onChange={(e) => setEditSelector(e.target.value)}
+              placeholder="e.g. .price"
+              helperText="Only change this if the column picks up the wrong part of the item."
+            />
+          </Disclosure>
         </div>
       )}
     </div>

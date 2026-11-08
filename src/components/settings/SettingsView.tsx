@@ -3,8 +3,8 @@ import { ShieldCheck, Trash2 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
-import { Modal } from '@/components/common/Modal';
-import { Alert } from '@/components/common/Alert';
+import { Dialog } from '@/components/common/Dialog';
+import { Banner } from '@/components/common/Banner';
 import { Select } from '@/components/common/Select';
 import { UserSettingsSchema } from '@/shared/contracts/settings';
 import { db } from '@/storage/db';
@@ -114,10 +114,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
     <div className="flex flex-col gap-4 p-4 text-left h-full">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-bold text-slate-900 leading-tight">
+          <h2 className="text-sm font-bold text-fg leading-tight">
             Settings & Preferences
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-fg-subtle mt-0.5">
             Configure default extraction throttling and storage
           </p>
         </div>
@@ -128,17 +128,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
       </div>
 
       {savedFeedback && (
-        <Alert variant="success" onDismiss={() => setSavedFeedback(false)}>
+        <Banner tone="success" onDismiss={() => setSavedFeedback(false)}>
           Settings saved successfully.
-        </Alert>
+        </Banner>
       )}
 
       {settingsError && (
-        <Alert variant="error" onDismiss={() => setSettingsError(null)}>
+        <Banner tone="danger" onDismiss={() => setSettingsError(null)}>
           {settingsError}
-        </Alert>
+        </Banner>
       )}
 
+      {/* Locked until the saved values arrive, which would otherwise overwrite an early edit. */}
+      <fieldset disabled={!isLoaded} className="contents">
       {/* Crawl & Extraction Defaults */}
       <Card variant="default">
         <CardHeader
@@ -252,14 +254,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
               type="checkbox"
               checked={draft.csvIncludeBom}
               onChange={(e) => update('csvIncludeBom', e.target.checked)}
-              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              className="w-4 h-4 rounded border-line-strong text-brand-fg focus:ring-focus"
             />
-            <span className="text-xs text-slate-700">
+            <span className="text-xs text-fg-muted">
               Include UTF-8 BOM in CSV exports (recommended for Microsoft Excel)
             </span>
           </label>
         </div>
       </Card>
+      </fieldset>
 
       <div>
         <Button
@@ -282,14 +285,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
 
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-              <span className="text-slate-500 block text-[11px]">Saved Datasets</span>
-              <strong className="text-sm text-slate-900 font-semibold">{datasetCount}</strong>
+            <div className="p-2.5 rounded-lg bg-surface-sunken border border-line">
+              <span className="text-fg-subtle block text-2xs">Saved Datasets</span>
+              <strong className="text-sm text-fg font-semibold">{datasetCount}</strong>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-              <span className="text-slate-500 block text-[11px]">Total Rows</span>
-              <strong className="text-sm text-slate-900 font-semibold">{recordCount}</strong>
+            <div className="p-2.5 rounded-lg bg-surface-sunken border border-line">
+              <span className="text-fg-subtle block text-2xs">Total Rows</span>
+              <strong className="text-sm text-fg font-semibold">{recordCount}</strong>
             </div>
           </div>
 
@@ -308,20 +311,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
       </Card>
 
       {/* Privacy Notice */}
-      <Card variant="flat" className="p-3.5 bg-slate-50/80 border-slate-200/80">
+      <Card variant="flat" className="p-3.5 bg-surface-sunken/80 border-line/80">
         <div className="flex items-center gap-2 mb-1.5">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <h4 className="text-xs font-semibold text-slate-800">
+          <ShieldCheck className="w-4 h-4 text-brand-fg" />
+          <h4 className="text-xs font-semibold text-fg">
             Privacy & Browser Safety
           </h4>
         </div>
-        <p className="text-[11px] text-slate-600 leading-relaxed">
+        <p className="text-2xs text-fg-muted leading-relaxed">
           PageHarvest is 100% client-side. No remote AI endpoints, telemetry, or third-party servers receive your data.
         </p>
       </Card>
 
       {/* Clear Storage Modal */}
-      <Modal
+      <Dialog
         isOpen={isClearModalOpen}
         onClose={() => setIsClearModalOpen(false)}
         title="Clear All Saved Data?"
@@ -346,10 +349,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
           </>
         }
       >
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-fg-muted">
           This operation cannot be reversed. Make sure you have exported any needed CSV or JSON datasets first.
         </p>
-      </Modal>
+      </Dialog>
     </div>
   );
 };

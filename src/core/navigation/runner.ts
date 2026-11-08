@@ -16,6 +16,7 @@ export * from './engine';
 
 import { ExtractionEngine } from '@/core/extraction/extractor';
 import { ExtractionSchema } from '@/shared/contracts/schema';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
 import { BatchStats, JobNavigationState, JobResumeState } from '@/shared/contracts/message';
 import { ExtractedRecord, FieldDefinition } from '@/types';
 import { runMultiPageExtraction } from './engine';
@@ -59,9 +60,14 @@ export interface NavigationJobOptions {
   commitCheckpoint: (navigation: JobNavigationState) => Promise<void>;
   /** Starts leaving this document for the given URL. Nothing after it is guaranteed to run. */
   navigateTo: (url: string) => void | Promise<void>;
+  /** Announces what the runner is currently doing, for the on-page neon scan HUD. */
+  onProgressAction?: (action: NavigationProgressAction) => void;
   /** Overrides engine timing, for tests. */
   engineOverrides?: { pageTimeoutMs?: number; navigationTimeoutMs?: number };
 }
+
+/** What the visual overlay HUD announces while a run moves. */
+export type NavigationProgressAction = 'scanning' | 'scrolling' | 'navigating' | 'complete';
 
 export type NavigationJobOutcome =
   | { kind: 'finished'; stopReason: string }
@@ -70,9 +76,13 @@ export type NavigationJobOutcome =
   | { kind: 'navigating' };
 
 export class NavigationJobError extends Error {
-  constructor(message: string) {
+  /** What the panel tells the user (ADR-031). Each throw site knows what went wrong. */
+  public readonly code: ExtractionErrorCode;
+
+  constructor(message: string, code: ExtractionErrorCode = 'UNKNOWN_ERROR') {
     super(message);
     this.name = 'NavigationJobError';
+    this.code = code;
   }
 }
 
@@ -113,13 +123,15 @@ function assertValidContainer(recipe: ExtractionSchema, root: Document): void {
     root.querySelector(recipe.containerSelector);
   } catch {
     throw new NavigationJobError(
-      `The container selector "${recipe.containerSelector}" is not a valid CSS selector.`
+      `The container selector "${recipe.containerSelector}" is not a valid CSS selector.`,
+      'VALIDATION_ERROR'
     );
   }
 }
 
 async function runSinglePageJob(options: NavigationJobOptions): Promise<NavigationJobOutcome> {
   const { recipe, resume, root, signal, getCurrentUrl, waitWhilePaused, commitBatch } = options;
+  options.onProgressAction?.('scanning');
   await waitWhilePaused();
   if (signal.aborted) return { kind: 'cancelled' };
 
@@ -165,6 +177,7 @@ async function runSinglePageJob(options: NavigationJobOptions): Promise<Navigati
  */
 async function runUrlTemplateJob(options: NavigationJobOptions): Promise<NavigationJobOutcome> {
   const { recipe, resume, root, signal, getCurrentUrl, waitWhilePaused, commitBatch, navigateTo } = options;
+  options.onProgressAction?.('scanning');
   const pagination = recipe.pagination;
   const sequence = {
     template: pagination.urlTemplate ?? '',
@@ -173,7 +186,7 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
   };
   const validation = validateUrlTemplate(sequence, resume.startUrl);
   if (!validation.valid) {
-    throw new NavigationJobError(validation.error ?? 'The URL template is not valid.');
+    throw new NavigationJobError(validation.error ?? 'The URL template is not valid.', 'VALIDATION_ERROR');
   }
 
   await waitWhilePaused();
@@ -196,10 +209,10 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
   const nextUrl = isLastAllowedPage ? undefined : buildTemplateUrl(sequence, step + 1);
 
   if (nextUrl && !isSameOrigin(nextUrl, resume.startUrl)) {
-    throw new NavigationJobError(`Refusing to navigate to another website: ${nextUrl}`);
+    throw new NavigationJobError(`Refusing to navigate to another website: ${nextUrl}`, 'VALIDATION_ERROR');
   }
   if (nextUrl && visitedUrls.includes(normalizeUrlForDeduplication(nextUrl))) {
-    throw new NavigationJobError('URL pagination generated a repeated or invalid next URL.');
+    throw new NavigationJobError('URL pagination generated a repeated or invalid next URL.', 'VALIDATION_ERROR');
   }
 
   const hasRows = output.records.length > 0;
@@ -232,6 +245,7 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
   await waitWhilePaused();
   if (signal.aborted) return { kind: 'cancelled' };
 
+  options.onProgressAction?.('navigating');
   await navigateTo(nextUrl);
   return { kind: 'navigating' };
 }
@@ -246,6 +260,7 @@ function resolveClickStrategy(root: Document, selector?: string): NavigationStra
 
 async function runEngineJob(options: NavigationJobOptions): Promise<NavigationJobOutcome> {
   const { recipe, resume, root, signal, getCurrentUrl, waitWhilePaused, commitBatch, commitCheckpoint } = options;
+  options.onProgressAction?.('scanning');
   const pagination = recipe.pagination;
   const isScroll = pagination.type === 'infinite_scroll';
   const strategy: NavigationStrategy = isScroll
@@ -271,6 +286,14 @@ async function runEngineJob(options: NavigationJobOptions): Promise<NavigationJo
     waitWhilePaused,
     allowedOrigin: new URL(resume.startUrl).origin,
     ...options.engineOverrides,
+    onProgress: (progress) => {
+      // Feed the neon HUD: infinite scroll harvests by scrolling, every other
+      // engine strategy moves to the next document.
+      if (progress.status !== 'running') return;
+      options.onProgressAction?.(
+        progress.strategy === 'infinite_scroll' ? 'scrolling' : 'navigating'
+      );
+    },
     initialSessionState: {
       strategy,
       currentPage: resume.page - 1,
@@ -321,7 +344,7 @@ async function runEngineJob(options: NavigationJobOptions): Promise<NavigationJo
 
   if (result.stopReason === 'cancelled') return { kind: 'cancelled' };
   if (result.stopReason === 'navigation_failure') {
-    throw new NavigationJobError(result.error ?? 'The next page could not be opened.');
+    throw new NavigationJobError(result.error ?? 'The next page could not be opened.', 'PAGINATION_TIMEOUT');
   }
   return { kind: 'finished', stopReason: result.stopReason };
 }

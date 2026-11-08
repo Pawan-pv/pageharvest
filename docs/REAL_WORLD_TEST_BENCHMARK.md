@@ -4,11 +4,11 @@ A repeatable measure of extraction accuracy on real pages, through the real exte
 
 ## How to read these results
 
-**All 19 pages are practice sites made for scraping, and they are cleaner than real commercial sites.** These results show that the known defects are fixed on real markup. They do not predict how PageHarvest will do on commercial sites, which have not been tested.
+**All 19 original pages are practice sites made for scraping, and they are cleaner than real commercial sites.** These results show that the known defects are fixed on real markup. They do not predict how PageHarvest will do on commercial sites. Five additional real commercial sites (Hacker News, Lobsters, Wikipedia x2, Open Library) were added as held-out tests in November 2026; see the "Real commercial sites" section below.
 
 Three more limits:
 - **Same author.** The truth selectors and expected samples were written and verified by the author of the code being measured, by reading page source. No independent person has checked them.
-- **Tuned on these sites.** The 13 main pages were used while fixing defects. The 6 held-out pages were not, but they come from the same sites, so they are only a weak test of generalization.
+- **Tuned on these sites.** The 13 main pages were used while fixing defects. The 6 held-out pages were not, but they come from the same sites, so they are only a weak test of generalization. The 5 real commercial sites are also held-out but from different domains — a stronger generalization test.
 - **Heuristic ranking.** Rank 1 here means the right list came first on these pages.
 
 ## Running it
@@ -84,6 +84,18 @@ These were not used while fixing defects. On their first run all six had 100% pr
 | holdout-tablets | PASS | 6 | 6 | 100% | 100% | 100% | 100% | 0% | 100% | 1 of 8 |
 | holdout-internet-challenging | PASS | 10 | 10 | 100% | 100% | 100% | 100% | 0% | 100% | 1 of 1 |
 | holdout-internet-sortable | PASS | 50 | 50 | 100% | 100% | 100% | 100% | 0% | 100% | 1 of 1 |
+
+### Real commercial sites (held-out, November 2026)
+
+These are not practice sites. They are real production pages with stable repeating structures. Held-out: not used while fixing defects. Run with `pnpm benchmark:sites hn-frontpage lobsters-frontpage wikipedia-us-states openlibrary-trending wikipedia-eiffel`.
+
+| Site | URL | Category |
+| --- | --- | --- |
+| hn-frontpage | https://news.ycombinator.com/ | Article listings |
+| lobsters-frontpage | https://lobste.rs/ | Community listings |
+| wikipedia-us-states | https://en.wikipedia.org/wiki/List_of_U.S._states_by_population | Tables |
+| openlibrary-trending | https://openlibrary.org/trending/daily | E-commerce |
+| wikipedia-eiffel | https://en.wikipedia.org/wiki/Eiffel_Tower | Infobox tables |
 
 ### Mean of pages that ran
 
@@ -176,7 +188,14 @@ Last checked: 2026-11-02. "Volatile" fields are compared only with the live page
 | holdout-internet-challenging | A table on a page built to be awkward to automate, with generated ids. | A practice site for browser automation from Elemental Selenium. robots.txt disallows nothing. |
 | holdout-internet-sortable | A very large page with a large table and a large nested list. | A practice site for browser automation from Elemental Selenium. robots.txt disallows nothing. |
 
-## Verification procedure
+## Live verification: TestingURL.dev (2026-11-03)
+
+In addition to the practice-site benchmark above, the extension was exercised end-to-end on `https://testingurl.dev` through the real Chrome side panel (native toolbar click via `trigger_extension_action`):
+
+- List auto-detect: 10 items, 75% confidence; fields Link (href) and Category (text).
+- Table extraction: 60 rows x 6 columns, 60 detected / 60 kept.
+- Durable persistence: dataset survived side-panel close/reopen in PageHarvestDB; CSV export triggered.
+- Quality gates: 75 files, 928 unit/integration tests passing; typecheck, lint, and production build clean.
 
 1. Read the raw page source and write `truth.recordSelector` and field selectors by hand, without using the extension.
 2. Check `robots.txt` and the site's own statement about automated access, and record both.

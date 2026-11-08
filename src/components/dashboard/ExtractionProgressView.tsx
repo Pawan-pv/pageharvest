@@ -1,10 +1,12 @@
-import React from 'react';
-import { Loader2, Pause, Play, Square, Clock, Layers, CopyX, AlertCircle } from 'lucide-react';
+import React, { useId } from 'react';
+import { Loader2, Pause, Play, Square, AlertCircle } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
-import { Badge } from '@/components/common/Badge';
-import { Alert } from '@/components/common/Alert';
+import { HelpTip } from '@/components/common/Tooltip';
+import { Banner } from '@/components/common/Banner';
+import { ErrorBanner } from '@/components/common/ErrorBanner';
 import { ExtractionStats } from '@/hooks/useExtractionWorkflow';
+import { describeProgress } from './progress-copy';
 
 export interface ExtractionProgressViewProps {
   stats: ExtractionStats;
@@ -16,25 +18,34 @@ export interface ExtractionProgressViewProps {
   onCancel: () => void;
 }
 
-/** Progress in the unit this job actually advances by. */
-function describeProgress(stats: ExtractionStats): { label: string; value: string; percent: number | null } {
-  if (stats.progressKind === 'scrolls') {
-    return {
-      label: 'Scrolling',
-      value: `Scroll ${stats.currentStep} of ${stats.targetSteps}`,
-      percent: Math.min(Math.round((stats.currentStep / stats.targetSteps) * 100), 100),
-    };
-  }
-  if (stats.progressKind === 'pages') {
-    return {
-      label: 'Page Crawled',
-      value: `Page ${stats.currentStep} of ${stats.targetSteps}`,
-      percent: Math.min(Math.round((stats.currentStep / stats.targetSteps) * 100), 100),
-    };
-  }
-  return { label: 'Scope', value: 'Current page', percent: null };
+const STEP_LABEL = { single: 'Scope', pages: 'Pages', scrolls: 'Scrolls' } as const;
+
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+/** A counter: the label is a <dt> and the value its <dd>, so they are read together. */
+const Metric: React.FC<{ label: string; value: React.ReactNode; help?: React.ReactNode; large?: boolean }> = ({
+  label,
+  value,
+  help,
+  large = false,
+}) => (
+  <div className="p-2.5 rounded-control bg-surface-sunken border border-line">
+    <dt className="flex items-center gap-1 text-2xs text-fg-subtle">
+      {label}
+      {help}
+    </dt>
+    <dd className={`${large ? 'text-lg font-bold' : 'text-sm font-semibold'} text-fg tracking-tight`}>{value}</dd>
+  </div>
+);
+
+/**
+ * A running job, read from storage. The background owns the job: closing the panel does not
+ * stop it, so the panel says so while the job is active.
+ */
 export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
   stats,
   recordWarningThreshold,
@@ -43,144 +54,106 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
   onStop,
   onCancel,
 }) => {
+  const finishHintId = useId();
+  const cancelHintId = useId();
   const isPaused = stats.status === 'PAUSED';
   const isError = stats.status === 'FAILED';
-  const progress = describeProgress(stats);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  const isActive = !isError;
+  const progress = describeProgress({
+    kind: stats.progressKind,
+    step: stats.currentStep,
+    total: stats.targetSteps,
+    rows: stats.totalExtracted,
+  });
+  const title = isError ? 'Extraction stopped by a problem' : isPaused ? 'Extraction paused' : 'Collecting rows…';
 
   return (
-    <div className="flex flex-col gap-4 p-4 text-left">
-      <Card variant="default" className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            {!isPaused && !isError ? (
-              <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" />
-            ) : isPaused ? (
-              <Pause className="w-5 h-5 text-amber-600" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-rose-600" />
-            )}
-            <h3 className="text-base font-semibold text-slate-900">
-              {isPaused ? 'Extraction Paused' : isError ? 'Extraction Interrupted' : 'Harvesting in Progress...'}
-            </h3>
-          </div>
-
-          <Badge
-            variant={isPaused ? 'warning' : isError ? 'danger' : 'brand'}
-            size="md"
-          >
-            {stats.status}
-          </Badge>
+    <div className="flex flex-col gap-3 p-4 text-left">
+      <Card className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          {isError ? (
+            <AlertCircle aria-hidden="true" className="w-5 h-5 text-danger-fg" />
+          ) : isPaused ? (
+            <Pause aria-hidden="true" className="w-5 h-5 text-warning-fg" />
+          ) : (
+            <Loader2 aria-hidden="true" className="w-5 h-5 text-brand-fg motion-safe:animate-spin" />
+          )}
+          <h2 className="text-base font-semibold text-fg">{title}</h2>
         </div>
 
-        {/* Progress Bar */}
-        <div className="w-full bg-slate-100 rounded-full h-2 mb-4 overflow-hidden">
+        <p className="text-xs text-fg-muted" aria-live="polite">
+          {progress.summary}
+        </p>
+
+        <div
+          role="progressbar"
+          aria-label="Extraction progress"
+          aria-valuemin={progress.percent === null ? undefined : 0}
+          aria-valuemax={progress.percent === null ? undefined : 100}
+          aria-valuenow={progress.percent ?? undefined}
+          aria-valuetext={progress.summary}
+          className="w-full bg-surface-muted rounded-pill h-2 overflow-hidden"
+        >
           <div
-            className={`h-2 transition-all duration-300 rounded-full ${
-              isPaused ? 'bg-amber-500' : isError ? 'bg-rose-500' : 'bg-emerald-600 animate-pulse'
-            }`}
+            className={`h-2 rounded-pill transition-[width] duration-300 ${
+              isPaused ? 'bg-warning' : isError ? 'bg-danger' : 'bg-brand'
+            } ${progress.percent === null && !isPaused && !isError ? 'motion-safe:animate-pulse' : ''}`}
             style={{ width: `${progress.percent ?? 100}%` }}
           />
         </div>
 
-        {/* Real-time metrics grid */}
-        <div className="grid grid-cols-2 gap-2.5 mb-2">
-          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
-            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
-              <Layers className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Records Harvested</span>
-            </div>
-            <span className="text-lg font-bold text-slate-900 tracking-tight">
-              {stats.totalExtracted}
-            </span>
-          </div>
-
-          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
-            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
-              <Clock className="w-3.5 h-3.5 text-sky-600" />
-              <span>Elapsed Time</span>
-            </div>
-            <span className="text-lg font-bold text-slate-900 tracking-tight font-mono">
-              {formatTime(stats.elapsedSeconds)}
-            </span>
-          </div>
-
-          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
-            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
-              <span>{progress.label}</span>
-            </div>
-            <span className="text-sm font-semibold text-slate-800">
-              {progress.value}
-            </span>
-          </div>
-
-          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/70">
-            <div className="flex items-center gap-1.5 text-slate-500 text-[11px] mb-1">
-              <CopyX className="w-3.5 h-3.5 text-slate-400" />
-              <span>Duplicates Skipped</span>
-            </div>
-            <span className="text-sm font-semibold text-slate-800">
-              {stats.duplicatesSkipped}
-            </span>
-          </div>
-        </div>
+        <dl className="grid grid-cols-2 gap-2">
+          <Metric label="Rows saved" value={stats.totalExtracted} large />
+          <Metric label="Time" value={formatTime(stats.elapsedSeconds)} large />
+          <Metric label={STEP_LABEL[stats.progressKind]} value={progress.stepLabel} />
+          <Metric label="Duplicates skipped" value={stats.duplicatesSkipped} help={<HelpTip tipId="dedup" />} />
+        </dl>
 
         {/* What happened to each detected item, so nothing disappears silently */}
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500 mt-3">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-2xs text-fg-subtle">
           <div className="flex justify-between">
             <dt>Items detected</dt>
-            <dd className="font-semibold text-slate-700">{stats.recordsDetected}</dd>
+            <dd className="font-semibold text-fg-muted">{stats.recordsDetected}</dd>
           </div>
           <div className="flex justify-between">
             <dt>Missing some fields</dt>
-            <dd className="font-semibold text-slate-700">{stats.recordsWithMissingFields}</dd>
+            <dd className="font-semibold text-fg-muted">{stats.recordsWithMissingFields}</dd>
           </div>
-          <div className="flex justify-between">
-            <dt>Filtered out</dt>
-            <dd className="font-semibold text-slate-700">{stats.recordsFiltered}</dd>
+          <div className="flex justify-between items-center">
+            <dt className="flex items-center gap-0.5">
+              Rows excluded
+              <HelpTip tipId="required-field" />
+            </dt>
+            <dd className="font-semibold text-fg-muted">{stats.recordsFiltered}</dd>
           </div>
           <div className="flex justify-between">
             <dt>Failed</dt>
-            <dd className="font-semibold text-slate-700">{stats.recordsFailed}</dd>
+            <dd className="font-semibold text-fg-muted">{stats.recordsFailed}</dd>
           </div>
         </dl>
 
         {recordWarningThreshold !== undefined && stats.totalExtracted >= recordWarningThreshold && (
-          <Alert variant="warning" title="Large dataset" className="mt-3">
-            This extraction has passed {recordWarningThreshold.toLocaleString()} rows. The grid may slow down.
-          </Alert>
+          <Banner tone="warning" title="Large dataset">
+            This extraction has passed {recordWarningThreshold.toLocaleString()} rows. The table may be slow to scroll.
+          </Banner>
         )}
 
-        {/* Error notice if present */}
-        {isError && (
-          <Alert variant="error" title="Extraction Error" className="mt-3">
-            {stats.errorMessage || 'An error occurred during extraction. You can still inspect the records harvested so far.'}
-          </Alert>
-        )}
+        {isError && <ErrorBanner error={{ message: stats.errorMessage, code: stats.errorCode }} />}
       </Card>
 
-      {/* Control Buttons */}
-      <div className="flex items-center justify-between gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onCancel}
-          title="Stops the job. Rows already saved stay in Datasets."
-        >
-          {isError ? 'Close' : 'Cancel Job'}
-        </Button>
+      {isActive && (
+        <Banner tone="info">
+          You can close this panel. The job keeps running in the background, and rows are saved as they arrive.
+        </Banner>
+      )}
 
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isPaused ? (
             <Button
               variant="outline"
               size="sm"
-              iconLeft={<Play className="w-3.5 h-3.5 fill-current" />}
+              iconLeft={<Play aria-hidden="true" className="w-3.5 h-3.5 fill-current" />}
               onClick={onResume}
             >
               Resume
@@ -189,23 +162,31 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
             <Button
               variant="outline"
               size="sm"
-              iconLeft={<Pause className="w-3.5 h-3.5" />}
+              iconLeft={<Pause aria-hidden="true" className="w-3.5 h-3.5" />}
               onClick={onPause}
               disabled={isError}
             >
               Pause
             </Button>
           )}
-
           <Button
             variant="primary"
             size="sm"
-            iconLeft={<Square className="w-3.5 h-3.5 fill-current" />}
+            iconLeft={<Square aria-hidden="true" className="w-3.5 h-3.5 fill-current" />}
             onClick={onStop}
+            aria-describedby={finishHintId}
           >
-            Finish & View Results
+            Finish and view rows
           </Button>
+          <Button variant="ghost" size="sm" onClick={onCancel} aria-describedby={cancelHintId}>
+            {isError ? 'Close' : 'Cancel job'}
+          </Button>
+          <HelpTip tipId="finish-vs-cancel" />
         </div>
+        <p className="text-2xs text-fg-subtle">
+          <span id={finishHintId}>Finish stops now and shows the rows collected so far.</span>{' '}
+          <span id={cancelHintId}>Cancel stops the job; saved rows stay in Datasets.</span>
+        </p>
       </div>
     </div>
   );

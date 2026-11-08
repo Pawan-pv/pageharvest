@@ -53,3 +53,41 @@ export function resolveAbsoluteUrl(relativeUrl: string | null | undefined, baseU
 export function parseNumberValue(text: string | null | undefined): number | null {
   return parseNumberDetailed(text).value;
 }
+
+/**
+ * Every PageHarvest overlay host opts itself out of the page's own change
+ * detection with this attribute, so that overlay animations can never be
+ * mistaken for real page mutations by extraction observers.
+ */
+const OVERLAY_IGNORE_ATTRIBUTE = 'data-pageharvest-ignore';
+
+/**
+ * Reports whether a mutated node belongs to a PageHarvest overlay host (or is one).
+ * Accepts any Node: elements are walked with `closest`, other node types climb
+ * through `parentElement`.
+ */
+export function isPageHarvestOverlayNode(node: Node): boolean {
+  let current: Node | null = node;
+  while (current) {
+    if (current instanceof Element && current.closest(`[${OVERLAY_IGNORE_ATTRIBUTE}]`)) {
+      return true;
+    }
+    current = current.parentElement;
+  }
+  return false;
+}
+
+/**
+ * Reports whether a mutation record was caused exclusively by PageHarvest overlay
+ * activity. Records that only add or remove overlay-owned nodes (e.g. mounting or
+ * animating an overlay host) count as overlay activity, even when the observed
+ * target is the page body; attribute or characterData changes count only when they
+ * target an overlay node.
+ */
+export function isPageHarvestOverlayMutation(record: MutationRecord): boolean {
+  const changed: Node[] = [...record.addedNodes, ...record.removedNodes];
+  if (changed.length > 0) {
+    return changed.every((node) => isPageHarvestOverlayNode(node));
+  }
+  return isPageHarvestOverlayNode(record.target);
+}

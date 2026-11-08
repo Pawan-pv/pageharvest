@@ -48,8 +48,8 @@ describe('Side panel as a view of stored state', () => {
   async function runSavedRecipe() {
     await openLibraryTab('Recipes');
     fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Start Extraction/ }));
-    await screen.findByText('Harvesting in Progress...');
+    fireEvent.click(await screen.findByRole('button', { name: /Start extraction/i }));
+    await screen.findByText('Collecting rows…');
     await waitFor(async () => expect(await db.jobs.count()).toBe(1));
   }
 
@@ -73,9 +73,9 @@ describe('Side panel as a view of stored state', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('Harvesting in Progress...')).toBeInTheDocument();
+    expect(await screen.findByText('Collecting rows…')).toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByText('Records Harvested').parentElement?.parentElement).toHaveTextContent('1')
+      expect(screen.getByText('Rows saved').nextSibling).toHaveTextContent('1')
     );
     expect(await db.jobs.count()).toBe(1);
   });
@@ -101,7 +101,10 @@ describe('Side panel as a view of stored state', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Datasets' }));
     fireEvent.click(await screen.findByText(/Simple Product Grid/));
 
-    expect(await screen.findByText('Row one')).toBeInTheDocument();
+    // DataTable is loaded through React.lazy. The production contract is that the
+    // saved row appears after the panel reopens, not that its module resolves within
+    // Testing Library's one-second default while the full suite is under load.
+    expect(await screen.findByText('Row one', {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(await screen.findByLabelText('Extraction summary')).toHaveTextContent('1 detected, 1 kept');
   });
 
@@ -111,11 +114,11 @@ describe('Side panel as a view of stored state', () => {
     await runSavedRecipe();
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
-    expect(await screen.findByText('Extraction Paused')).toBeInTheDocument();
+    expect(await screen.findByText('Extraction paused')).toBeInTheDocument();
     expect((await db.jobs.get(await jobId()))?.status).toBe('PAUSED');
 
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
-    expect(await screen.findByText('Harvesting in Progress...')).toBeInTheDocument();
+    expect(await screen.findByText('Collecting rows…')).toBeInTheDocument();
     expect((await db.jobs.get(await jobId()))?.status).toBe('RUNNING');
   });
 
@@ -124,9 +127,9 @@ describe('Side panel as a view of stored state', () => {
     render(<App />);
     await runSavedRecipe();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel Job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel job' }));
 
-    expect(await screen.findByText('Quick Actions')).toBeInTheDocument();
+    expect(await screen.findByText('Get data from this page')).toBeInTheDocument();
     expect((await db.jobs.get(await jobId()))?.status).toBe('CANCELLED');
     expect(await db.history.count()).toBe(1);
   });
@@ -136,7 +139,7 @@ describe('Side panel as a view of stored state', () => {
     render(<App />);
     await runSavedRecipe();
 
-    fireEvent.click(screen.getByRole('button', { name: /Finish & View Results/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Finish and view rows/ }));
 
     await waitFor(async () => {
       expect((await db.jobs.get(await jobId()))?.status).toBe('COMPLETED');
@@ -151,10 +154,10 @@ describe('Side panel as a view of stored state', () => {
 
     await openLibraryTab('Recipes');
     fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Start Extraction/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Start extraction/i }));
 
     expect(await screen.findByText(/could not start extraction/)).toBeInTheDocument();
-    expect(screen.getByText('Columns to Extract')).toBeInTheDocument();
+    expect(screen.getByText('Choose your columns')).toBeInTheDocument();
     expect((await db.jobs.toArray())[0].status).toBe('FAILED');
   });
 
@@ -168,11 +171,13 @@ describe('Side panel as a view of stored state', () => {
     await openLibraryTab('Recipes');
     fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
 
-    fireEvent.click(await screen.findByRole('button', { name: /Infinite Scroll/ }));
-    expect(screen.getByLabelText('Max Scrolls')).toHaveValue(17);
+    fireEvent.click(await screen.findByRole('button', { name: 'Next: Pagination' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Scroll to load more' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+    expect(screen.getByLabelText('Most scrolls')).toHaveValue(17);
 
-    fireEvent.click(screen.getByRole('button', { name: /Next Button/ }));
-    expect(screen.getByLabelText('Max Pages to Crawl')).toHaveValue(33);
+    fireEvent.click(screen.getByRole('radio', { name: 'Click a Next button' }));
+    expect(screen.getByLabelText('Most pages')).toHaveValue(33);
   });
 
   describe('Library', () => {
@@ -182,6 +187,7 @@ describe('Side panel as a view of stored state', () => {
 
       await openLibraryTab('Recipes');
       fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Base recipe' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Next: Pagination' }));
       fireEvent.change(await screen.findByLabelText('Recipe Name'), { target: { value: 'My new recipe' } });
       fireEvent.click(screen.getByRole('button', { name: 'Save Recipe' }));
 
@@ -194,7 +200,7 @@ describe('Side panel as a view of stored state', () => {
       render(<App />);
       await openLibraryTab('Recipes');
       fireEvent.click(await screen.findByRole('button', { name: 'Run recipe My new recipe' }));
-      fireEvent.click(await screen.findByRole('button', { name: /Start Extraction/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /Start extraction/i }));
 
       await waitFor(async () => {
         expect((await db.jobs.toArray())[0]?.recipeId).toBe(saved?.id);
@@ -206,6 +212,7 @@ describe('Side panel as a view of stored state', () => {
       render(<App />);
       await openLibraryTab('Recipes');
       fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Next: Pagination' }));
       fireEvent.change(await screen.findByLabelText('Recipe Name'), { target: { value: 'Will fail' } });
 
       vi.spyOn(db.recipes, 'put').mockRejectedValueOnce(new Error('disk full'));
@@ -269,7 +276,7 @@ describe('Side panel as a view of stored state', () => {
       render(<App />);
       await openLibraryTab('Recipes');
       fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
-      fireEvent.click(await screen.findByRole('button', { name: /Start Extraction/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /Start extraction/i }));
       await waitFor(async () => expect(await db.schemas.count()).toBe(1));
       const [schema] = await db.schemas.toArray();
       await new RecipeRepository().updateRecipe('recipe_saved', { schemaId: schema.id });
@@ -287,7 +294,7 @@ describe('Side panel as a view of stored state', () => {
       await screen.findByText('Card list');
 
       fireEvent.click(screen.getByRole('button', { name: 'Use schema Card list' }));
-      expect(await screen.findByText('Columns to Extract')).toBeInTheDocument();
+      expect(await screen.findByText('Choose your columns')).toBeInTheDocument();
     });
 
     it('shows real run history for finished, failed and cancelled runs', async () => {
@@ -322,7 +329,7 @@ describe('Side panel as a view of stored state', () => {
       fireEvent.click(choice);
       fireEvent.click(screen.getByRole('button', { name: 'Save field edits' }));
 
-      expect(await screen.findByText('filters rows')).toBeInTheDocument();
+      expect(await screen.findByText('Required')).toBeInTheDocument();
     });
   });
 });
@@ -361,7 +368,7 @@ describe('URL template configuration', () => {
 
   it('explains the supported placeholders', () => {
     render(<PaginationConfigPanel config={base} onChange={vi.fn()} />);
-    expect(screen.getByText(/\{page\} becomes the page number/)).toBeInTheDocument();
+    expect(screen.getByText(/Write \{page\} where the page number goes/)).toBeInTheDocument();
     expect(screen.getByText(/\{offset\} starts at 0/)).toBeInTheDocument();
   });
 
@@ -391,13 +398,14 @@ describe('URL template configuration', () => {
     const onChange = vi.fn();
     render(<PaginationConfigPanel config={base} onChange={onChange} />);
 
-    fireEvent.change(screen.getByLabelText('Page URL Template'), { target: { value: 'https://a.test/{page}' } });
+    fireEvent.change(screen.getByLabelText('Page address'), { target: { value: 'https://a.test/{page}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
     expect(onChange).toHaveBeenLastCalledWith({ urlTemplate: 'https://a.test/{page}' });
 
-    fireEvent.change(screen.getByLabelText('Page Increment'), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('Count up by'), { target: { value: '5' } });
     expect(onChange).toHaveBeenLastCalledWith({ pageIncrement: 5 });
 
-    fireEvent.change(screen.getByLabelText('Maximum Pages'), { target: { value: '9' } });
+    fireEvent.change(screen.getByLabelText('Most pages'), { target: { value: '9' } });
     expect(onChange).toHaveBeenLastCalledWith({ maxPages: 9 });
   });
 });

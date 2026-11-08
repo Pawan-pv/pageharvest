@@ -1,9 +1,11 @@
-import React from 'react';
-import { ArrowRightCircle, Link2, MoveDown, Compass, Sliders } from 'lucide-react';
-import { Card } from '@/components/common/Card';
+import React, { useId } from 'react';
 import { Input } from '@/components/common/Input';
+import { Disclosure } from '@/components/common/Disclosure';
+import { HelpTip } from '@/components/common/Tooltip';
+import type { HelpTipId } from '@/components/guide/tips';
 import { previewTemplateUrls, validateUrlTemplate } from '@/core/navigation/url-paginator';
 import { ExtractionPaginationConfig, PaginationType } from '@/types';
+import { PAGINATION_DEFAULTS, describeLimits } from './pagination-copy';
 
 export interface PaginationConfigPanelProps {
   config: ExtractionPaginationConfig;
@@ -12,193 +14,241 @@ export interface PaginationConfigPanelProps {
   onChange: (updated: Partial<ExtractionPaginationConfig>) => void;
 }
 
-export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({
-  config,
-  sourceUrl,
-  onChange,
-}) => {
-  const modes: { type: PaginationType; label: string; icon: React.ReactNode; desc: string }[] = [
-    {
-      type: 'none',
-      label: 'Single Page',
-      icon: <Compass className="w-3.5 h-3.5" />,
-      desc: 'Extract only visible items on the current page',
-    },
-    {
-      type: 'next_button',
-      label: 'Next Button',
-      icon: <ArrowRightCircle className="w-3.5 h-3.5" />,
-      desc: 'Click "Next" button across multiple pages',
-    },
-    {
-      type: 'infinite_scroll',
-      label: 'Infinite Scroll',
-      icon: <MoveDown className="w-3.5 h-3.5" />,
-      desc: 'Scroll down to load lazy/infinite content',
-    },
-    {
-      type: 'url_template',
-      label: 'URL Template',
-      icon: <Link2 className="w-3.5 h-3.5" />,
-      desc: 'Visit numbered page URLs such as ?page=2',
-    },
-  ];
+const MODES: { type: PaginationType; label: string; description: string; tip?: HelpTipId }[] = [
+  { type: 'none', label: 'Just this page', description: 'Collect only the items you can see now.' },
+  {
+    type: 'next_button',
+    label: 'Click a Next button',
+    description: 'For sites with Next or page-number buttons.',
+    tip: 'pagination-next-button',
+  },
+  {
+    type: 'infinite_scroll',
+    label: 'Scroll to load more',
+    description: 'For pages that add items as you scroll down.',
+    tip: 'pagination-scroll',
+  },
+  {
+    type: 'url_template',
+    label: 'Page numbers in the URL',
+    description: 'For addresses that change with the page, such as ?page=2.',
+    tip: 'pagination-url',
+  },
+];
 
+/** Parses a whole-number field; an empty or invalid entry gives undefined. */
+function wholeNumber(value: string): number | undefined {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/** Seconds on screen, milliseconds in the contract, kept within the contract's range. */
+function secondsToMs(value: string, min: number, max: number): number | undefined {
+  const seconds = Number.parseFloat(value);
+  if (!Number.isFinite(seconds)) return undefined;
+  return Math.min(max, Math.max(min, Math.round(seconds * 1000)));
+}
+
+const ModeOption: React.FC<{
+  mode: (typeof MODES)[number];
+  checked: boolean;
+  onSelect: () => void;
+}> = ({ mode, checked, onSelect }) => {
+  const inputId = useId();
+  const descriptionId = useId();
+  return (
+    <div
+      className={`flex items-start gap-2 p-2.5 rounded-control border ${
+        checked ? 'border-brand bg-brand-soft' : 'border-line bg-surface hover:border-line-strong'
+      }`}
+    >
+      <input
+        id={inputId}
+        type="radio"
+        name="pagination-mode"
+        checked={checked}
+        onChange={onSelect}
+        aria-describedby={descriptionId}
+        className="mt-0.5 h-4 w-4 accent-brand"
+      />
+      <div className="min-w-0 flex-1">
+        <label htmlFor={inputId} className="block text-xs font-semibold text-fg cursor-pointer">
+          {mode.label}
+        </label>
+        <span id={descriptionId} className="block text-2xs text-fg-muted">
+          {mode.description}
+        </span>
+      </div>
+      {mode.tip && <HelpTip tipId={mode.tip} />}
+    </div>
+  );
+};
+
+export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({ config, sourceUrl, onChange }) => {
+  const legendId = useId();
   const sequence = {
     template: config.urlTemplate ?? '',
-    startPage: config.startPage ?? 1,
-    pageIncrement: config.pageIncrement ?? 1,
+    startPage: config.startPage ?? PAGINATION_DEFAULTS.startPage,
+    pageIncrement: config.pageIncrement ?? PAGINATION_DEFAULTS.pageIncrement,
   };
   const templateCheck = validateUrlTemplate(sequence, sourceUrl);
+  const isPaged = config.type === 'next_button' || config.type === 'url_template';
+
+  const rowLimitInput = (
+    <Input
+      type="number"
+      label="Stop after this many rows"
+      min={1}
+      placeholder="No limit"
+      value={config.maxRecords ?? ''}
+      onChange={(e) => onChange({ maxRecords: wholeNumber(e.target.value) })}
+    />
+  );
 
   return (
-    <Card variant="flat" className="text-left bg-slate-50/70 p-3.5 border-slate-200/80">
-      <div className="flex items-center gap-1.5 mb-2.5">
-        <Sliders className="w-3.5 h-3.5 text-slate-700" />
-        <h4 className="text-xs font-semibold text-slate-800">
-          Navigation & Pagination Strategy
-        </h4>
-      </div>
-
-      {/* Mode selection buttons */}
-      <div className="grid grid-cols-2 gap-1.5 mb-3">
-        {modes.map((mode) => (
-          <button
+    <div className="flex flex-col gap-3 text-left">
+      <fieldset aria-labelledby={legendId} className="min-w-0 flex flex-col gap-1.5">
+        <div className="flex items-center gap-1 mb-0.5">
+          <span id={legendId} className="text-sm font-semibold text-fg">
+            How does this site show more items?
+          </span>
+          <HelpTip tipId="pagination-modes" />
+        </div>
+        {MODES.map((mode) => (
+          <ModeOption
             key={mode.type}
-            type="button"
-            onClick={() => onChange({ type: mode.type })}
-            className={`flex flex-col items-start p-2 rounded-lg border text-left transition-all ${
-              config.type === mode.type
-                ? 'bg-white border-emerald-600 text-emerald-900 shadow-xs ring-1 ring-emerald-600'
-                : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
-            }`}
-          >
-            <div className="flex items-center gap-1 mb-1">
-              <span className={config.type === mode.type ? 'text-emerald-700' : 'text-slate-500'}>
-                {mode.icon}
-              </span>
-              <span className="text-xs font-semibold">{mode.label}</span>
-            </div>
-            <span className="text-[10px] text-slate-500 leading-tight">
-              {mode.desc}
-            </span>
-          </button>
+            mode={mode}
+            checked={config.type === mode.type}
+            onSelect={() => onChange({ type: mode.type })}
+          />
         ))}
-      </div>
-
-      {/* Mode specific parameters */}
-      {config.type === 'next_button' && (
-        <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200/60">
-          <Input
-            label="Next Button Selector"
-            placeholder="e.g. a.next, [rel='next'], button.load-more"
-            value={config.nextButtonSelector || ''}
-            onChange={(e) => onChange({ nextButtonSelector: e.target.value })}
-            helperText="CSS selector for the button. Leave empty to find it automatically."
-          />
-
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              type="number"
-              label="Max Pages to Crawl"
-              min={1}
-              max={500}
-              value={config.maxPages ?? 20}
-              onChange={(e) => onChange({ maxPages: parseInt(e.target.value, 10) || 1 })}
-            />
-            <Input
-              type="number"
-              label="Delay Between Pages (ms)"
-              min={200}
-              max={30000}
-              step={250}
-              value={config.delayMs ?? 1500}
-              onChange={(e) => onChange({ delayMs: parseInt(e.target.value, 10) || 1500 })}
-            />
-          </div>
-        </div>
-      )}
-
-      {config.type === 'infinite_scroll' && (
-        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/60">
-          <Input
-            type="number"
-            label="Max Scrolls"
-            min={1}
-            max={200}
-            value={config.scrollCount ?? 30}
-            onChange={(e) => onChange({ scrollCount: parseInt(e.target.value, 10) || 1 })}
-          />
-          <Input
-            type="number"
-            label="Scroll Delay (ms)"
-            min={300}
-            max={10000}
-            step={250}
-            value={config.scrollDelayMs ?? 1500}
-            onChange={(e) => onChange({ scrollDelayMs: parseInt(e.target.value, 10) || 1500 })}
-          />
-        </div>
-      )}
+      </fieldset>
 
       {config.type === 'url_template' && (
-        <div className="flex flex-col gap-2.5 pt-2 border-t border-slate-200/60">
+        <div className="flex flex-col gap-2">
           <Input
-            label="Page URL Template"
+            label="Page address"
             placeholder="https://example.com/items?page={page}"
             value={config.urlTemplate || ''}
             onChange={(e) => onChange({ urlTemplate: e.target.value })}
-            helperText="{page} becomes the page number. {offset} starts at 0, for sites that count items."
+            helperText="Write {page} where the page number goes. {offset} starts at 0, for sites that count items."
           />
-
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              type="number"
-              label="Starting Page"
-              min={1}
-              value={config.startPage ?? 1}
-              onChange={(e) => onChange({ startPage: parseInt(e.target.value, 10) || 1 })}
-            />
-            <Input
-              type="number"
-              label="Page Increment"
-              min={1}
-              value={config.pageIncrement ?? 1}
-              onChange={(e) => onChange({ pageIncrement: parseInt(e.target.value, 10) || 1 })}
-            />
-            <Input
-              type="number"
-              label="Maximum Pages"
-              min={1}
-              max={500}
-              value={config.maxPages ?? 20}
-              onChange={(e) => onChange({ maxPages: parseInt(e.target.value, 10) || 1 })}
-            />
-            <Input
-              type="number"
-              label="Delay Between Pages (ms)"
-              min={200}
-              max={30000}
-              step={250}
-              value={config.delayMs ?? 1500}
-              onChange={(e) => onChange({ delayMs: parseInt(e.target.value, 10) || 1500 })}
-            />
-          </div>
-
           {templateCheck.valid ? (
-            <div className="rounded-lg bg-white border border-slate-200 p-2">
-              <p className="text-[11px] font-semibold text-slate-600 mb-1">Pages it will visit</p>
-              <ol className="text-[11px] font-mono text-slate-600 flex flex-col gap-0.5" aria-label="Generated page URLs">
+            <div className="rounded-control bg-surface-sunken border border-line p-2">
+              <p className="text-2xs font-semibold text-fg-muted mb-1">Pages it will visit</p>
+              <ol className="text-2xs font-mono text-fg-muted flex flex-col gap-0.5" aria-label="Generated page URLs">
                 {previewTemplateUrls(sequence, 3).map((url) => (
-                  <li key={url} className="truncate" title={url}>{url}</li>
+                  <li key={url} className="truncate" title={url}>
+                    {url}
+                  </li>
                 ))}
               </ol>
             </div>
           ) : (
-            <p role="alert" className="text-[11px] text-rose-600">{templateCheck.error}</p>
+            <p role="alert" className="text-2xs text-danger-fg">
+              {templateCheck.error}
+            </p>
           )}
         </div>
       )}
-    </Card>
+
+      <p className="text-2xs text-fg-subtle">{describeLimits(config)}</p>
+
+      <Disclosure label="Advanced" aside={<HelpTip tipId="pagination-limits" />}>
+        {/* items-end: a label that wraps to two lines must not push its input below its neighbour's. */}
+        <div className="grid grid-cols-2 gap-2 items-end">
+          {config.type === 'next_button' && (
+            <div className="col-span-2">
+              <Input
+                label="Next button selector (optional)"
+                placeholder="e.g. a.next"
+                value={config.nextButtonSelector || ''}
+                onChange={(e) => onChange({ nextButtonSelector: e.target.value })}
+                helperText="Leave empty and PageHarvest looks for the button itself."
+              />
+            </div>
+          )}
+          {config.type === 'url_template' && (
+            <>
+              <Input
+                type="number"
+                label="First page number"
+                min={1}
+                value={sequence.startPage}
+                onChange={(e) => {
+                  const value = wholeNumber(e.target.value);
+                  if (value !== undefined) onChange({ startPage: value });
+                }}
+              />
+              <Input
+                type="number"
+                label="Count up by"
+                min={1}
+                value={sequence.pageIncrement}
+                onChange={(e) => {
+                  const value = wholeNumber(e.target.value);
+                  if (value !== undefined) onChange({ pageIncrement: value });
+                }}
+              />
+            </>
+          )}
+          {isPaged && (
+            <>
+              <Input
+                type="number"
+                label="Most pages"
+                min={1}
+                max={500}
+                value={config.maxPages ?? PAGINATION_DEFAULTS.maxPages}
+                onChange={(e) => {
+                  const value = wholeNumber(e.target.value);
+                  if (value !== undefined) onChange({ maxPages: Math.min(500, Math.max(1, value)) });
+                }}
+              />
+              <Input
+                type="number"
+                label="Wait between pages (seconds)"
+                min={0.2}
+                max={30}
+                step={0.5}
+                value={(config.delayMs ?? PAGINATION_DEFAULTS.delayMs) / 1000}
+                onChange={(e) => {
+                  const value = secondsToMs(e.target.value, 200, 30000);
+                  if (value !== undefined) onChange({ delayMs: value });
+                }}
+              />
+            </>
+          )}
+          {config.type === 'infinite_scroll' && (
+            <>
+              <Input
+                type="number"
+                label="Most scrolls"
+                min={1}
+                max={200}
+                value={config.scrollCount ?? PAGINATION_DEFAULTS.scrollCount}
+                onChange={(e) => {
+                  const value = wholeNumber(e.target.value);
+                  if (value !== undefined) onChange({ scrollCount: Math.min(200, Math.max(1, value)) });
+                }}
+              />
+              <Input
+                type="number"
+                label="Wait between scrolls (seconds)"
+                min={0.3}
+                max={10}
+                step={0.5}
+                value={(config.scrollDelayMs ?? PAGINATION_DEFAULTS.scrollDelayMs) / 1000}
+                onChange={(e) => {
+                  const value = secondsToMs(e.target.value, 300, 10000);
+                  if (value !== undefined) onChange({ scrollDelayMs: value });
+                }}
+              />
+            </>
+          )}
+          <div className="col-span-2">{rowLimitInput}</div>
+        </div>
+      </Disclosure>
+    </div>
   );
 };

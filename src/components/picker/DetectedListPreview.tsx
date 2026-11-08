@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Layers, RotateCcw, Code, ArrowRight } from 'lucide-react';
-import { Card, CardHeader } from '@/components/common/Card';
+import React, { useId, useState } from 'react';
+import { Layers, MousePointer, ArrowRight } from 'lucide-react';
+import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
+import { Banner } from '@/components/common/Banner';
 import { Badge } from '@/components/common/Badge';
+import { HelpTip } from '@/components/common/Tooltip';
 import { DetectedList } from '@/hooks/useExtractionWorkflow';
 import { ListCandidate } from '@/shared/contracts/message';
 
@@ -14,52 +16,134 @@ export interface DetectedListPreviewProps {
   onCancel: () => void;
 }
 
-const SAMPLES_PER_CANDIDATE = 2;
+const SAMPLE_ROWS = 3;
+const CARD_SAMPLES = 2;
 
-const CandidateOption: React.FC<{
+/** Confidence in words first, number second. The score is a heuristic, not a probability (ADR-027). */
+export function confidenceLabel(confidence: number): string {
+  const percent = Math.round(confidence * 100);
+  const level = confidence >= 0.75 ? 'High' : confidence >= 0.45 ? 'Medium' : 'Low';
+  return `${level} · ${percent}% confidence`;
+}
+
+function itemsFound(count: number): string {
+  return `${count.toLocaleString('en-US')} similar ${count === 1 ? 'item' : 'items'} found`;
+}
+
+function columnsLine(fields: string[]): string {
+  return `${fields.length} ${fields.length === 1 ? 'column' : 'columns'}: ${fields.join(', ')}`;
+}
+
+/** Shown on demand: evidence and selectors are for checking, not for choosing. */
+const TechnicalDetails: React.FC<{ evidence?: string[]; selector: string }> = ({ evidence, selector }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <details open={isOpen} className="text-2xs text-fg-subtle">
+      <summary
+        className="cursor-pointer select-none hover:text-fg"
+        onClick={(event) => {
+          event.preventDefault();
+          setIsOpen((open) => !open);
+        }}
+      >
+        Technical details
+      </summary>
+      {isOpen && (
+        <div className="mt-1 flex flex-col gap-1">
+          {evidence && evidence.length > 0 && (
+            <ul className="list-disc pl-4">
+              {evidence.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+          <p className="p-2 rounded-control bg-surface-muted font-mono text-fg-muted break-all select-all">{selector}</p>
+        </div>
+      )}
+    </details>
+  );
+};
+
+const SampleRows: React.FC<{ samples: string[]; limit: number }> = ({ samples, limit }) => {
+  const labelId = useId();
+  const rows = samples.slice(0, limit);
+  if (rows.length === 0) return null;
+  return (
+    <div>
+      <p id={labelId} className="text-xs font-semibold text-fg-muted mb-1">
+        Sample rows
+      </p>
+      <ol aria-labelledby={labelId} className="flex flex-col gap-1">
+        {rows.map((snippet, index) => (
+          <li
+            key={index}
+            className="flex items-start gap-2 p-2 rounded-control bg-surface-sunken border border-line text-xs text-fg-muted"
+          >
+            <span aria-hidden="true" className="text-2xs font-mono text-fg-subtle shrink-0 pt-px">
+              {index + 1}
+            </span>
+            <span className="min-w-0 truncate">{snippet || '(no text in this item)'}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+};
+
+/** One ranked candidate the user can choose. The radio and its text share one label. */
+const CandidateCard: React.FC<{
   candidate: ListCandidate;
+  rank: number;
   isSelected: boolean;
   onSelect: () => void;
-}> = ({ candidate, isSelected, onSelect }) => (
-  <label
-    className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
-      isSelected ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-200 bg-white hover:border-slate-300'
+}> = ({ candidate, rank, isSelected, onSelect }) => (
+  <div
+    className={`flex flex-col gap-2 p-3 rounded-card border ${
+      isSelected ? 'border-brand bg-brand-soft' : 'border-line bg-surface hover:border-line-strong'
     }`}
   >
-    <input
-      type="radio"
-      name="list-candidate"
-      checked={isSelected}
-      onChange={onSelect}
-      className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
-    />
-    <span className="min-w-0 flex-1 flex flex-col gap-1">
-      <span className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="text-xs font-semibold text-slate-900">{candidate.name}</span>
-        <span className="flex items-center gap-1">
-          <Badge variant="neutral" size="sm">
-            {candidate.matchCount} items
-          </Badge>
+    <label className="flex items-start gap-2 cursor-pointer">
+      <input
+        type="radio"
+        name="list-candidate"
+        checked={isSelected}
+        onChange={onSelect}
+        className="mt-0.5 h-4 w-4 accent-brand shrink-0"
+      />
+      <span className="min-w-0 flex-1 flex flex-col gap-1">
+        <span className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-fg">
+            {rank === 0 ? 'Best match: ' : ''}
+            {candidate.name}
+          </span>
           <Badge variant={candidate.credible ? 'brand' : 'warning'} size="sm">
-            {Math.round(candidate.confidence * 100)}% confidence
+            {confidenceLabel(candidate.confidence)}
           </Badge>
         </span>
+        <span className="text-xs text-fg-muted">{itemsFound(candidate.matchCount)}</span>
+        {candidate.suggestedFields.length > 0 && (
+          <span className="text-2xs text-fg-subtle truncate">{columnsLine(candidate.suggestedFields)}</span>
+        )}
+        {!candidate.credible && (
+          <span className="text-2xs text-warning-fg">This looks like a menu or page furniture, not data.</span>
+        )}
+        {candidate.sampleSnippets.slice(0, CARD_SAMPLES).map((snippet, index) => (
+          <span key={index} className="text-2xs text-fg-muted truncate">
+            {snippet || '(no text in this item)'}
+          </span>
+        ))}
       </span>
-      {candidate.sampleSnippets.slice(0, SAMPLES_PER_CANDIDATE).map((snippet, index) => (
-        <span key={index} className="text-[11px] text-slate-600 truncate">
-          {snippet || '(no text)'}
-        </span>
-      ))}
-      {candidate.suggestedFields.length > 0 && (
-        <span className="text-[11px] text-slate-500 truncate">
-          Columns: {candidate.suggestedFields.join(', ')}
-        </span>
-      )}
-      <span className="text-[10px] text-slate-400">{candidate.evidence.join(' · ')}</span>
-    </span>
-  </label>
+    </label>
+    <TechnicalDetails evidence={candidate.evidence} selector={candidate.containerSelector} />
+  </div>
 );
 
+/**
+ * What auto-detect, Table or Links found, for the user to accept or reject. Candidates are
+ * ranked on recorded evidence (ADR-027) and the best one is chosen first, but nothing is used
+ * until the user presses "Use this list"; a list that does not look like data needs a second,
+ * deliberate click.
+ */
 export const DetectedListPreview: React.FC<DetectedListPreviewProps> = ({
   detectedList,
   onSelectCandidate,
@@ -67,139 +151,119 @@ export const DetectedListPreview: React.FC<DetectedListPreviewProps> = ({
   onPickAgain,
   onCancel,
 }) => {
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [chosenAnyway, setChosenAnyway] = useState(false);
-
   const candidates = detectedList.candidates ?? [];
   const selected =
-    candidates.find((candidate) => candidate.containerSelector === detectedList.containerSelector) ??
-    candidates[0];
+    candidates.find((candidate) => candidate.containerSelector === detectedList.containerSelector) ?? candidates[0];
   const nothingCredible = detectedList.credible === false;
   const needsConfirmation = selected !== undefined && !selected.credible && !chosenAnyway;
+  const found = detectedList.matchCount > 0 || candidates.length > 0;
 
   return (
     <div className="flex flex-col gap-3 p-4 text-left">
+      <div className="flex items-center gap-1">
+        <h2 className="text-sm font-semibold text-fg">Is this the data you want?</h2>
+        {candidates.length > 0 && <HelpTip tipId="confidence" />}
+      </div>
+
       {nothingCredible && (
-        <div role="alert" className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900">
-          <p className="font-semibold">No data list was found on this page.</p>
-          <p className="mt-0.5">
-            The repeated items below look like navigation or page furniture. Pick an element on the page to
-            choose exactly what you want, or use one of these if it really is what you are after.
-          </p>
-        </div>
+        <Banner
+          tone="warning"
+          title="No data list was found on this page"
+          nextStep="Pick one item on the page yourself, or use one of these if it really is what you want."
+        >
+          The repeated items below look like navigation or page furniture.
+        </Banner>
       )}
 
-      <Card variant="default">
-        <CardHeader
-          title={
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-emerald-600" />
-              <span>Repeating Elements Found</span>
-            </div>
-          }
-          action={
-            <Badge variant="brand" size="md">
-              {detectedList.matchCount} items detected
-            </Badge>
-          }
-          subtitle="PageHarvest detected a pattern of repeating structured records."
-        />
-
-        {/* Human-readable preview */}
-        <div className="flex flex-col gap-2 mt-2">
-          <span className="text-xs font-semibold text-slate-700">
-            Sample Preview ({Math.min(detectedList.sampleSnippets.length, 3)} of {detectedList.matchCount}):
-          </span>
-
-          <div className="space-y-1.5">
-            {detectedList.sampleSnippets.slice(0, 3).map((snippet, idx) => (
-              <div
-                key={idx}
-                className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 text-xs text-slate-700 flex items-start gap-2"
-              >
-                <span className="text-[10px] font-mono bg-white border border-slate-200 text-slate-500 rounded px-1.5 py-0.5 shrink-0">
-                  #{idx + 1}
-                </span>
-                <span className="truncate leading-relaxed">
-                  {snippet || '(Empty text container)'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Advanced selector toggle (satisfies UX requirement: Avoid displaying technical DOM details to ordinary users, but allow power users to inspect) */}
-        <div className="mt-4 pt-3 border-t border-slate-100">
-          <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors"
-          >
-            <Code className="w-3.5 h-3.5" />
-            <span>{showAdvanced ? 'Hide technical selector' : 'View advanced CSS selector'}</span>
-          </button>
-
-          {showAdvanced && (
-            <div className="mt-2 p-2 rounded bg-slate-100 font-mono text-[11px] text-slate-700 break-all select-all">
-              {detectedList.containerSelector}
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* The best guess can be wrong, so the alternatives are always shown. */}
-      {candidates.length > 1 && (
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className="text-xs font-semibold text-slate-700 mb-1">
-            Other lists on this page. Choose the one you want:
+      {candidates.length > 1 ? (
+        <fieldset className="min-w-0 flex flex-col gap-2">
+          {/* min-w-0: a fieldset is otherwise as wide as its longest sample row, past the panel edge. */}
+          <legend className="text-xs text-fg-muted mb-1">
+            PageHarvest found {candidates.length} lists on this page. The best match is first; choose the one you want.
           </legend>
-          {candidates.map((candidate) => (
-            <CandidateOption
+          {candidates.map((candidate, rank) => (
+            <CandidateCard
               key={candidate.containerSelector}
               candidate={candidate}
+              rank={rank}
               isSelected={candidate.containerSelector === selected?.containerSelector}
               onSelect={() => {
+                // Choosing a list from the alternatives is itself the deliberate choice (ADR-027).
                 setChosenAnyway(true);
                 onSelectCandidate?.(candidate);
               }}
             />
           ))}
         </fieldset>
+      ) : found ? (
+        <Card className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="w-8 h-8 rounded-control bg-brand-soft text-brand-fg flex items-center justify-center shrink-0"
+            >
+              <Layers className="w-4 h-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-fg">{itemsFound(detectedList.matchCount)}</p>
+              <p className="text-2xs text-fg-subtle">Each item becomes one row.</p>
+            </div>
+            {selected && (
+              <Badge variant={selected.credible ? 'brand' : 'warning'} size="sm">
+                {confidenceLabel(selected.confidence)}
+              </Badge>
+            )}
+          </div>
+
+          <SampleRows samples={detectedList.sampleSnippets} limit={SAMPLE_ROWS} />
+
+          <p className="text-2xs text-fg-subtle">
+            {selected && selected.suggestedFields.length > 0
+              ? `${columnsLine(selected.suggestedFields)}. You can change them on the next step.`
+              : 'Columns are suggested on the next step, where you can change them.'}
+          </p>
+
+          <TechnicalDetails evidence={selected?.evidence} selector={detectedList.containerSelector} />
+        </Card>
+      ) : (
+        <Banner
+          tone="warning"
+          title="No repeated items were found on this page"
+          nextStep="Pick one item on the page yourself, and PageHarvest will look for others like it."
+        >
+          The page may still be loading, or its items may not repeat in a way PageHarvest recognises.
+        </Banner>
       )}
 
       {needsConfirmation && (
-        <Button variant="outline" size="sm" onClick={() => setChosenAnyway(true)}>
-          Use this list anyway
-        </Button>
+        <div>
+          <Button variant="outline" size="sm" onClick={() => setChosenAnyway(true)}>
+            Use this list anyway
+          </Button>
+        </div>
       )}
 
-      {/* Action buttons */}
-      <div className="flex items-center justify-between gap-2 pt-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onCancel}
-        >
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            iconLeft={<RotateCcw className="w-3.5 h-3.5" />}
+            iconLeft={<MousePointer aria-hidden="true" className="w-3.5 h-3.5" />}
             onClick={onPickAgain}
           >
-            Pick Again
+            Pick on the page instead
           </Button>
-
           <Button
-            variant="primary"
             size="sm"
-            iconRight={<ArrowRight className="w-3.5 h-3.5" />}
+            iconRight={<ArrowRight aria-hidden="true" className="w-3.5 h-3.5" />}
             onClick={onConfirm}
-            disabled={needsConfirmation}
+            disabled={!found || needsConfirmation}
           >
-            Next: Choose Fields
+            Use this list
           </Button>
         </div>
       </div>

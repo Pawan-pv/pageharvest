@@ -700,6 +700,8 @@ export function suggestionsToFieldDefinitions(
     extractor: s.extractor,
     attributeName: s.attributeName,
     required: false,
+    // Anchors ride along so the saved recipe can self-heal later.
+    ...('anchor' in s ? { anchor: s.anchor } : {}),
     ...('coverage' in s
       ? {
           discovery: {

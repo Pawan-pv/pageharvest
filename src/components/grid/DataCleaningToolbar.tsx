@@ -90,12 +90,12 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl p-2 text-xs">
+    <div className="flex flex-col gap-1.5 bg-surface-sunken border border-line/80 rounded-xl p-2 text-xs">
       {/* Toolbar actions */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="flex items-center gap-1 font-semibold text-slate-700 mr-1">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+          <span className="flex items-center gap-1 font-semibold text-fg-muted mr-1">
+            <Sparkles className="w-3.5 h-3.5 text-brand-fg" />
             Clean:
           </span>
 
@@ -121,7 +121,7 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
             Redo
           </Button>
 
-          <div className="w-[1px] h-4 bg-slate-200 mx-0.5" />
+          <div className="w-[1px] h-4 bg-surface-strong mx-0.5" />
 
           <Button
             variant="subtle"
@@ -134,7 +134,7 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
                 onConfirm: onRemoveDuplicates,
               })
             }
-            iconLeft={<CopyX className="w-3 h-3 text-slate-500" />}
+            iconLeft={<CopyX className="w-3 h-3 text-fg-subtle" />}
           >
             Remove Duplicates
           </Button>
@@ -143,7 +143,7 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
             variant="subtle"
             size="xs"
             onClick={onRemoveEmptyRows}
-            iconLeft={<Trash className="w-3 h-3 text-slate-500" />}
+            iconLeft={<Trash className="w-3 h-3 text-fg-subtle" />}
           >
             Remove Empty Rows
           </Button>
@@ -159,7 +159,7 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
                 onConfirm: onRemoveEmptyColumns,
               })
             }
-            iconLeft={<Trash className="w-3 h-3 text-slate-500" />}
+            iconLeft={<Trash className="w-3 h-3 text-fg-subtle" />}
           >
             Remove Empty Columns
           </Button>
@@ -168,7 +168,7 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
             variant="subtle"
             size="xs"
             onClick={onTrimWhitespace}
-            iconLeft={<Scissors className="w-3 h-3 text-slate-500" />}
+            iconLeft={<Scissors className="w-3 h-3 text-fg-subtle" />}
           >
             Trim Spaces
           </Button>
@@ -177,7 +177,7 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
             variant="subtle"
             size="xs"
             onClick={() => setShowFindReplace(true)}
-            iconLeft={<Replace className="w-3 h-3 text-slate-500" />}
+            iconLeft={<Replace className="w-3 h-3 text-fg-subtle" />}
           >
             Find & Replace
           </Button>
@@ -186,14 +186,14 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
             variant="subtle"
             size="xs"
             onClick={() => setShowNormalizeMenu(!showNormalizeMenu)}
-            iconLeft={<Wand2 className="w-3 h-3 text-slate-500" />}
+            iconLeft={<Wand2 className="w-3 h-3 text-fg-subtle" />}
           >
             Normalize
           </Button>
         </div>
 
         {feedbackMessage && (
-          <div className="flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-medium border border-emerald-200 animate-in fade-in">
+          <div className="flex items-center gap-1 text-2xs text-brand-fg bg-brand-soft px-2 py-0.5 rounded-md font-medium border border-brand-line animate-fade-in">
             <Check className="w-3 h-3" />
             <span>{feedbackMessage}</span>
           </div>
@@ -202,12 +202,12 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
 
       {/* Normalize Menu Dropdown */}
       {showNormalizeMenu && (
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 flex-wrap">
-          <span className="text-slate-600 font-medium">Normalize column:</span>
+        <div className="flex items-center gap-2 pt-2 border-t border-line/60 flex-wrap">
+          <span className="text-fg-muted font-medium">Normalize column:</span>
           <select
             value={normalizeColumn}
             onChange={(e) => setNormalizeColumn(e.target.value)}
-            className="rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700"
+            className="rounded border border-line bg-surface px-2 py-0.5 text-xs text-fg-muted"
           >
             {fields.map((f) => (
               <option key={f.id} value={f.name}>
@@ -229,7 +229,7 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
                         | 'boolean'
                     )
                   }
-            className="rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700"
+            className="rounded border border-line bg-surface px-2 py-0.5 text-xs text-fg-muted"
           >
             <option value="number">Parse Number / Price (strip $ ,)</option>
             <option value="url">Resolve Full URL</option>
@@ -250,13 +250,13 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
 
       {/* Find and Replace Modal Dialog */}
       {showFindReplace && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-2xs p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <span className="font-bold text-slate-900">Find & Replace</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/30 backdrop-blur-2xs p-4">
+          <div className="bg-surface rounded-xl shadow-xl border border-line w-full max-w-sm p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between pb-2 border-b border-line-subtle">
+              <span className="font-bold text-fg">Find & Replace</span>
               <button
                 onClick={() => setShowFindReplace(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-fg-subtle hover:text-fg-muted"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -264,33 +264,33 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
 
             <div className="flex flex-col gap-2">
               <div>
-                <label className="text-[11px] font-semibold text-slate-600">Find</label>
+                <label className="text-2xs font-semibold text-fg-muted">Find</label>
                 <input
                   type="text"
                   value={findText}
                   onChange={(e) => setFindText(e.target.value)}
                   placeholder="Text to find..."
-                  className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
+                  className="w-full px-2.5 py-1 text-xs border border-line rounded-lg focus:outline-none focus:border-brand"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-600">Replace with</label>
+                <label className="text-2xs font-semibold text-fg-muted">Replace with</label>
                 <input
                   type="text"
                   value={replaceText}
                   onChange={(e) => setReplaceText(e.target.value)}
                   placeholder="Replacement text..."
-                  className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
+                  className="w-full px-2.5 py-1 text-xs border border-line rounded-lg focus:outline-none focus:border-brand"
                 />
               </div>
 
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-slate-600">Column</label>
+                <label className="text-2xs font-semibold text-fg-muted">Column</label>
                 <select
                   value={targetColumn}
                   onChange={(e) => setTargetColumn(e.target.value)}
-                  className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                  className="rounded border border-line bg-surface px-2 py-1 text-xs text-fg-muted"
                 >
                   <option value="all">All Columns</option>
                   {fields.map((f) => (
@@ -306,13 +306,13 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
                   type="checkbox"
                   checked={matchCase}
                   onChange={(e) => setMatchCase(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded text-emerald-600 border-slate-300"
+                  className="w-3.5 h-3.5 rounded text-brand-fg border-line-strong"
                 />
-                <span className="text-slate-600">Match Case</span>
+                <span className="text-fg-muted">Match Case</span>
               </label>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-line-subtle">
               <Button variant="outline" size="xs" onClick={() => setShowFindReplace(false)}>
                 Cancel
               </Button>
@@ -331,18 +331,18 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
 
       {/* Destructive Action Confirmation Dialog */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-2xs p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-amber-600 font-bold">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-2xs p-4">
+          <div className="bg-surface rounded-xl shadow-xl border border-line w-full max-w-sm p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-warning-fg font-bold">
               <AlertTriangle className="w-4 h-4" />
               <span>{confirmDialog.title}</span>
             </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p className="text-xs text-fg-muted leading-relaxed">
               {confirmDialog.description}
             </p>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-line-subtle">
               <Button variant="outline" size="xs" onClick={() => setConfirmDialog(null)}>
                 Cancel
               </Button>

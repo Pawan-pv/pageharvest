@@ -1,4 +1,4 @@
-/* global document, indexedDB, URL */
+/* global chrome, document, indexedDB, URL */
 /**
  * The real-site benchmark. It uses the built extension the way a person does: open the
  * panel, run a tool, choose a list, start a job. It then compares what was saved with truth
@@ -13,6 +13,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { computeMetrics, summarizeResults } from './metrics.mjs';
+import { selectBenchmarkSites } from './site-selection.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const extensionPath = join(root, '.output/chrome-mv3');
@@ -81,7 +82,17 @@ async function readTruth(context, site) {
   return records;
 }
 
-const TOOL = { 'auto-detect': 'Auto-Detect Lists', table: 'Extract Tables', links: 'Extract Links' };
+const TOOL = { 'auto-detect': 'Find data automatically', table: 'Extract a table', links: 'Extract all links' };
+/** Table and Links sit under "More ways to start". */
+const UNDER_MORE = new Set(['table', 'links']);
+/** The pagination choices on the Pagination step, by the mode names in sites.json. */
+const MODE_LABEL = {
+  'Next Button': 'Click a Next button',
+  'Infinite Scroll': 'Scroll to load more',
+  'URL Template': 'Page numbers in the URL',
+};
+/** The first-run tour's flag (src/components/guide/preferences.ts). The benchmark measures extraction, not the tour. */
+const GUIDE_STORAGE_KEY = 'pageharvest.guide';
 
 /** Selects the option showing a truth record, and reports where the extension ranked it. */
 async function chooseCandidate(panel, truthRecords, fields) {
@@ -102,19 +113,21 @@ async function chooseCandidate(panel, truthRecords, fields) {
   return { candidates: count, rank: rank + 1, chosen: true };
 }
 
+/** Chooses the mode on the Pagination step and fills its limits under Advanced. Waits are in seconds there. */
 async function configurePagination(panel, pagination) {
   if (pagination.mode === 'Single Page') return;
-  await panel.getByRole('button', { name: new RegExp(pagination.mode) }).click();
-  if (pagination.mode === 'Next Button') {
-    await panel.getByLabel('Max Pages to Crawl').fill(String(pagination.maxPages));
-    await panel.getByLabel('Delay Between Pages (ms)').fill(String(pagination.delayMs));
-  } else if (pagination.mode === 'Infinite Scroll') {
-    await panel.getByLabel('Max Scrolls').fill(String(pagination.maxScrolls));
-    await panel.getByLabel('Scroll Delay (ms)').fill(String(pagination.scrollDelayMs));
-  } else if (pagination.mode === 'URL Template') {
-    await panel.getByLabel('Page URL Template').fill(pagination.template);
-    await panel.getByLabel('Maximum Pages').fill(String(pagination.maxPages));
-    await panel.getByLabel('Delay Between Pages (ms)').fill(String(pagination.delayMs));
+  await panel.getByRole('button', { name: 'Next: Pagination' }).click();
+  await panel.getByRole('group', { name: /How does this site show more items/ }).waitFor({ timeout: 10000 });
+  await panel.getByRole('radio', { name: MODE_LABEL[pagination.mode] }).check();
+  if (pagination.mode === 'URL Template') await panel.getByLabel('Page address').fill(pagination.template);
+  const advanced = panel.getByRole('button', { name: 'Advanced' });
+  if ((await advanced.getAttribute('aria-expanded')) !== 'true') await advanced.click();
+  if (pagination.mode === 'Infinite Scroll') {
+    await panel.getByLabel('Most scrolls').fill(String(pagination.maxScrolls));
+    await panel.getByLabel('Wait between scrolls (seconds)').fill(String(pagination.scrollDelayMs / 1000));
+  } else {
+    await panel.getByLabel('Most pages').fill(String(pagination.maxPages));
+    await panel.getByLabel('Wait between pages (seconds)').fill(String(pagination.delayMs / 1000));
   }
 }
 
@@ -149,7 +162,13 @@ async function runSite(context, extensionId, site) {
     await sleep(MIN_REQUEST_GAP_MS);
     await target.bringToFront();
 
-    const tool = panel.getByRole('button', { name: TOOL[site.method] });
+    if (UNDER_MORE.has(site.method)) {
+      const more = panel.getByText('More ways to start');
+      await more.waitFor({ timeout: 15000 });
+      const details = panel.locator('details', { has: more });
+      if (!(await details.evaluate((element) => element.open))) await more.click();
+    }
+    const tool = panel.getByRole('button', { name: TOOL[site.method], exact: true });
     await tool.waitFor({ timeout: 15000 });
     await panel.waitForFunction(
       (name) => [...document.querySelectorAll('button')].some((b) => b.textContent.includes(name) && !b.disabled),
@@ -157,7 +176,7 @@ async function runSite(context, extensionId, site) {
       { timeout: 15000 }
     );
     await tool.click();
-    await panel.getByText('Repeating Elements Found').waitFor({ timeout: 20000 });
+    await panel.getByRole('heading', { name: 'Is this the data you want?' }).waitFor({ timeout: 20000 });
 
     const onPageTruth = await target.evaluate(readTruthInPage, site.truth);
     result.choice = await chooseCandidate(panel, onPageTruth, site.truth.fields);
@@ -167,15 +186,21 @@ async function runSite(context, extensionId, site) {
       return result;
     }
 
-    await panel.getByRole('button', { name: 'Next: Choose Fields' }).click();
-    await panel.getByText('Columns to Extract').waitFor({ timeout: 10000 });
-    const start = panel.getByRole('button', { name: /Start Extraction/ });
+    // A list that does not look like data needs the same second click a person would give it.
+    const anyway = panel.getByRole('button', { name: 'Use this list anyway' });
+    result.choice.confirmedAnyway = await anyway.isVisible();
+    if (result.choice.confirmedAnyway) await anyway.click();
+    await panel.getByRole('button', { name: 'Use this list', exact: true }).click();
+    await panel.getByText('Choose your columns').waitFor({ timeout: 10000 });
+    const start = panel.getByRole('button', { name: /Start extraction/ });
     await panel.waitForFunction(
-      () => [...document.querySelectorAll('button')].some((b) => /Start Extraction/.test(b.textContent) && !b.disabled),
+      () => [...document.querySelectorAll('button')].some((b) => /Start extraction/.test(b.textContent) && !b.disabled),
       undefined,
       { timeout: 15000 }
     );
-    result.columnsOffered = await panel.locator('label[for^="field-toggle"]').allInnerTexts();
+    result.columnsOffered = await panel
+      .locator('input[type="checkbox"][aria-label^="Include "]')
+      .evaluateAll((boxes) => boxes.map((box) => box.getAttribute('aria-label').slice('Include '.length)));
     await configurePagination(panel, site.pagination);
     await start.click();
 
@@ -295,7 +320,7 @@ function toMarkdown(report) {
 
 const { sites } = JSON.parse(await readFile(join(root, 'tests/benchmark/sites.json'), 'utf8'));
 const only = process.argv.slice(2);
-const selected = only.length > 0 ? sites.filter((site) => only.includes(site.id)) : sites;
+const selected = selectBenchmarkSites(sites, only);
 
 const profile = await mkdtemp(join(os.tmpdir(), 'pageharvest-benchmark-'));
 const context = await chromium.launchPersistentContext(profile, {
@@ -304,6 +329,10 @@ const context = await chromium.launchPersistentContext(profile, {
 });
 const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker', { timeout: 15000 }));
 const extensionId = worker.url().split('/')[2];
+await worker.evaluate(
+  (key) => chrome.storage.local.set({ [key]: { version: 1, onboardingDone: true } }),
+  GUIDE_STORAGE_KEY
+);
 
 const results = [];
 for (const site of selected) {

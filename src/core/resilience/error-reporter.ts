@@ -1,4 +1,26 @@
 import { HarvestError, ErrorCategory, ErrorSeverity } from '@/types';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
+
+/**
+ * The code an error gets when whoever reports it does not know a more precise one (ADR-031).
+ * A category only maps to a specific code when every error in it means that one thing:
+ * pagination failures, for example, cover bad templates and pages that would not open, so
+ * the navigation runner names their code itself.
+ */
+const DEFAULT_CODE: Record<ErrorCategory, ExtractionErrorCode> = {
+  DOM_PARSING: 'UNKNOWN_ERROR',
+  SELECTOR_NOT_FOUND: 'CONTAINER_NOT_FOUND',
+  PAGINATION_FAILED: 'UNKNOWN_ERROR',
+  STORAGE_FAILED: 'STORAGE_ERROR',
+  RUNTIME_MESSAGING: 'TAB_DISCONNECTED',
+  VALIDATION_FAILED: 'UNKNOWN_ERROR',
+  CIRCUIT_BREAKER_TRIGGERED: 'UNKNOWN_ERROR',
+  UNKNOWN: 'UNKNOWN_ERROR',
+};
+
+export function codeForCategory(category: ErrorCategory): ExtractionErrorCode {
+  return DEFAULT_CODE[category];
+}
 
 export class ErrorReporter {
   private static instance: ErrorReporter;
@@ -19,6 +41,8 @@ export class ErrorReporter {
     options: {
       severity?: ErrorSeverity;
       context?: Record<string, unknown>;
+      /** A precise code, when the caller knows one. Defaults from the category. */
+      code?: ExtractionErrorCode;
     } = {}
   ): HarvestError {
     const message =
@@ -32,6 +56,7 @@ export class ErrorReporter {
       id: `err_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       category,
       severity: options.severity || 'ERROR',
+      code: options.code ?? codeForCategory(category),
       message,
       timestamp: Date.now(),
       context: options.context,

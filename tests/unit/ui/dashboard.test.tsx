@@ -42,7 +42,7 @@ describe('UI: Main Dashboard & Website Detection', () => {
 
     expect(screen.getByText('Restricted')).toBeInTheDocument();
     expect(
-      screen.getByText(/Chrome extensions cannot inspect browser internal pages/i)
+      screen.getByText(/PageHarvest cannot read browser pages like this one/i)
     ).toBeInTheDocument();
   });
 
@@ -61,16 +61,17 @@ describe('UI: Main Dashboard & Website Detection', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Select Elements'));
+    fireEvent.click(screen.getByRole('button', { name: 'Pick items myself' }));
     expect(onSelectElements).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText('Auto-Detect Lists'));
+    fireEvent.click(screen.getByRole('button', { name: 'Find data automatically' }));
     expect(onAutoDetectLists).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText('Extract Tables'));
+    fireEvent.click(screen.getByText('More ways to start'));
+    fireEvent.click(screen.getByRole('button', { name: 'Extract a table' }));
     expect(onExtractTable).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText('Extract Links'));
+    fireEvent.click(screen.getByRole('button', { name: 'Extract all links' }));
     expect(onExtractLinks).toHaveBeenCalledTimes(1);
   });
 
@@ -85,8 +86,9 @@ describe('UI: Main Dashboard & Website Detection', () => {
       />
     );
 
-    const selectBtn = screen.getByText('Select Elements').closest('button');
-    expect(selectBtn).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Pick items myself' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Find data automatically' })).toBeDisabled();
+    expect(screen.getByText(/Open a normal website tab to start/)).toBeInTheDocument();
   });
 
   it('renders RecentProjectsCard with dataset list and calls onViewDataset', () => {
@@ -151,8 +153,8 @@ describe('UI: Main Dashboard & Website Detection', () => {
     );
 
     expect(screen.getByText('books.toscrape.com')).toBeInTheDocument();
-    expect(screen.getByText('Quick Actions')).toBeInTheDocument();
-    expect(screen.getByText('What can be extracted?')).toBeInTheDocument();
+    expect(screen.getByText('Get data from this page')).toBeInTheDocument();
+    expect(screen.getByText(/Everything PageHarvest collects stays on this computer/)).toBeInTheDocument();
     expect(screen.getByText('Recent Extractions')).toBeInTheDocument();
   });
 });

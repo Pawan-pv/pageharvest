@@ -17,6 +17,7 @@ import {
   discoverFieldsInCluster,
   detectListFromSelection,
   suggestionsToFieldDefinitions,
+  attachFieldAnchors,
 } from '@/core/detection';
 import {
   CommitOutcome,
@@ -26,12 +27,29 @@ import {
   runNavigationJob,
 } from '@/core/navigation/runner';
 import { errorReporter } from '@/core/resilience/error-reporter';
+import type { FieldPreviewResult } from '@/shared/contracts/message';
+import { previewFields } from './preview-fields';
 import { JobIdentity } from '@/shared/contracts/job';
+import { getVisualOverlay } from '@/content/extraction-visual-overlay';
 
 type DetectRepeatedElementsMessage = Extract<ExtensionMessage, { type: 'DETECT_REPEATED_ELEMENTS' }>;
 type DetectFieldsMessage = Extract<ExtensionMessage, { type: 'DETECT_FIELDS' }>;
 type ExtractRecordsMessage = Extract<ExtensionMessage, { type: 'EXTRACT_RECORDS' }>;
 type ControlJobMessage = Extract<ExtensionMessage, { type: 'CONTROL_JOB' }>;
+type PreviewFieldsMessage = Extract<ExtensionMessage, { type: 'PREVIEW_FIELDS' }>;
+
+/**
+ * Detection found nothing to offer. It carries CONTAINER_NOT_FOUND so the panel explains it
+ * as "nothing like that is on this page" instead of an unexpected error (ADR-031).
+ */
+export class DetectionError extends Error {
+  public readonly code = 'CONTAINER_NOT_FOUND' as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'DetectionError';
+  }
+}
 
 export interface ContentWorkflowCoordinator {
   detectRepeatedElements(
@@ -44,6 +62,8 @@ export interface ContentWorkflowCoordinator {
   extractRecords(message: ExtractRecordsMessage): ContentCommandResult;
   controlJob(message: ControlJobMessage): ContentCommandResult;
   queryJobRun(): JobRunStatus;
+  /** Reads the first rows with the given fields. Read-only, and refused while a job runs here. */
+  previewFields(message: PreviewFieldsMessage): FieldPreviewResult;
   /** Resolves once the current run, if any, has ended. */
   runSettled(): Promise<void>;
 }
@@ -78,6 +98,7 @@ const RETRYABLE_REJECTIONS = new Set(['persist_failed']);
 
 interface ActiveRun {
   identity: JobIdentity;
+  containerSelector: string;
   controller: AbortController;
   paused: boolean;
   resumeWaiters: Array<() => void>;
@@ -88,6 +109,7 @@ interface ActiveRun {
 function listCandidateOf(list: DetectedListResult): ListCandidate {
   return {
     containerSelector: list.containerSelector,
+    containerAnchor: list.containerAnchor,
     matchCount: list.itemCount,
     sampleSnippets: list.sampleElements.map((sample) => sample.previewText),
     name: list.name,
@@ -131,6 +153,8 @@ export function createContentWorkflowCoordinator(
   const abortRun = (run: ActiveRun): void => {
     run.controller.abort();
     releasePause(run);
+    // The neon scan indicators only belong to a live run in this document.
+    getVisualOverlay().destroy();
   };
 
   /**
@@ -193,6 +217,13 @@ export function createContentWorkflowCoordinator(
       })
     );
     run.nextSequence = sequence + 1;
+    // Visual progress comes after the ack: nothing is celebrated before the
+    // transaction has actually committed in storage.
+    if (ack.inserted > 0) {
+      const overlay = getVisualOverlay();
+      overlay.addRows(ack.inserted);
+      overlay.pulseSelector(run.containerSelector, batch.records.length);
+    }
     return { inserted: ack.inserted, shouldStop: ack.shouldStop === true };
   };
 
@@ -222,12 +253,21 @@ export function createContentWorkflowCoordinator(
         commitBatch: (batch) => commitBatch(run, batch),
         commitCheckpoint: (navigation) => commitCheckpoint(run, navigation),
         navigateTo,
+        onProgressAction: (action) => getVisualOverlay().setAction(action),
         engineOverrides: options.engineOverrides,
       });
 
-      if (outcome.kind !== 'finished' || run.controller.signal.aborted) return;
+      if (outcome.kind !== 'finished') {
+        // The document is being replaced; the next document mounts its own overlay.
+        getVisualOverlay().destroy();
+        return;
+      }
+      if (run.controller.signal.aborted) return;
       // The background already ended the job when it told the run to stop.
-      if (outcome.stopReason === 'stopped_by_coordinator') return;
+      if (outcome.stopReason === 'stopped_by_coordinator') {
+        getVisualOverlay().destroy();
+        return;
+      }
 
       await deliver(run, () =>
         createContentWorkflowMessage({
@@ -241,14 +281,17 @@ export function createContentWorkflowCoordinator(
           },
         })
       );
+      getVisualOverlay().complete();
     } catch (error: unknown) {
+      getVisualOverlay().destroy();
       if (error instanceof JobRejectedError || run.controller.signal.aborted) return;
 
       const text = error instanceof Error ? error.message : String(error);
       const recoverable = error instanceof BatchDeliveryError;
       const category = error instanceof NavigationJobError ? 'PAGINATION_FAILED' : 'DOM_PARSING';
-      errorReporter.report(recoverable ? 'RUNTIME_MESSAGING' : category, error, {
+      const reported = errorReporter.report(recoverable ? 'RUNTIME_MESSAGING' : category, error, {
         context: { jobId: run.identity.jobId },
+        code: !recoverable && error instanceof NavigationJobError ? error.code : undefined,
       });
 
       await options
@@ -261,6 +304,7 @@ export function createContentWorkflowCoordinator(
               identity: run.identity,
               message: text,
               category: recoverable ? ('RUNTIME_MESSAGING' as const) : category,
+              code: reported.code,
               recoverable,
             },
           })
@@ -277,14 +321,14 @@ export function createContentWorkflowCoordinator(
 
       if (mode === 'table') {
         candidates = detectTables(root);
-        if (candidates.length === 0) throw new Error('No data table was found on this page.');
+        if (candidates.length === 0) throw new DetectionError('No data table was found on this page.');
       } else if (mode === 'links') {
         candidates = detectLinkRegions(root);
-        if (candidates.length === 0) throw new Error('No links were found on this page.');
+        if (candidates.length === 0) throw new DetectionError('No links were found on this page.');
       } else if (targetSelector) {
         const target = root.querySelector(targetSelector);
         if (!target) {
-          throw new Error(`The selected element could not be found for selector "${targetSelector}".`);
+          throw new DetectionError(`The selected element could not be found for selector "${targetSelector}".`);
         }
         const picked = detectListFromSelection(target);
         candidates = picked ? [listCandidateOf(picked)] : [];
@@ -293,7 +337,7 @@ export function createContentWorkflowCoordinator(
       }
 
       if (candidates.length === 0) {
-        throw new Error('No repeated list or table rows were detected on this page.');
+        throw new DetectionError('No repeated list or table rows were detected on this page.');
       }
 
       const [best] = candidates;
@@ -303,6 +347,7 @@ export function createContentWorkflowCoordinator(
         timestamp: Date.now(),
         payload: {
           containerSelector: best.containerSelector,
+          containerAnchor: best.containerAnchor,
           matchCount: best.matchCount,
           sampleSnippets: best.sampleSnippets,
           candidates,
@@ -314,7 +359,7 @@ export function createContentWorkflowCoordinator(
     async detectFields(message) {
       const containers = Array.from(root.querySelectorAll(message.payload.containerSelector));
       if (containers.length === 0) {
-        throw new Error(
+        throw new DetectionError(
           `No elements matched the container selector "${message.payload.containerSelector}".`
         );
       }
@@ -325,7 +370,11 @@ export function createContentWorkflowCoordinator(
           ? tableFields(containerSelector, root)
           : kind === 'links'
             ? linkFields(containerSelector, root)
-            : suggestionsToFieldDefinitions(discoverFieldsInCluster(containers));
+            : suggestionsToFieldDefinitions(
+                // Anchors attach here, on the final discovery result — the
+                // detection hot path itself stays fingerprint-free.
+                attachFieldAnchors(discoverFieldsInCluster(containers), containers[0])
+              );
       const suggestions = definitions.map((field) => fieldDefinitionSchema.parse(field));
       return publish({
         id: messageId('fields'),
@@ -342,8 +391,14 @@ export function createContentWorkflowCoordinator(
       // A new generation supersedes anything still running in this document.
       if (activeRun) abortRun(activeRun);
 
+      // The neon scan overlay mounts at once, before the first batch is delivered,
+      // so the page shows harvesting state from the first moment.
+      // It continues the count from rows earlier documents of this job committed.
+    getVisualOverlay().start({}, message.payload.resume.recordsExtracted);
+
       const run: ActiveRun = {
         identity: message.payload.identity,
+        containerSelector: message.payload.recipe.containerSelector,
         controller: new AbortController(),
         paused: false,
         resumeWaiters: [],
@@ -392,6 +447,13 @@ export function createContentWorkflowCoordinator(
 
     runSettled() {
       return activeRun ? activeRun.settled : Promise.resolve();
+    },
+
+    previewFields(message) {
+      return previewFields(root, message.payload, {
+        jobActive: activeRun !== null,
+        baseUrl: options.getCurrentUrl?.() ?? root.location?.href ?? '',
+      });
     },
   };
 }

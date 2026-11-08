@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { REQUIRED_PERMISSIONS } from '@/platform/permissions';
 
 const ROOT = resolve(__dirname, '../..');
 const SIZES = [16, 32, 48, 128] as const;
@@ -41,5 +42,22 @@ describe('Extension icon assets', () => {
   it('declares the minimum Chrome version that supports the side panel', () => {
     const config = readFileSync(resolve(ROOT, 'wxt.config.ts'), 'utf8');
     expect(config).toContain("minimum_chrome_version: '116'");
+  });
+});
+
+describe('Manifest permissions', () => {
+  function declaredPermissions(): string[] {
+    const config = readFileSync(resolve(ROOT, 'wxt.config.ts'), 'utf8');
+    const list = config.match(/permissions:\s*\[([^\]]*)\]/s)?.[1] ?? '';
+    return [...list.matchAll(/'([^']+)'/g)].map((match) => match[1] ?? '').sort();
+  }
+
+  it('requests exactly the permissions the job start check requires', () => {
+    expect(declaredPermissions()).toEqual([...REQUIRED_PERMISSIONS].sort());
+  });
+
+  it('does not request scripting, which no production code calls (ADR-034)', () => {
+    // The content script is declared in the manifest. WXT adds scripting itself in dev mode.
+    expect(declaredPermissions()).not.toContain('scripting');
   });
 });

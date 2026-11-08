@@ -170,24 +170,24 @@ describe('UI: Data Table & Spreadsheet Management', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Export' }));
-    fireEvent.click(screen.getByRole('button', { name: /^CSV/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'CSV' }));
     fireEvent.click(screen.getByRole('button', { name: 'Download File' }));
     await waitFor(() => expect(triggerDownload).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        content: expect.any(String),
+        content: expect.arrayContaining([expect.any(String)]),
         filename: expect.stringMatching(/^tech-accessories-\d{4}-\d{2}-\d{2}\.csv$/),
         mimeType: 'text/csv',
       })
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Export' }));
-    fireEvent.click(screen.getByRole('button', { name: /^JSON/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'JSON' }));
     fireEvent.click(screen.getByRole('button', { name: 'Download File' }));
     await waitFor(() => expect(triggerDownload).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        content: expect.any(String),
+        content: expect.arrayContaining([expect.any(String)]),
         filename: expect.stringMatching(/^tech-accessories-\d{4}-\d{2}-\d{2}\.json$/),
         mimeType: 'application/json',
       })
@@ -203,6 +203,6 @@ describe('UI: Data Table & Spreadsheet Management', () => {
       />
     );
 
-    expect(screen.getByText(/No records extracted/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No rows yet' })).toBeInTheDocument();
   });
 });

@@ -1,0 +1,108 @@
+name: Beta readiness report
+
+# Manual only. This is a final evidence run; it never merges or publishes anything.
+on:
+  workflow_dispatch:
+    inputs:
+      site_ids:
+        description: Space-separated authorized commercial site IDs from tests/benchmark/sites.json
+        required: true
+        type: string
+      external_review_confirmed:
+        description: An independent reviewer completed docs/INDEPENDENT_REVIEW_CHECKLIST.md
+        required: true
+        type: boolean
+        default: false
+      architect_review_confirmed:
+        description: An architect reviewed shared-contract and architectural changes
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  beta-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Require the human gates
+        env:
+          EXTERNAL_REVIEW: ${{ inputs.external_review_confirmed }}
+          ARCHITECT_REVIEW: ${{ inputs.architect_review_confirmed }}
+        run: |
+          if [ "$EXTERNAL_REVIEW" != "true" ]; then
+            echo 'Independent review confirmation is required.'
+            exit 1
+          fi
+          if [ "$ARCHITECT_REVIEW" != "true" ]; then
+            echo 'Architect review confirmation is required.'
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate WXT types
+        run: pnpm compile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Run the full test gate
+        run: pnpm test
+
+      - name: Build the extension
+        run: pnpm build
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Validate authorized commercial sites
+        env:
+          SITE_IDS: ${{ inputs.site_ids }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          import { validateAuthorizedBenchmarkSites } from './scripts/benchmark/site-selection.mjs';
+
+          const ids = process.env.SITE_IDS.trim().split(/\s+/).filter(Boolean);
+          const { sites } = JSON.parse(await readFile('tests/benchmark/sites.json', 'utf8'));
+          validateAuthorizedBenchmarkSites(sites, ids, true);
+          console.log(`Validated ${ids.length} authorized commercial site(s).`);
+          NODE
+
+      - name: Run the commercial benchmark
+        env:
+          SITE_IDS: ${{ inputs.site_ids }}
+        run: |
+          read -r -a ids <<< "$SITE_IDS"
+          xvfb-run --auto-servernum pnpm benchmark:sites "${ids[@]}"
+
+      - name: Upload readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta-readiness
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report the manual promotion boundary
+        if: success()
+        run: echo 'All automated evidence passed. Merge and closed-beta promotion remain manual decisions.'

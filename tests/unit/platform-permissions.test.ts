@@ -25,7 +25,7 @@ describe('Permissions & Security Model', () => {
   it('verifies that default required permissions conform to least-privilege', () => {
     // Ensure we do NOT request dangerous broad permissions like webRequestBlocking, debugger, all_urls broad host permissions
     expect(REQUIRED_PERMISSIONS).toContain('activeTab');
-    expect(REQUIRED_PERMISSIONS).toContain('scripting');
+    expect(REQUIRED_PERMISSIONS).not.toContain('scripting');
     expect(REQUIRED_PERMISSIONS).toContain('sidePanel');
     expect(REQUIRED_PERMISSIONS).toContain('storage');
     expect(REQUIRED_PERMISSIONS).toContain('downloads');

@@ -3,7 +3,7 @@ import { MessageRouter } from '@/platform/message-router';
 import { MessagingClient } from '@/platform/messaging-client';
 import { ExtensionMessage } from '@/contracts/messages';
 import { PickerMessenger } from '@/content/picker';
-import { createContentWorkflowCoordinator } from '@/content/workflow-coordinator';
+import { createContentWorkflowCoordinator, DetectionError } from '@/content/workflow-coordinator';
 import { errorReporter } from '@/core/resilience/error-reporter';
 
 interface PageHarvestWindow extends Window {
@@ -17,6 +17,7 @@ type DetectRepeatedElementsMessage = Extract<
 type DetectFieldsMessage = Extract<ExtensionMessage, { type: 'DETECT_FIELDS' }>;
 type ExtractRecordsMessage = Extract<ExtensionMessage, { type: 'EXTRACT_RECORDS' }>;
 type ControlJobMessage = Extract<ExtensionMessage, { type: 'CONTROL_JOB' }>;
+type PreviewFieldsMessage = Extract<ExtensionMessage, { type: 'PREVIEW_FIELDS' }>;
 
 const BATCH_DELIVERY_TIMEOUT_MS = 30_000;
 
@@ -54,6 +55,7 @@ export default defineContentScript({
       } catch (error: unknown) {
         const reported = errorReporter.report('DOM_PARSING', error, {
           context: { originalMessageType: sourceType },
+          code: error instanceof DetectionError ? error.code : undefined,
         });
         await emitToExtension({
           id: reported.id,
@@ -62,6 +64,7 @@ export default defineContentScript({
           payload: {
             id: reported.id,
             category: reported.category,
+            code: reported.code,
             severity: reported.severity,
             message: reported.message,
             timestamp: reported.timestamp,
@@ -126,6 +129,8 @@ export default defineContentScript({
     });
     router.on('CONTROL_JOB', (msg: ControlJobMessage) => coordinator.controlJob(msg));
     router.on('QUERY_JOB_RUN', () => coordinator.queryJobRun());
+    // Read-only: replies with preview rows and changes nothing (ADR-030).
+    router.on('PREVIEW_FIELDS', (msg: PreviewFieldsMessage) => coordinator.previewFields(msg));
 
     router.listen();
 

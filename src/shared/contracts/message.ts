@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { HarvestErrorSchema } from './error';
+import { ExtractionErrorCodeSchema, HarvestErrorSchema } from './error';
+import { MultiAnchorSelectorSchema, HealedFieldSummarySchema } from './selector';
 import { ExtractionFieldSchema } from './field';
 import { JobIdentitySchema } from './job';
 import { ExtractionProgressSchema } from './progress';
@@ -104,6 +105,7 @@ export type CandidateKind = z.infer<typeof CandidateKindSchema>;
 /** One thing on the page the user could extract, with the evidence for choosing it. */
 export const ListCandidateSchema = z.object({
   containerSelector: z.string(),
+  containerAnchor: MultiAnchorSelectorSchema.optional(),
   matchCount: z.number(),
   sampleSnippets: z.array(z.string()),
   name: z.string(),
@@ -130,6 +132,8 @@ export const repeatedElementsDetectedMessageSchema = baseMessageSchema.extend({
   type: z.literal('REPEATED_ELEMENTS_DETECTED'),
   payload: z.object({
     containerSelector: z.string(),
+    /** Multi-tier fallback ladder of the best candidate's repeating item. */
+    containerAnchor: MultiAnchorSelectorSchema.optional(),
     matchCount: z.number(),
     sampleSnippets: z.array(z.string()),
     candidates: z.array(ListCandidateSchema).optional(),
@@ -149,6 +153,51 @@ export const fieldsDetectedMessageSchema = baseMessageSchema.extend({
     suggestedFields: z.array(ExtractionFieldSchema),
   }),
 });
+
+// ---------------------------------------------------------------------------
+// Field preview: side panel -> content, read-only (ADR-030)
+// ---------------------------------------------------------------------------
+/** The most rows a preview returns. */
+export const PREVIEW_ROW_LIMIT = 5;
+
+/**
+ * Reads the first items of a list with the given fields, to preview columns while they are
+ * edited. Strictly read-only: the content script reads the DOM and replies; nothing is
+ * stored, no job changes, and no other message is sent.
+ */
+export const previewFieldsMessageSchema = baseMessageSchema.extend({
+  type: z.literal('PREVIEW_FIELDS'),
+  payload: z.object({
+    containerSelector: z.string().min(1),
+    /** The list's backup ladder (ADR-030). Used only to read; never stored or written back. */
+    containerAnchor: MultiAnchorSelectorSchema.optional(),
+    fields: z.array(ExtractionFieldSchema).min(1).max(50),
+    limit: z.number().int().min(1).max(PREVIEW_ROW_LIMIT),
+  }),
+});
+
+export const PreviewCellSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+/** The content script's reply to PREVIEW_FIELDS, validated again by the side panel. */
+export const FieldPreviewResultSchema = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    rows: z.array(z.record(z.string(), PreviewCellSchema)).max(PREVIEW_ROW_LIMIT),
+    matchCount: z.number().int().min(0),
+    /**
+     * True when the saved selector no longer matched and the list was found with its backup
+     * anchor. A run uses the saved selector only, so it would not find the list yet.
+     */
+    usedFallback: z.boolean().default(false),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: ExtractionErrorCodeSchema,
+    message: z.string().min(1),
+  }),
+]);
+
+export type FieldPreviewResult = z.infer<typeof FieldPreviewResultSchema>;
 
 // ---------------------------------------------------------------------------
 // Job commands: side panel -> background
@@ -208,6 +257,8 @@ export const reconcileJobsMessageSchema = baseMessageSchema.extend({
 export const JobResumeStateSchema = z.object({
   page: z.number().int().min(1),
   nextSequence: z.number().int().min(1),
+  /** Rows committed by earlier documents of this job, so each page's HUD keeps counting. */
+  recordsExtracted: z.number().int().min(0).default(0),
   scrollsCompleted: z.number().int().min(0),
   catchUpScrolls: z.number().int().min(0),
   visitedUrls: z.array(z.string()),
@@ -239,6 +290,34 @@ export const queryJobRunMessageSchema = baseMessageSchema.extend({
 });
 
 // ---------------------------------------------------------------------------
+// Schema healing commands: side panel -> background
+// ---------------------------------------------------------------------------
+/**
+ * Applies a re-picked field selector to a paused job's schema in place. The
+ * selector and anchor are relative to the job's containerSelector, so the
+ * update never disturbs the other fields or their column order.
+ */
+export const updateJobSchemaMessageSchema = baseMessageSchema.extend({
+  type: z.literal('UPDATE_JOB_SCHEMA'),
+  payload: z.object({
+    jobId: z.string().min(1),
+    fieldUpdate: z.object({
+      fieldId: z.string().min(1),
+      selector: z.string(),
+      anchor: MultiAnchorSelectorSchema.optional(),
+    }),
+    /** Drop the staged drift batch (the Re-Pick path never commits degraded rows). */
+    discardStagedBatch: z.boolean().default(false),
+  }),
+});
+
+/** Accepts the staged drift batch ("Accept Auto-Healed Preview / Continue"). */
+export const acceptSelectorDriftMessageSchema = baseMessageSchema.extend({
+  type: z.literal('ACCEPT_SELECTOR_DRIFT'),
+  payload: z.object({ jobId: z.string().min(1) }),
+});
+
+// ---------------------------------------------------------------------------
 // Job execution: content script -> background
 // ---------------------------------------------------------------------------
 export const BatchStatsSchema = z.object({
@@ -247,6 +326,14 @@ export const BatchStatsSchema = z.object({
   filtered: z.number().int().min(0),
   failed: z.number().int().min(0),
   duplicates: z.number().int().min(0),
+  /** Field name -> records of this batch that carry a value. Drives the drift gate. */
+  fillHits: z.record(z.string(), z.number().int().min(0)).optional(),
+  /** Containers examined on the page, after recovery was attempted. */
+  containerCount: z.number().int().min(0).optional(),
+  /** True when the batch came from the container fallback ladder, not the primary selector. */
+  containerRecovered: z.boolean().optional(),
+  /** Fields a heal tier carried on this batch. */
+  healedFields: z.array(HealedFieldSummarySchema).optional(),
 });
 
 export type BatchStats = z.infer<typeof BatchStatsSchema>;
@@ -298,6 +385,7 @@ export const jobFailedMessageSchema = baseMessageSchema.extend({
     identity: JobIdentitySchema,
     message: z.string().min(1),
     category: HarvestErrorSchema.shape.category,
+    code: HarvestErrorSchema.shape.code,
     recoverable: z.boolean().default(false),
   }),
 });
@@ -332,6 +420,7 @@ export const BrowserMessageSchema = z.discriminatedUnion('type', [
   repeatedElementsDetectedMessageSchema,
   detectFieldsMessageSchema,
   fieldsDetectedMessageSchema,
+  previewFieldsMessageSchema,
   startJobMessageSchema,
   pauseJobMessageSchema,
   resumeJobMessageSchema,
@@ -349,6 +438,8 @@ export const BrowserMessageSchema = z.discriminatedUnion('type', [
   jobFailedMessageSchema,
   jobUpdatedMessageSchema,
   extractionErrorMessageSchema,
+  updateJobSchemaMessageSchema,
+  acceptSelectorDriftMessageSchema,
 ]);
 
 export type BrowserMessage = z.infer<typeof BrowserMessageSchema>;
@@ -365,6 +456,8 @@ export const BatchRejectionReasonSchema = z.enum([
   'wrong_tab',
   'out_of_order',
   'persist_failed',
+  /** Batch held for review by the drift gate; the job is paused with it staged. */
+  'selector_drift',
 ]);
 
 export type BatchRejectionReason = z.infer<typeof BatchRejectionReasonSchema>;

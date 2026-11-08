@@ -1,7 +1,7 @@
 import React from 'react';
+import { ShieldCheck } from 'lucide-react';
 import { WebsiteCard } from './WebsiteCard';
 import { QuickActions } from './QuickActions';
-import { ExtractionInsights } from './ExtractionInsights';
 import { RecentProjectsCard } from './RecentProjectsCard';
 import { TabInfo } from '@/services/messaging';
 import { Dataset } from '@/types';
@@ -51,16 +51,18 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
         onExtractLinks={onExtractLinks}
       />
 
-      {/* 3. Extraction Insights */}
-      <ExtractionInsights />
-
-      {/* 4. Recent Projects */}
+      {/* 3. Recent Projects */}
       <RecentProjectsCard
         datasets={datasets}
         isLoading={isDatasetsLoading}
         onViewDataset={onViewDataset}
         onViewAllHistory={onViewAllHistory}
       />
+
+      <p className="flex items-center gap-1.5 text-2xs text-fg-subtle">
+        <ShieldCheck aria-hidden="true" className="w-3.5 h-3.5 shrink-0" />
+        Everything PageHarvest collects stays on this computer. Nothing is sent anywhere.
+      </p>
     </div>
   );
 };

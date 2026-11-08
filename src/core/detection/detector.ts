@@ -10,6 +10,7 @@ import { calculateConfidence } from './confidence';
 import { discoverFieldsInCluster } from './fields';
 import { generateRepeatedSelector, createCandidateSample } from './repeated';
 import { escapeCss, filterMeaningfulClasses, isDynamicId } from '@/utils/selector';
+import { attachFieldAnchors, buildContainerAnchor } from './anchors';
 
 /**
  * Fast selector generator for a parent container avoiding expensive document-wide scans
@@ -229,13 +230,18 @@ export function detectListFromSelection(
   return {
     name: listName,
     containerSelector: itemSelector,
+    containerAnchor: buildContainerAnchor(
+      best.matchedElements[0].parentElement ?? best.parent,
+      best.matchedElements[0],
+      itemSelector
+    ) ?? undefined,
     parentSelector: best.parentSelector,
     itemSelector,
     itemCount: matchedElements.length,
     confidence: best.confidence,
     confidencePercent: best.confidencePercent,
     confidenceFactors: best.factors,
-    availableFields: best.fields,
+    availableFields: attachFieldAnchors(best.fields, matchedElements[0]),
     sampleElements: samples,
     matchedElements,
     credible: true,
@@ -301,13 +307,19 @@ export function autoDetectLists(
     results.push({
       name: inferListName(matchedElements, group.parent, fields),
       containerSelector: itemSelector,
+      containerAnchor:
+        buildContainerAnchor(
+          matchedElements[0].parentElement ?? group.parent,
+          matchedElements[0],
+          itemSelector
+        ) ?? undefined,
       parentSelector: getFastParentSelector(group.parent),
       itemSelector,
       itemCount: matchedElements.length,
       confidence: candidate.confidence,
       confidencePercent: Math.round(candidate.confidence * 100),
       confidenceFactors: candidate.factors,
-      availableFields: fields,
+      availableFields: attachFieldAnchors(fields, matchedElements[0]),
       sampleElements: sampleElements(matchedElements, sampleLimit).map(createCandidateSample),
       matchedElements,
       credible: candidate.credible,
