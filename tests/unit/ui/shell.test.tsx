@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describeProgress, formatRows } from '@/components/dashboard/progress-copy';
 import { describeError, ERROR_COPY } from '@/components/common/errorCopy';
@@ -214,7 +214,8 @@ describe('App shell', () => {
   it('shows no steps on the dashboard', async () => {
     render(<App />);
     await screen.findByText('Get data from this page');
-    expect(screen.queryByRole('navigation', { name: 'Extraction steps' })).not.toBeInTheDocument();
+    await screen.findByText('PageHarvest');
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Extraction steps' })).not.toBeInTheDocument());
   });
 
   it('shows the Table flow with its own first step and a scanning state, not the picker', async () => {

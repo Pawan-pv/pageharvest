@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { buildContainerAnchor } from '@/core/detection/anchors';
 import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 import type { FieldPreviewResult } from '@/shared/contracts/message';
@@ -285,10 +285,11 @@ describe('The panel after a backup-anchor preview', () => {
       return null;
     }
     render(createElement(Probe));
+    await waitFor(() => expect(workflow?.recordWarningThreshold).toBeDefined());
     await act(async () => {
       workflow?.loadSchema(makeRecipe({}, { containerAnchor: anchor }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
     });
+    await waitFor(() => expect(workflow?.detectedList?.containerSelector).toBe('.card'));
     const before = { recipes: await db.recipes.count(), schemas: await db.schemas.count() };
 
     let result: FieldPreviewResult | undefined;

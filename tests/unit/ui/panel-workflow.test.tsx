@@ -4,8 +4,9 @@ import App from '../../../entrypoints/sidepanel/App';
 import { JobCoordinator, JobTransport } from '@/background/job-coordinator';
 import { PaginationConfigPanel } from '@/components/picker/PaginationConfigPanel';
 import { recordsToCsv } from '@/core/export/exporter';
+import { messagingService } from '@/services/messaging';
 import { db } from '@/storage/db';
-import { RecipeRepository, SettingsRepository } from '@/storage/repositories';
+import { JobRepository, RecipeRepository, SettingsRepository } from '@/storage/repositories';
 import { ExtractionPaginationConfig } from '@/types';
 import { installBackground, makeBatch, makeRecipe } from '../../utils/job-harness';
 
@@ -97,15 +98,51 @@ describe('Side panel as a view of stored state', () => {
     await chromeMock.sendFromContentScript(101, makeBatch(identity, 1, ['Row one']));
     await coordinator.finishJob(job.id);
 
+    // The second open re-runs the panel's background reconciliation. Wait for it
+    // (and the active-job scan after it) to return, so no state update lands
+    // while the test clicks through to the results view.
+    let reconciled = false;
+    const originalReconcile = messagingService.reconcileJobs.bind(messagingService);
+    vi.spyOn(messagingService, 'reconcileJobs').mockImplementation(async () => {
+      await originalReconcile();
+      reconciled = true;
+    });
+    let activeScanned = false;
+    const originalFindActive = JobRepository.prototype.findActiveJobs;
+    vi.spyOn(JobRepository.prototype, 'findActiveJobs').mockImplementation(async function (this: JobRepository) {
+      const result = await originalFindActive.call(this);
+      activeScanned = true;
+      return result;
+    });
     render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Datasets' }));
-    fireEvent.click(await screen.findByText(/Simple Product Grid/));
+    await screen.findByText('Get data from this page');
+    await waitFor(() => expect(screen.queryByText('Loading saved datasets...')).not.toBeInTheDocument());
+    await waitFor(() => expect(reconciled).toBe(true));
+    await waitFor(() => expect(activeScanned).toBe(true));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    const datasetsButton = await screen.findByRole('button', { name: 'Datasets' });
+    await act(async () => {
+      fireEvent.click(datasetsButton);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+    await screen.findByText('Saved Extractions');
+    await waitFor(() => expect(screen.queryByText('Loading extraction history...')).not.toBeInTheDocument());
+    const datasetRow = await screen.findByText(/Simple Product Grid/);
+    await act(async () => {
+      fireEvent.click(datasetRow);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
 
     // DataTable is loaded through React.lazy. The production contract is that the
     // saved row appears after the panel reopens, not that its module resolves within
     // Testing Library's one-second default while the full suite is under load.
     expect(await screen.findByText('Row one', {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(await screen.findByLabelText('Extraction summary')).toHaveTextContent('1 detected, 1 kept');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
   });
 
   it('pauses through the background, and resumes from what storage says', async () => {
@@ -127,9 +164,10 @@ describe('Side panel as a view of stored state', () => {
     render(<App />);
     await runSavedRecipe();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel job' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel job' }));
 
     expect(await screen.findByText('Get data from this page')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Loading saved datasets...')).not.toBeInTheDocument());
     expect((await db.jobs.get(await jobId()))?.status).toBe('CANCELLED');
     expect(await db.history.count()).toBe(1);
   });
@@ -150,6 +188,7 @@ describe('Side panel as a view of stored state', () => {
   it('shows a clear error when a job cannot start, and stays on the configuration', async () => {
     await saveRecipe();
     vi.spyOn(transport, 'sendToTab').mockRejectedValue(new Error('Receiving end does not exist.'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     render(<App />);
 
     await openLibraryTab('Recipes');
@@ -159,6 +198,10 @@ describe('Side panel as a view of stored state', () => {
     expect(await screen.findByText(/could not start extraction/)).toBeInTheDocument();
     expect(screen.getByText('Choose your columns')).toBeInTheDocument();
     expect((await db.jobs.toArray())[0].status).toBe('FAILED');
+    expect(warnSpy).toHaveBeenCalledWith(
+      'PageHarvest operation failed:',
+      expect.stringContaining('The page could not start extraction')
+    );
   });
 
   it('applies saved defaults to a new extraction', async () => {
@@ -167,7 +210,7 @@ describe('Side panel as a view of stored state', () => {
     render(<App />);
 
     await waitFor(async () => expect(await db.settings.count()).toBe(1));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await screen.findByText('Get data from this page');
     await openLibraryTab('Recipes');
     fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
 
