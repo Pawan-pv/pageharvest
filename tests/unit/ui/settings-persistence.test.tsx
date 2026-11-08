@@ -23,6 +23,23 @@ describe('Settings persistence through the real repository', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps the fields locked until saved settings load, so an early edit is not overwritten', async () => {
+    const saved = { ...(await repository.getSettings()), defaultDelayMs: 2750 };
+    let release: () => void = () => undefined;
+    vi.spyOn(SettingsRepository.prototype, 'getSettings').mockImplementationOnce(
+      () => new Promise((resolve) => { release = () => resolve(saved); })
+    );
+
+    render(<SettingsView onBackToDashboard={vi.fn()} />);
+    const delay = await screen.findByLabelText('Default Page Delay (ms)');
+    expect(delay).toBeDisabled();
+    expect(screen.getByLabelText(/Include UTF-8 BOM/)).toBeDisabled();
+
+    release();
+    await waitFor(() => expect(delay).toBeEnabled());
+    expect(delay).toHaveValue(2750);
+  });
+
   it('writes edited values and reads them back after the view is reopened', async () => {
     await renderLoaded();
 

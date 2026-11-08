@@ -139,6 +139,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
         </Banner>
       )}
 
+      {/* Locked until the saved values arrive, which would otherwise overwrite an early edit. */}
+      <fieldset disabled={!isLoaded} className="contents">
       {/* Crawl & Extraction Defaults */}
       <Card variant="default">
         <CardHeader
@@ -260,6 +262,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
           </label>
         </div>
       </Card>
+      </fieldset>
 
       <div>
         <Button
