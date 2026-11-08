@@ -55,7 +55,8 @@ export const ExtractionFieldSchema = z.object({
   extractor: FieldExtractorTypeSchema,
   attributeName: z.string().optional(),
   regexPattern: z.string().optional(),
-  regexGroup: z.number().int().min(0).default(0).optional(),
+  // Absent means group 0. No .default(): Zod 4 would write 0 into every field (ADR-035).
+  regexGroup: z.number().int().min(0).optional(),
   defaultValue: z.string().optional(),
   required: z.boolean().default(false),
   transform: FieldTransformSchema.default('trim'),

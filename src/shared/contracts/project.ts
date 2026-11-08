@@ -25,7 +25,8 @@ export const ExtractionProjectSchema = z.object({
   targetUrl: z.string().url('A valid URL is required').optional(),
   schema: ExtractionSchemaSchema.optional(),
   status: ProjectStatusSchema.default('draft'),
-  tags: z.array(z.string()).default([]).optional(),
+  // No .default([]): Zod 4 would add tags to every project that has none (ADR-035).
+  tags: z.array(z.string()).optional(),
   createdAt: z.number().int().default(() => Date.now()),
   updatedAt: z.number().int().default(() => Date.now()),
 });

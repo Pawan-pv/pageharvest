@@ -54,7 +54,7 @@ export class MessageRouter {
         sendResponse({
           ok: false,
           error: 'INVALID_MESSAGE: Message validation failed against ExtensionMessage schema',
-          details: parseResult.error.errors
+          details: parseResult.error.issues
         });
         return false;
       }

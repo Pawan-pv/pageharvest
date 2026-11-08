@@ -31,7 +31,7 @@ export const ExtractionErrorSchema = z.object({
   jobId: z.string().optional(),
   pageNumber: z.number().int().optional(),
   selector: z.string().optional(),
-  details: z.record(z.unknown()).optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
   recoverable: z.boolean().default(false),
   timestamp: z.number().int().default(() => Date.now()),
 });
@@ -58,7 +58,7 @@ export const HarvestErrorSchema = z.object({
   code: ExtractionErrorCodeSchema.optional(),
   message: z.string().min(1),
   timestamp: z.number(),
-  context: z.record(z.unknown()).optional(),
+  context: z.record(z.string(), z.unknown()).optional(),
   stack: z.string().optional(),
 });
 
