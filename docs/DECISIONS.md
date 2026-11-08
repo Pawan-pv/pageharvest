@@ -336,3 +336,31 @@ This document tracks all foundational architectural and technical decisions made
 - **Context**: Before a Next click the content script commits a checkpoint with `awaitingNavigation`, because the click may destroy its document. When the tab then reports `complete`, the background waits `pageLoadGraceMs` and, if the checkpoint still says it is waiting, interrupts the job as "failed to load". On a site that changes its address with `pushState` (a client-side route) the document survives and keeps running, but if a `complete` event arrives before its next checkpoint, the job was interrupted while it was working. Real-Chromium E2E (`extraction-accuracy.spec.ts`, pages that change without a reload) hit it intermittently.
 - **Decision**: `checkPendingNavigation` asks the tab with `QUERY_JOB_RUN` before interrupting, as reconciliation already does. If the page answers that it is running this job with the same generation, and the job has not moved on since, nothing failed and the job is left alone; its next checkpoint clears the flag. No answer, an idle page, or another run means the load really failed, and the job is interrupted as before.
 - **Consequences**: One extra tab message on a rare path. A real failed navigation is still caught, because a document that is gone cannot answer. Covered by `tests/integration/client-side-navigation.test.ts`. The test harness now refuses sends from a document it has replaced, as a browser does, which removed a race in `job-pagination.test.ts` where jsdom kept a replaced page running.
+
+## ADR-034: No `scripting` Permission
+
+- **Status**: Accepted
+- **Context**: The manifest requested `scripting`, and `src/platform/permissions.ts` required it before a job could start, but no production code calls `chrome.scripting`. The content script is declared in the manifest (`entrypoints/content.ts`, `<all_urls>`), so Chrome injects it on every page load, which is what multi-page jobs and recovery rely on. The Chrome Web Store rejects items that request permissions they do not use.
+- **Decision**: Remove `scripting` from the manifest and from `REQUIRED_PERMISSIONS`. `tests/unit/manifest-assets.test.ts` now holds the two lists equal and keeps `scripting` out.
+- **Consequences**: No change to what users are asked to grant: `scripting` shows no install warning. `wxt dev` still works, because WXT adds `scripting` and `tabs` to the development manifest on its own. If a future feature injects scripts programmatically, it must add the permission back with its first caller.
+
+## ADR-035: Zod 4
+
+- **Status**: Accepted
+- **Context**: `zod@3.25.76` was the only shipped dependency with a known vulnerability: GHSA-mrhx-c7xc-m3w5 (high), where an array schema records an issue for every failing element with no limit, so a large invalid array can exhaust memory. Every release below 4.6.6 is affected, including all of Zod 3, which receives no further fixes.
+- **Decision**: Upgrade to `zod@^4.6.7` and keep every contract's parsed output identical. Zod 4 changed when defaults apply, and three contracts would have changed silently, with no type error:
+  1. `regexGroup` and `tags` were `.default(x).optional()`. In Zod 3 the outer `optional` returned before the default ran, so absent stayed absent; Zod 4 would write `0` and `[]`. The dead `.default()` is removed.
+  2. A schema's `pagination` default lists five fields, and Zod 3 parsed it, so the schema's own defaults filled the rest. Zod 4 returns a default unparsed; `.prefault()` keeps the old behavior.
+  3. One-argument `z.record(v)` is now `z.record(z.string(), v)`, and `ZodError.errors` is now `.issues`.
+  `tests/contracts/zod-parity.test.ts` records these behaviors. It passed on Zod 3, failed in exactly the three places above on Zod 4 before the fix, and passes now.
+- **Consequences**:
+  - **Size.** Zod 4's chainable API attaches every format check to every schema, so it does not tree-shake as well. Measured on the same commit: the side panel chunk grew from 482.5 kB to 526.5 kB and the content script from 225.5 kB to 266.8 kB. The panel is now over the 500 kB Rollup default that ADR-014 aimed for, and under the 550 kB limit set in `wxt.config.ts`. Both load from the extension package, not the network. `zod/mini` would recover most of this, at the cost of rewriting every contract in its functional style.
+  - **URLs.** `z.string().url()` accepts the same addresses (both use the platform `URL` parser), but now trims surrounding whitespace and removes tabs and line breaks from the parsed value. Addresses here come from `location.href`, which has neither.
+  - **What the fix covers.** Zod 4.6.6 rejects an over-long array at once only when the schema declares `.max()`. `RECORD_BATCH.records` has no maximum, because one batch is one page's records. That array is built by the extension's own extractor, and a page cannot send messages into the extension (there is no `externally_connectable`, `onMessageExternal` or `window` message listener), so a page cannot supply the many invalid elements the attack needs.
+
+## ADR-036: The Side Panel Survives a Render Error
+
+- **Status**: Accepted
+- **Context**: The panel had no React error boundary. React answers an error thrown while rendering by unmounting the whole tree, so any such bug left an empty panel with no way back but closing it. One cause is not a bug at all: Chrome can update the extension while a panel is open, and the open panel then asks for lazy chunks (ADR-014) whose names no longer exist.
+- **Decision**: `PanelErrorBoundary` (`src/components/shell/`) wraps `App` in `entrypoints/sidepanel/main.tsx`. It shows a danger `Banner` (ADR-032): what happened, that saved rows are safe, a **Reload panel** button, and the message under Technical details. A failed dynamic import is worded as an update rather than a fault. The error goes to `errorReporter` with severity `FATAL` and the component stack, and stays in memory; nothing is sent anywhere.
+- **Consequences**: Jobs and saved rows belong to the background (ADR-016), so reloading the panel loses neither. Errors in event handlers and promises are not render errors, and are still handled where they occur. Covered by `tests/unit/ui/panel-error-boundary.test.tsx`.
