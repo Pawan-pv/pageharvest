@@ -12,7 +12,19 @@ export default defineConfig({
   vite: () => ({
     plugins: [react()],
     build: {
-      chunkSizeWarningLimit: 550
+      chunkSizeWarningLimit: 550,
+      rollupOptions: {
+        // Zod v4 ships @__PURE__ annotations Rollup cannot interpret; the comments
+        // are stripped and output is unaffected. Silence only these, by file.
+        onwarn(warning, warn) {
+          const id = (warning.id ?? '').replace(/\\/g, '/');
+          const fromZod = id.endsWith('zod/v4/core/util.js') || id.endsWith('zod/v4/core/regexes.js');
+          if (fromZod && warning.message.includes('contains an annotation that Rollup cannot interpret')) {
+            return;
+          }
+          warn(warning);
+        }
+      }
     }
   }),
   manifest: {
