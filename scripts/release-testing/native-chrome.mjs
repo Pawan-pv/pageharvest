@@ -240,9 +240,32 @@ async function collectEvidence({ browser, port, evidence, artifactDirectory, not
   await clickPanelButton(panel, 'Use this list');
   await clickPanelButton(panel, 'Next: Pagination');
   await clickPanelButton(panel, 'Start extraction');
-  await waitFor('the job to complete', async () =>
-    (await readFromDatabase(panel, 'jobs')).some((job) => job.status === 'COMPLETED')
-  );
+  try {
+    await waitFor('the job to complete', async () =>
+      (await readFromDatabase(panel, 'jobs')).some((job) => job.status === 'COMPLETED')
+    );
+  } catch (error) {
+    // Record what the job and the panel were doing, so a timeout can be told from a stall or a failure.
+    const attempt = async (read) => read().catch((reason) => `unavailable: ${reason?.message ?? reason}`);
+    notes.atJobTimeout = {
+      jobs: await attempt(async () =>
+        (await readFromDatabase(panel, 'jobs')).map((job) => ({
+          status: job.status,
+          pagination: job.schema?.pagination?.type,
+          error: job.error ?? job.lastError ?? null,
+          createdAt: job.createdAt,
+          updatedAt: job.updatedAt,
+        }))
+      ),
+      records: await attempt(async () => (await readFromDatabase(panel, 'records')).length),
+      panelText: await attempt(() => evaluate(panel, 'document.body.innerText.slice(0, 2000)')),
+      screenshot: runToolbarAdapter(browser.pid, [
+        '--screenshot',
+        join(artifactDirectory, 'native-job-timeout.png'),
+      ]),
+    };
+    throw error;
+  }
   evidence.rowsSaved = (await readFromDatabase(panel, 'records')).length;
   notes.screenshot = runToolbarAdapter(browser.pid, [
     '--screenshot',
