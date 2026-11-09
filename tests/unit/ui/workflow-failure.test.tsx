@@ -45,7 +45,9 @@ describe('useExtractionWorkflow communication failures', () => {
     await waitFor(() => {
       expect(screen.getByTestId('workflow-state')).toHaveTextContent('dashboard:no-list');
     });
-    expect(screen.getByTestId('workflow-error')).toHaveTextContent(/Could not communicate/);
+    await waitFor(() => {
+      expect(screen.getByTestId('workflow-error')).toHaveTextContent(/Could not communicate/);
+    });
     expect(warnSpy).toHaveBeenCalledWith(
       'PageHarvest operation failed:',
       expect.stringContaining('Could not communicate with the page content script.')

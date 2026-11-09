@@ -15,7 +15,7 @@ import { choosePagination, setLimits, markTourSeen } from './helpers/panel';
  */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = 'http://127.0.0.1:3456';
-const EXTENSION_PATH = path.resolve(HERE, '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(HERE, '../../.output/chrome-mv3-test');
 const SHOTS_DIR = path.resolve(HERE, '../../test-results');
 
 const PICKER_HOST = 'pageharvest-picker-overlay-host';

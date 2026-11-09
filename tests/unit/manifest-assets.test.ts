@@ -52,12 +52,49 @@ describe('Manifest permissions', () => {
     return [...list.matchAll(/'([^']+)'/g)].map((match) => match[1] ?? '').sort();
   }
 
+  function builtManifest(): Record<string, unknown> {
+    const raw = readFileSync(resolve(ROOT, '.output/chrome-mv3/manifest.json'), 'utf8');
+    return JSON.parse(raw) as Record<string, unknown>;
+  }
+
+  function builtManifestRaw(): string | null {
+    try {
+      return readFileSync(resolve(ROOT, '.output/chrome-mv3/manifest.json'), 'utf8');
+    } catch {
+      return null;
+    }
+  }
+
   it('requests exactly the permissions the job start check requires', () => {
     expect(declaredPermissions()).toEqual([...REQUIRED_PERMISSIONS].sort());
   });
 
-  it('does not request scripting, which no production code calls (ADR-034)', () => {
-    // The content script is declared in the manifest. WXT adds scripting itself in dev mode.
-    expect(declaredPermissions()).not.toContain('scripting');
+  it('requests scripting for on-demand injection (ADR-037)', () => {
+    expect(declaredPermissions()).toContain('scripting');
+  });
+
+  it('built manifest has no static content scripts and no broad host warning (ADR-037)', () => {
+    // CI's unit layer runs `pnpm test` before `pnpm build`; when no build output
+    // exists yet, verify the same contract from source and skip the built-file
+    // assertions (the e2e/release layers build first and get the strict check).
+    if (!existsSync(resolve(ROOT, '.output/chrome-mv3/manifest.json'))) {
+      const config = readFileSync(resolve(ROOT, 'wxt.config.ts'), 'utf8');
+      expect(config).toContain('optional_host_permissions');
+      expect(config).not.toContain('<all_urls>');
+      expect(readFileSync(resolve(ROOT, 'entrypoints/content.ts'), 'utf8')).toContain("registration: 'runtime'");
+      return;
+    }
+    const raw = builtManifestRaw()!;
+    const manifest = builtManifest();
+    // WXT emits "content_scripts": [] for runtime-registered scripts; either
+    // absent or empty counts, but no <all_urls> entry may exist anywhere.
+    const contentScripts = manifest['content_scripts'] as unknown[] | undefined;
+    expect(contentScripts === undefined || contentScripts.length === 0).toBe(true);
+    expect(raw).not.toContain('<all_urls>');
+    expect('host_permissions' in manifest).toBe(false);
+    expect(manifest['optional_host_permissions']).toEqual(['http://*/*', 'https://*/*']);
+    expect([...(manifest['permissions'] as string[])].sort()).toEqual(
+      ['activeTab', 'downloads', 'scripting', 'sidePanel', 'storage'].sort()
+    );
   });
 });

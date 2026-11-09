@@ -7,7 +7,7 @@ import { expect, test } from './release-test';
 import { choosePagination, setLimits, markTourSeen, waitForCompletedDownload } from './helpers/panel';
 
 const fixtureBaseUrl = 'http://127.0.0.1:3456';
-const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 
 type DownloadSnapshot = {
   id: number;

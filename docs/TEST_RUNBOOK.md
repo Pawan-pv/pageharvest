@@ -134,7 +134,7 @@ pnpm test:e2e
 
 The production suite is `tests/e2e/production-workflows.spec.ts`. It opens visible browser windows, restarts a browser profile, and commits 50,000 rows through real IndexedDB, so allow several minutes.
 
-The URL-pagination E2E starts on `url-page-1.html`, moves through `url-page-2.html` as a real page load, and completes on the empty `url-page-3.html`. The background coordinator resumes each page from its stored checkpoint when the new content script sends `CONTENT_READY`, and the test reads the rows back from IndexedDB.
+The URL-pagination E2E starts on `url-page-1.html`, moves through `url-page-2.html` as a real page load, and completes on the empty `url-page-3.html`. When each new page finishes loading, the background coordinator injects the content script into it and resumes from its stored checkpoint (ADR-037), and the test reads the rows back from IndexedDB.
 
 ---
 
@@ -155,7 +155,7 @@ pnpm test:release:report
 
 The exit-code contract is deterministic: `0` means every requested check passed, `1` means at least one check failed, and `3` means no check failed but a requested capability is blocked by the host environment.
 
-The Playwright release layer loads the production `.output/chrome-mv3` artifact into a dedicated temporary profile and exercises the real content script, side-panel UI, picker, extraction, persistence, exports, heterogeneous fixtures, error response, and infinite-scroll workflow. It captures trace-on-failure, screenshots/video-on-failure, console/page/request diagnostics, and export attachments.
+The Playwright release layer loads `.output/chrome-mv3-test` into a dedicated temporary profile. Playwright's global setup (`tests/e2e/global-setup.ts`) makes that folder from the production `.output/chrome-mv3` build with `scripts/testing/test-extension.mjs`: the same files, with the fixture site `http://127.0.0.1:3456/*` added as `host_permissions`, because automation cannot answer Chrome's site-access prompt (ADR-037). The production build is never changed, and the prompt itself is a manual check. The suite exercises the real content script, side-panel UI, picker, extraction, persistence, exports, heterogeneous fixtures, error response, and infinite-scroll workflow. It captures trace-on-failure, screenshots/video-on-failure, console/page/request diagnostics, and export attachments.
 
 Artifacts are written to:
 

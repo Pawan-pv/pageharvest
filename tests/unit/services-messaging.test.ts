@@ -43,4 +43,21 @@ describe('extension messaging service', () => {
       isInjectable: true,
     });
   });
+
+  it('marks a tab whose address Chrome hides as needing access, not as a browser page', async () => {
+    vi.spyOn(chrome.tabs, 'query').mockResolvedValue([{ id: 43, title: '', url: undefined } as chrome.tabs.Tab]);
+    vi.spyOn(chrome.tabs, 'sendMessage').mockRejectedValue(new Error('Receiving end does not exist.'));
+
+    const tab = await messagingService.getActiveTab();
+
+    expect(tab).toMatchObject({ id: 43, url: '', isInjectable: false, needsAccess: true });
+  });
+
+  it('does not ask for access on a tab whose address Chrome shows', async () => {
+    vi.spyOn(chrome.tabs, 'query').mockResolvedValue([
+      { id: 44, title: 'Shop', url: 'https://shop.test/items' } as chrome.tabs.Tab,
+    ]);
+
+    expect(await messagingService.getActiveTab()).toMatchObject({ isInjectable: true, needsAccess: false });
+  });
 });

@@ -26,6 +26,10 @@ export class ChromeMock {
   private tabRemovedListeners: Set<(tabId: number) => void> = new Set();
   private localStorageData: Record<string, unknown> = {};
   public grantedPermissions: Set<string> = new Set(['activeTab', 'sidePanel', 'storage', 'scripting', 'downloads']);
+  // Optional host grants default to allowed (tests opt into revocation via
+  // request/remove). contains() returns true for every origin except revoked.
+  public grantedOrigins: Set<string> = new Set(['http://localhost:3000/*', 'http://127.0.0.1:3456/*', 'https://example.com/*', 'https://shop.test/*', 'http://shop.test/*']);
+  public revokedOrigins: Set<string> = new Set();
 
   public activeTab: chrome.tabs.Tab = {
     id: 101,
@@ -229,31 +233,50 @@ export class ChromeMock {
   };
 
   public downloads = {
-    download: vi.fn().mockImplementation((_options: chrome.downloads.DownloadOptions) => {
+    download: vi.fn((_options: chrome.downloads.DownloadOptions) => {
       return Promise.resolve(12345);
     })
   };
 
+  // Implementations are passed to vi.fn(impl), not set with mockImplementation, so that
+  // vi.restoreAllMocks() in a test file restores them instead of leaving undefined.
+  // Host grants default-allow (any origin not explicitly revoked via revokedOrigins),
+  // so fixture origins used by existing tests need no pre-listing.
   public permissions = {
-    contains: vi.fn().mockImplementation((details: chrome.permissions.Permissions) => {
+    contains: vi.fn((details: chrome.permissions.Permissions) => {
       const perms = details.permissions || [];
-      const hasAll = perms.every((p) => this.grantedPermissions.has(p));
-      return Promise.resolve(hasAll);
+      const origins = details.origins || [];
+      const hasPerms = perms.every((p) => this.grantedPermissions.has(p));
+      const hasOrigins = origins.every((o) => !this.revokedOrigins.has(o));
+      return Promise.resolve(hasPerms && hasOrigins);
     }),
-    request: vi.fn().mockImplementation((details: chrome.permissions.Permissions) => {
+    request: vi.fn((details: chrome.permissions.Permissions) => {
       const perms = details.permissions || [];
+      const origins = details.origins || [];
       perms.forEach((p) => this.grantedPermissions.add(p));
+      origins.forEach((o) => { this.grantedOrigins.add(o); this.revokedOrigins.delete(o); });
       return Promise.resolve(true);
     }),
-    remove: vi.fn().mockImplementation((details: chrome.permissions.Permissions) => {
+    remove: vi.fn((details: chrome.permissions.Permissions) => {
       const perms = details.permissions || [];
+      const origins = details.origins || [];
       perms.forEach((p) => this.grantedPermissions.delete(p));
+      origins.forEach((o) => { this.grantedOrigins.delete(o); this.revokedOrigins.add(o); });
       return Promise.resolve(true);
-    })
+    }),
+    onRemoved: {
+      listeners: new Set<(permissions: chrome.permissions.Permissions) => void>(),
+      addListener: function (this: { listeners: Set<(p: chrome.permissions.Permissions) => void> }, listener: (p: chrome.permissions.Permissions) => void) {
+        this.listeners.add(listener);
+      },
+      removeListener: function (this: { listeners: Set<(p: chrome.permissions.Permissions) => void> }, listener: (p: chrome.permissions.Permissions) => void) {
+        this.listeners.delete(listener);
+      },
+    },
   };
 
   public scripting = {
-    executeScript: vi.fn().mockResolvedValue([{ result: true }])
+    executeScript: vi.fn((_injection: chrome.scripting.ScriptInjection<unknown[], unknown>) => Promise.resolve([{ result: true as unknown }]))
   };
 
   public reset() {
@@ -272,6 +295,18 @@ export class ChromeMock {
     this.permissions.request.mockClear();
     this.permissions.remove.mockClear();
     this.scripting.executeScript.mockClear();
+    this.grantedOrigins = new Set([
+      'http://localhost:3000/*',
+      'http://127.0.0.1:3456/*',
+      'https://example.com/*',
+      'https://shop.test/*',
+      'http://shop.test/*',
+    ]);
+    this.revokedOrigins.clear();
+  }
+
+  public triggerPermissionsRemoved(permissions: chrome.permissions.Permissions) {
+    for (const listener of this.permissions.onRemoved.listeners) listener(permissions);
   }
 }
 

@@ -46,6 +46,18 @@ describe('UI: Main Dashboard & Website Detection', () => {
     ).toBeInTheDocument();
   });
 
+  it('asks for the toolbar click, not "browser page", when Chrome hides the address', () => {
+    render(
+      <WebsiteCard tab={{ id: 103, url: '', title: 'This page', isInjectable: false, needsAccess: true }} onRefresh={vi.fn()} />
+    );
+
+    expect(screen.getByText('Access needed')).toBeInTheDocument();
+    expect(screen.getByText(/PageHarvest cannot see this page yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Click the PageHarvest button in the Chrome toolbar/i)).toBeInTheDocument();
+    expect(screen.queryByText('Restricted')).not.toBeInTheDocument();
+    expect(screen.queryByText(/cannot read browser pages like this one/i)).not.toBeInTheDocument();
+  });
+
   it('triggers quick actions on user click', () => {
     const onSelectElements = vi.fn();
     const onAutoDetectLists = vi.fn();
