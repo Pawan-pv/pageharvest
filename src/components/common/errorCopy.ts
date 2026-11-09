@@ -90,6 +90,13 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     dataSafety: 'Rows collected so far are saved in Datasets.',
     nextStep: 'Open Datasets to see them, or start a new extraction.',
   },
+  SITE_PERMISSION_REQUIRED: {
+    tone: 'warning',
+    title: 'PageHarvest needs access to this site to continue',
+    whatHappened: 'PageHarvest needs access to this site to continue. Allow access?',
+    dataSafety: 'Rows saved before this are safe.',
+    nextStep: 'Choose Allow access below, then resume. No rows will be lost.',
+  },
   UNKNOWN_ERROR: {
     tone: 'danger',
     title: 'Something went wrong',

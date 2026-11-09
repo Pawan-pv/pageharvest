@@ -25,7 +25,8 @@ import {
   normalizeUrlForDeduplication,
   validateUrlTemplate,
 } from '@/core/navigation/url-paginator';
-import { checkRequiredPermissions } from '@/platform/permissions';
+import type { InjectionResult } from '@/platform/content-script';
+import { checkRequiredPermissions, hasHostAccess, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import { isHarvestableUrl } from '@/platform/tab-manager';
 import {
   ExtractionJob,
@@ -69,6 +70,12 @@ export interface JobTransport {
   navigateTab(tabId: number, url: string): Promise<void>;
   /** 'complete', 'loading', or null when the tab no longer exists. */
   getTabLoadStatus(tabId: number): Promise<string | null>;
+  /**
+   * Makes sure the tab's current document runs the content script (ADR-037). Idempotent:
+   * `injected` is true only when the document had no script yet. Throws when the tab
+   * cannot be scripted.
+   */
+  injectContentScript(tabId: number): Promise<InjectionResult>;
 }
 
 export interface JobCoordinatorDeps {
@@ -215,6 +222,11 @@ export class JobCoordinator {
       if (!isHarvestableUrl(payload.sourceUrl)) {
         return { ok: false, error: 'Extraction is only available on regular web pages.' };
       }
+      // Persistent per-site grant (ADR-037). The side panel requests it from the
+      // Start click's user gesture; the background only checks it (contains).
+      if (!(await hasHostAccess(payload.sourceUrl))) {
+        return { ok: false, error: SITE_PERMISSION_MESSAGE };
+      }
 
       const { recipe, tabId, sourceUrl } = payload;
       let firstUrl = sourceUrl;
@@ -345,9 +357,14 @@ export class JobCoordinator {
         if (needsNavigation) {
           await this.transport.navigateTab(tabId, firstUrl);
         } else {
+          await this.transport.injectContentScript(tabId);
           await this.sendExtract(created.job, created.checkpoint);
         }
       } catch (error: unknown) {
+        if (isSitePermissionFailure(error)) {
+          await this.failJob(created.job.id, SITE_PERMISSION_MESSAGE, 'RUNTIME_MESSAGING', 'SITE_PERMISSION_REQUIRED');
+          return { ok: false, error: SITE_PERMISSION_MESSAGE };
+        }
         const reason = `The page could not start extraction: ${toMessage(error)}`;
         await this.failJob(created.job.id, reason, 'RUNTIME_MESSAGING');
         return { ok: false, error: reason };
@@ -389,13 +406,28 @@ export class JobCoordinator {
       // current document from the checkpoint.
       const checkpoint = await this.jobs.getCheckpoint(job.id);
       if (checkpoint) {
+        if (!isHarvestableUrl(checkpoint.currentUrl)) {
+          // Restricted page: keep the existing can't-work-here path; SITE is
+          // only for http(s) hosts where a grant is missing.
+          await this.interruptJob(job.id, 'The page could not continue: restricted page.');
+          return { ok: false, error: 'The page could not continue, so the job was saved for recovery.' };
+        }
+        if (!(await hasHostAccess(checkpoint.currentUrl))) {
+          await this.interruptForSiteAccess(job.id);
+          return { ok: false, error: SITE_PERMISSION_MESSAGE };
+        }
         try {
           await this.duringHandoff(job.tabId, async () => {
             await this.db.jobs.update(job.id, { updatedAt: this.now() });
             await this.db.checkpoints.update(job.id, { awaitingNavigation: false });
+            await this.transport.injectContentScript(job.tabId!);
             await this.sendExtract(job, { ...checkpoint, awaitingNavigation: false });
           });
         } catch (error: unknown) {
+          if (isSitePermissionFailure(error)) {
+            await this.interruptForSiteAccess(job.id);
+            return { ok: false, error: SITE_PERMISSION_MESSAGE };
+          }
           await this.interruptJob(job.id, `The page could not continue: ${toMessage(error)}`);
           return { ok: false, error: 'The page could not continue, so the job was saved for recovery.' };
         }
@@ -447,6 +479,11 @@ export class JobCoordinator {
     if (!isHarvestableUrl(resumeUrl) || !isSameOrigin(resumeUrl, existing.startUrl)) {
       await this.failJob(jobId, `The saved session points to an invalid page: ${resumeUrl}`, 'VALIDATION_FAILED');
       return { ok: false, error: 'The saved session points to an invalid page.' };
+    }
+    // Persistent grant must exist to resume on a fresh tab; the panel's Allow
+    // access click re-requests it first (ADR-037). Background only checks.
+    if (!(await hasHostAccess(resumeUrl))) {
+      return { ok: false, error: SITE_PERMISSION_MESSAGE };
     }
 
     let tabId: number;
@@ -850,7 +887,11 @@ export class JobCoordinator {
         await this.db.jobs.update(job.id, { updatedAt: now });
         await this.sendExtract(job, updatedCheckpoint);
       } catch (error: unknown) {
-        await this.interruptJob(job.id, `The page could not continue: ${toMessage(error)}`);
+        if (isSitePermissionFailure(error)) {
+          await this.interruptForSiteAccess(job.id);
+        } else {
+          await this.interruptJob(job.id, `The page could not continue: ${toMessage(error)}`);
+        }
       }
     });
   }
@@ -858,6 +899,33 @@ export class JobCoordinator {
   // -------------------------------------------------------------------------
   // Browser events and reconciliation
   // -------------------------------------------------------------------------
+
+  /**
+   * chrome.permissions.onRemoved (ADR-037): when a site grant is revoked,
+   * every active job on that origin becomes RECOVERABLE with
+   * SITE_PERMISSION_REQUIRED in one transaction per job via the state machine.
+   * Already-recoverable jobs stay recoverable; their resume path re-checks.
+   */
+  public async handlePermissionRemoved(origins: string[]): Promise<void> {
+    if (!origins.length) return;
+    const matchesOrigin = (url: string | undefined): boolean => {
+      if (!url) return false;
+      try {
+        const parsed = new URL(url);
+        const origin = `${parsed.protocol}//${parsed.host}`;
+        return origins.some((o) => o === `${origin}/*` || o === `${parsed.protocol}//*/*`);
+      } catch {
+        return false;
+      }
+    };
+    for (const job of await this.jobs.findActiveJobs()) {
+      const checkpoint = await this.jobs.getCheckpoint(job.id);
+      const url = checkpoint?.currentUrl ?? job.targetUrl;
+      if (matchesOrigin(url) || matchesOrigin(job.targetUrl)) {
+        await this.interruptForSiteAccess(job.id);
+      }
+    }
+  }
 
   public async handleTabClosed(tabId: number): Promise<void> {
     const job = await this.jobs.findActiveJobForTab(tabId);
@@ -874,8 +942,38 @@ export class JobCoordinator {
     const job = await this.jobs.findActiveJobForTab(tabId);
     if (!job) return;
     const checkpoint = await this.jobs.getCheckpoint(job.id);
-    if (!checkpoint?.awaitingNavigation || job.status === 'PAUSED') return;
+    if (!checkpoint) return;
 
+    // On-demand injection (ADR-037): a new document in a job's tab has no content
+    // script until the background injects one. Every load of an active job's tab
+    // (running or paused, expected or not) is checked, which keeps the behaviour of
+    // the old static script: a document that is new to the script goes to
+    // handleContentReady, which continues the job, parks it (paused) or interrupts it
+    // (reload, left the site). A load event for a document that already runs the
+    // script is ignored, so the job is never sent to the same page twice.
+    let injection: InjectionResult | null;
+    try {
+      injection = await this.transport.injectContentScript(tabId);
+    } catch {
+      injection = null;
+    }
+    if (injection?.injected && injection.url) {
+      await this.handleContentReady(injection.url, tabId);
+    }
+    if (!injection) {
+      if (!(await hasHostAccess(checkpoint.expectedUrl ?? checkpoint.currentUrl))) {
+        await this.interruptForSiteAccess(job.id);
+        return;
+      }
+      if (!checkpoint.awaitingNavigation && job.status !== 'PAUSED') {
+        // The job's site is granted but this document cannot be scripted, so the
+        // tab is on another site or an error page and the job cannot go on here.
+        await this.interruptJob(job.id, 'The page changed during extraction and PageHarvest could not reach it.');
+        return;
+      }
+    }
+
+    if (!checkpoint.awaitingNavigation || job.status === 'PAUSED') return;
     this.schedule(() => {
       void this.checkPendingNavigation(job.id, tabId);
     }, this.pageLoadGraceMs);
@@ -996,7 +1094,12 @@ export class JobCoordinator {
   // Lifecycle internals
   // -------------------------------------------------------------------------
 
-  public async interruptJob(jobId: string, reason: string): Promise<void> {
+  /** Saves the job for recovery because this site's access grant is missing (ADR-037). */
+  private interruptForSiteAccess(jobId: string): Promise<void> {
+    return this.interruptJob(jobId, SITE_PERMISSION_MESSAGE, 'SITE_PERMISSION_REQUIRED');
+  }
+
+  public async interruptJob(jobId: string, reason: string, code?: ExtractionErrorCode): Promise<void> {
     const job = await this.db.transaction(
       'rw',
       [this.db.jobs, this.db.checkpoints, this.db.history],
@@ -1016,7 +1119,7 @@ export class JobCoordinator {
           interruptedReason: reason,
           interruptedAt: now,
           updatedAt: now,
-          errors: appendError(current.errors, this.buildError('RUNTIME_MESSAGING', reason, 'WARN', { jobId })),
+          errors: appendError(current.errors, this.buildError('RUNTIME_MESSAGING', reason, 'WARN', { jobId }, code)),
         };
 
         if (!checkpoint) {
@@ -1291,25 +1394,35 @@ export class JobCoordinator {
     if (job.tabId === undefined) {
       throw new Error('The job has no tab to run in.');
     }
-    await this.transport.sendToTab(
-      job.tabId,
-      this.buildMessage({
-        type: 'EXTRACT_RECORDS',
-        payload: {
-          identity: this.identityOf(job),
-          recipe: job.schema,
-          resume: {
-            page: checkpoint.nextPage,
-            nextSequence: job.lastSequence + 1,
-            recordsExtracted: job.totalExtracted,
-            scrollsCompleted: checkpoint.scrollsCompleted,
-            catchUpScrolls: checkpoint.catchUpScrolls,
-            visitedUrls: checkpoint.visitedUrls,
-            startUrl: checkpoint.startUrl,
-          },
+    const message = this.buildMessage({
+      type: 'EXTRACT_RECORDS',
+      payload: {
+        identity: this.identityOf(job),
+        recipe: job.schema,
+        resume: {
+          page: checkpoint.nextPage,
+          nextSequence: job.lastSequence + 1,
+          recordsExtracted: job.totalExtracted,
+          scrollsCompleted: checkpoint.scrollsCompleted,
+          catchUpScrolls: checkpoint.catchUpScrolls,
+          visitedUrls: checkpoint.visitedUrls,
+          startUrl: checkpoint.startUrl,
         },
-      })
-    );
+      },
+    });
+    try {
+      await this.transport.sendToTab(job.tabId, message);
+    } catch (err) {
+      // No listener means the document has no content script yet (on-demand
+      // injection, ADR-037). Inject (idempotent) and retry once. A missing
+      // persistent grant surfaces as SITE_PERMISSION_REQUIRED, not TAB_…
+      // (TAB_DISCONNECTED keeps its existing meaning).
+      if (!(await hasHostAccess(checkpoint.currentUrl))) {
+        throw new SitePermissionFailure();
+      }
+      await this.transport.injectContentScript(job.tabId);
+      await this.transport.sendToTab(job.tabId, message);
+    }
   }
 
   /** Returns whether a live run in the page applied the control. */
@@ -1377,9 +1490,10 @@ export class JobCoordinator {
     category: ErrorCategory,
     message: string,
     severity: HarvestError['severity'],
-    context: Record<string, unknown>
+    context: Record<string, unknown>,
+    code?: ExtractionErrorCode
   ): HarvestError {
-    return this.reporter.report(category, message, { severity, context });
+    return this.reporter.report(category, message, { severity, context, code });
   }
 }
 
@@ -1399,6 +1513,22 @@ interface CommitOutcome {
 }
 
 class JobConflictError extends Error {}
+
+/** Thrown inside the coordinator when a tab cannot be scripted because its site grant is missing. */
+class SitePermissionFailure extends Error {
+  readonly code = 'SITE_PERMISSION_REQUIRED' as const;
+  constructor() {
+    super(SITE_PERMISSION_MESSAGE);
+    this.name = 'SitePermissionFailure';
+  }
+}
+
+function isSitePermissionFailure(error: unknown): boolean {
+  return (
+    error instanceof SitePermissionFailure ||
+    (typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'SITE_PERMISSION_REQUIRED')
+  );
+}
 
 function rejectedAck(sequence: number, reason: BatchRejectionReason): BatchAck {
   return { status: 'rejected', sequence, inserted: 0, duplicates: 0, reason };

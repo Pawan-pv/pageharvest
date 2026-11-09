@@ -16,7 +16,7 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
   isLoading = false,
   onRefresh,
 }) => {
-  let hostname = 'Unknown page';
+  let hostname = tab.needsAccess ? 'Page not shared yet' : 'Unknown page';
   try {
     if (tab.url) {
       hostname = new URL(tab.url).hostname;
@@ -53,6 +53,10 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
                 <Badge variant="success" size="sm" icon={<CheckCircle2 className="w-2.5 h-2.5" />}>
                   Ready
                 </Badge>
+              ) : tab.needsAccess ? (
+                <Badge variant="warning" size="sm" icon={<AlertCircle className="w-2.5 h-2.5" />}>
+                  Access needed
+                </Badge>
               ) : (
                 <Badge variant="warning" size="sm" icon={<AlertCircle className="w-2.5 h-2.5" />}>
                   Restricted
@@ -76,7 +80,18 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
         </button>
       </div>
 
-      {!tab.isInjectable && (
+      {!tab.isInjectable && tab.needsAccess && (
+        <Banner
+          tone="warning"
+          className="mt-3"
+          nextStep="Click the PageHarvest button in the Chrome toolbar while this page is open. The panel updates by itself."
+        >
+          PageHarvest cannot see this page yet. It reads a site only after you open PageHarvest on it. Browser pages, such
+          as settings or the new tab page, cannot be read at all.
+        </Banner>
+      )}
+
+      {!tab.isInjectable && !tab.needsAccess && (
         <Banner
           tone="warning"
           className="mt-3"

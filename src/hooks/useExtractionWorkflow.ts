@@ -1,7 +1,8 @@
 import { CandidateKind, ListCandidate } from '@/shared/contracts/message';
 import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { messagingService, TabInfo } from '@/services/messaging';
+import { ensureContentScriptForPicking, isSitePermissionError, messagingService, TabInfo } from '@/services/messaging';
+import { requestSiteOrigin, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import {
   ExtractionJob,
   JobProgressKind,
@@ -106,6 +107,24 @@ function errorText(error: unknown): string {
 }
 
 /**
+ * The banner state for a failed operation. A missing site grant keeps its typed code
+ * (ADR-037) whether it came from the panel (SitePermissionError) or as the
+ * background's reply text, so the banner can offer Allow access.
+ */
+function operationErrorFrom(error: unknown): OperationError {
+  const message = errorText(error);
+  if (isSitePermissionError(error) || message === SITE_PERMISSION_MESSAGE) {
+    return { message: SITE_PERMISSION_MESSAGE, code: 'SITE_PERMISSION_REQUIRED' };
+  }
+  return { message };
+}
+
+const SITE_PERMISSION_ERROR: OperationError = {
+  message: SITE_PERMISSION_MESSAGE,
+  code: 'SITE_PERMISSION_REQUIRED',
+};
+
+/**
  * The code of the job's latest error. Errors stored before ADR-031 have no code, so they get
  * the default for their category, the same one the reporter would give them today.
  */
@@ -189,9 +208,8 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const setPaginationKeysRef = useRef(new Set<keyof ExtractionPaginationConfig>());
 
   const handleOperationError = useCallback((error: unknown, fallbackView: WorkflowView) => {
-    const message = errorText(error);
-    console.warn('PageHarvest operation failed:', message);
-    setOperationError({ message });
+    console.warn('PageHarvest operation failed:', errorText(error));
+    setOperationError(operationErrorFrom(error));
     setView(fallbackView);
   }, []);
 
@@ -403,6 +421,9 @@ export function useExtractionWorkflow(tab: TabInfo) {
    */
   const startVisualPicker = useCallback(async () => {
     try {
+      // First await: activeTab injection (no prompt). Restricted pages throw
+      // TAB_DISCONNECTED-equivalent; missing grant throws SITE (see #5).
+      await ensureContentScriptForPicking(tab);
       setOperationError(null);
       setInspectedElement(null);
       setActiveRecipeId(undefined);
@@ -413,7 +434,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       pickerActiveRef.current = false;
       handleOperationError(err, 'dashboard');
     }
-  }, [handleOperationError]);
+  }, [handleOperationError, tab]);
 
   const stopPickerQuietly = useCallback(async () => {
     if (!pickerActiveRef.current) return;
@@ -435,6 +456,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
    */
   const autoDetectLists = useCallback(async () => {
     try {
+      await ensureContentScriptForPicking(tab);
       setOperationError(null);
       setActiveRecipeId(undefined);
       setView('inspecting');
@@ -442,7 +464,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
     } catch (err) {
       handleOperationError(err, 'dashboard');
     }
-  }, [handleOperationError]);
+  }, [handleOperationError, tab]);
 
   const selectListCandidate = useCallback((candidate: ListCandidate) => {
     setDetectedList((current) => ({
@@ -459,6 +481,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const startPresetDetection = useCallback(
     async (mode: 'table' | 'links') => {
       try {
+        await ensureContentScriptForPicking(tab);
         setOperationError(null);
         setActiveRecipeId(undefined);
         setView('inspecting');
@@ -467,7 +490,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         handleOperationError(err, 'dashboard');
       }
     },
-    [handleOperationError]
+    [handleOperationError, tab]
   );
 
   const loadProjects = useCallback(async () => {
@@ -548,12 +571,21 @@ export function useExtractionWorkflow(tab: TabInfo) {
           message: 'An extraction is running in this tab. The preview is available again when it finishes.',
         };
       }
+      // First await: activeTab injection (ADR-037). Missing grant is SITE, not TAB.
+      try {
+        await ensureContentScriptForPicking(tab);
+      } catch (err) {
+        if (isSitePermissionError(err)) {
+          return { ok: false, code: 'SITE_PERMISSION_REQUIRED', message: SITE_PERMISSION_MESSAGE };
+        }
+        throw err;
+      }
       // The backup anchor is sent only so the page can say the list moved; nothing is written back.
       return messagingService.previewFields(detectedList.containerSelector, columns, {
         containerAnchor: detectedList.containerAnchor,
       });
     },
-    [activeJob, detectedList, tab.id]
+    [activeJob, detectedList, tab]
   );
 
   const removeField = useCallback((id: string) => {
@@ -602,6 +634,15 @@ export function useExtractionWorkflow(tab: TabInfo) {
       return;
     }
 
+    // First await: persistent site grant from the Start click gesture
+    // (ADR-037). Chrome no-ops when already granted; no messaging round trip
+    // precedes it. Background re-checks with contains before starting.
+    const siteGranted = await requestSiteOrigin(tab.url);
+    if (!siteGranted) {
+      setOperationError(SITE_PERMISSION_ERROR);
+      return;
+    }
+
     setOperationError(null);
     setRecords([]);
     setStats({
@@ -631,6 +672,8 @@ export function useExtractionWorkflow(tab: TabInfo) {
       }
     } catch (err) {
       setStats(IDLE_STATS);
+      // A grant revoked between the panel's request and START_JOB comes back as the
+      // background's SITE message; operationErrorFrom keeps the typed code.
       handleOperationError(err, 'config_fields');
     }
   }, [
@@ -722,7 +765,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
           await followJob(job);
         }
       } catch (err) {
-        setOperationError({ message: errorText(err) });
+        setOperationError(operationErrorFrom(err));
         await refreshRecoverableJobs();
       }
     },

@@ -10,6 +10,8 @@ import { Stepper } from '@/components/common/Stepper';
 import { RecoveryBanner } from '@/components/shell/RecoveryBanner';
 import { ScanningState } from '@/components/shell/ScanningState';
 import { flowSteps, stepForView, type FlowKind } from '@/components/shell/flow';
+import { Button } from '@/components/common/Button';
+import { requestSiteOrigin } from '@/platform/permissions';
 import type { ConfigStep } from '@/components/picker/FieldSelectionPanel';
 
 // Each step of the flow is its own chunk, so the panel opens on the dashboard alone (ADR-014).
@@ -131,11 +133,28 @@ export const App: React.FC = () => {
     refreshDatasets();
   };
 
-  const handleResumeRecoverable = (jobId: string) => {
+  // Resume asks for the job's site first: chrome.permissions.request must be the first
+  // await of the click (ADR-037), and Chrome answers at once, with no prompt, when the
+  // site is already granted. If the user declines, the background refuses the resume
+  // with SITE_PERMISSION_REQUIRED and the banner offers Allow access again.
+  const handleResumeRecoverable = async (jobId: string) => {
     setIsHelpOpen(false);
     setActiveTabNav('harvest');
     setFlow(null);
-    void workflow.recoverJob(jobId);
+    const job = workflow.recoverableJobs.find((candidate) => candidate.id === jobId);
+    if (job) {
+      await requestSiteOrigin(job.targetUrl);
+    }
+    await workflow.recoverJob(jobId);
+  };
+
+  // Allow access for a picking/preview/start SITE error: request first, then
+  // clear the banner so the user can retry the flow on the now-granted site.
+  const handleAllowAccessForOperationError = async () => {
+    const granted = await requestSiteOrigin(tab.url);
+    if (granted) {
+      workflow.clearOperationError();
+    }
   };
 
   const navButtonClass = (section: NavSection) =>
@@ -209,7 +228,7 @@ export const App: React.FC = () => {
         <div key={job.id} className="m-3 mb-0">
           <RecoveryBanner
             job={job}
-            onResume={handleResumeRecoverable}
+            onResume={(jobId) => void handleResumeRecoverable(jobId)}
             onDiscard={(jobId) => void handleDiscardRecoverable(jobId)}
           />
         </div>
@@ -220,6 +239,13 @@ export const App: React.FC = () => {
           error={workflow.operationError}
           className="m-3 mb-0"
           onDismiss={workflow.clearOperationError}
+          actions={
+            workflow.operationError.code === 'SITE_PERMISSION_REQUIRED' ? (
+              <Button size="sm" onClick={() => void handleAllowAccessForOperationError()}>
+                Allow access
+              </Button>
+            ) : undefined
+          }
         />
       )}
 

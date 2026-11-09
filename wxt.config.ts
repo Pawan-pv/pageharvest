@@ -42,13 +42,15 @@ export default defineConfig({
       48: 'icon/48.png',
       128: 'icon/128.png'
     },
-    // No `scripting`: the content script is declared below, and nothing injects one (ADR-034).
+    // Content script is injected on demand via scripting (ADR-037, supersedes ADR-034).
     permissions: [
       'activeTab',
       'sidePanel',
       'storage',
+      'scripting',
       'downloads'
     ],
+    optional_host_permissions: ['http://*/*', 'https://*/*'],
     action: {
       default_title: 'Open PageHarvest',
       default_icon: {

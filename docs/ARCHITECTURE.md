@@ -57,7 +57,7 @@ PageHarvest leverages modern WXT entry points configured for Chrome Manifest V3:
    - Watches tab closes and page loads to detect interrupted jobs, and reconciles on browser startup, extension install and side panel open.
 
 2. **Content Script (`entrypoints/content.ts`)**:
-   - Injected into all web pages via `"content_scripts": [{ "matches": ["<all_urls>"], "run_at": "document_idle" }]`.
+   - Injected on demand via `chrome.scripting.executeScript` (runtime registration, ADR-037). No static `<all_urls>` entry.
    - Runs in the isolated JavaScript world. Host page scripts cannot inspect or tamper with extension variables.
    - Hosts the **DOM Inspector**, **Repeated Pattern Detector**, **Data Extractor**, and **Navigation Runner** (`runNavigationJob`).
    - Cannot reach the extension's IndexedDB (a content script's IndexedDB belongs to the page), which is why every record is sent to the background.
@@ -142,7 +142,7 @@ The generation is replaced when a job ends, is interrupted, or is resumed. Trans
 Commands are accepted only from extension pages, and reports only from a tab's content script (`src/background/register-job-handlers.ts`).
 
 #### Leaving a document
-A navigation destroys the content script, so a job cannot wait across it. Before leaving a page the runner durably records where it is going (`awaitingNavigation`, `expectedUrl`). The next document's content script sends `CONTENT_READY`, and the coordinator validates the URL and sends `EXTRACT_RECORDS` again from the checkpoint. This is how both URL-template and ordinary next-link pagination work.
+A navigation destroys the content script, so a job cannot wait across it. Before leaving a page the runner durably records where it is going (`awaitingNavigation`, `expectedUrl`). When the next document finishes loading (`tabs.onUpdated` "complete"), the coordinator injects the content script into it (ADR-037), validates the URL and sends `EXTRACT_RECORDS` again from the checkpoint. A document that already runs the script is not treated as new, so a second load event never sends the job twice. This is how both URL-template and ordinary next-link pagination work.
 
 ---
 
@@ -262,10 +262,11 @@ Errors are typed using `ExtractionErrorCode` in `src/shared/contracts/error.ts`:
 
 ### 3.10 Extension Permission Model
 Manifest V3 operates under a strict principle of least privilege:
-- `activeTab`: Exposes the URL and title of the tab the user opens PageHarvest on.
+- `activeTab`: Exposes the URL and title of the tab the user opens PageHarvest on, and grants temporary injection access after the toolbar click.
 - `sidePanel`: Grants access to mount the extension inside Chrome's side panel.
 - `storage`: Grants access to `chrome.storage.local` for the first-run tour preference (ADR-032).
+- `scripting`: Injects the content script on demand (ADR-037).
 - `downloads`: Allows direct triggering of file exports to the user's local disk.
-- `<all_urls>` (content script match): Enables extraction across target web domains. There are no `host_permissions`, and no `tabs` permission.
+- `optional_host_permissions: ["http://*/*", "https://*/*"]`: Per-site grants requested one origin at a time. No `host_permissions`, no static `<all_urls>`, no `tabs` permission.
 
-There is no `scripting` permission, because nothing injects scripts programmatically (ADR-034). `src/platform/permissions.ts` confirms the required permissions before a job starts, and `tests/unit/manifest-assets.test.ts` keeps its list equal to the manifest's. What each permission is for, in the words the Chrome Web Store asks for, is in [STORE_LISTING.md](STORE_LISTING.md).
+`scripting` is required for on-demand injection (ADR-037, supersedes ADR-034). `src/platform/permissions.ts` checks required permissions and per-site `contains` before a job starts; `tests/unit/manifest-assets.test.ts` asserts the built manifest (no `content_scripts` entries, no `host_permissions`, no `<all_urls>`, exact `optional_host_permissions`). What each permission is for, in the words the Chrome Web Store asks for, is in [STORE_LISTING.md](STORE_LISTING.md).
