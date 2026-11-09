@@ -97,13 +97,13 @@ describe('Message routing to the job coordinator', () => {
     expect(reply).toHaveBeenCalledWith(expect.objectContaining({ ok: false }));
   });
 
-  it('does not route CONTENT_READY: the background detects new documents itself (ADR-037)', async () => {
+  it('routes CONTENT_READY so injected documents continue their job (ADR-037)', async () => {
     const reply = await chromeMock.sendFromContentScript(TAB, {
       ...envelope,
       type: 'CONTENT_READY',
       payload: { url: 'http://localhost:3000/page-2' },
     });
-    expect(reply).not.toEqual({ ok: true });
+    expect(reply).toEqual({ ok: true });
   });
 });
 
