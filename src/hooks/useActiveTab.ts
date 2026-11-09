@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { messagingService, TabInfo } from '@/services/messaging';
 
+const ACCESS_RECHECK_MS = 2_000;
+
 export function useActiveTab() {
   const [tab, setTab] = useState<TabInfo>({
     url: '',
@@ -22,6 +24,22 @@ export function useActiveTab() {
       setIsLoading(false);
     }
   }, []);
+
+  // Clicking the toolbar button on a page grants access to it, but Chrome sends the
+  // panel no event for that, so look again every few seconds while access is missing.
+  useEffect(() => {
+    if (!tab.needsAccess) return undefined;
+    const timer = setInterval(() => {
+      // Quiet: no loading state, so the refresh button does not spin every few seconds.
+      messagingService
+        .getActiveTab()
+        .then((activeTab) => {
+          if (!activeTab.needsAccess) setTab(activeTab);
+        })
+        .catch(() => undefined);
+    }, ACCESS_RECHECK_MS);
+    return () => clearInterval(timer);
+  }, [tab.needsAccess]);
 
   useEffect(() => {
     refreshTab();

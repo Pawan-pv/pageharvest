@@ -12,6 +12,11 @@ export interface RecoveryBannerProps {
   onDiscard: (jobId: string) => void;
 }
 
+/** The job stopped because its site access was missing or revoked (ADR-037). */
+export function needsSiteAccess(job: ExtractionJob): boolean {
+  return job.errors.at(-1)?.code === 'SITE_PERMISSION_REQUIRED';
+}
+
 function siteOf(url: string): string {
   try {
     return new URL(url).hostname;
@@ -52,7 +57,7 @@ export const RecoveryBanner: React.FC<RecoveryBannerProps> = ({ job, onResume, o
         actions={
           <>
             <Button size="sm" onClick={() => onResume(job.id)}>
-              Resume
+              {needsSiteAccess(job) ? 'Allow access and resume' : 'Resume'}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setIsConfirming(true)}>
               Discard

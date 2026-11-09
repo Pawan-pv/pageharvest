@@ -46,7 +46,7 @@ What to enter in the Chrome Web Store developer dashboard, and what to check bef
 
 | Permission | Justification |
 | --- | --- |
-| Host permission (content script on all sites) | The user can extract data from any website they choose. The page script must already be present on every page a multi-page job loads (after a Next click or a page-number URL), because the extension continues the job on each new document without a new click from the user. When a page loads, the script sends its address and title to the extension so a running job can continue; with no job running in that tab, they are discarded. It reads page content only when the user asks it to, from the panel. |
+| Optional site access (one site at a time, asked at use) | The user can extract data from any website they choose. PageHarvest asks for access to one site at a time, only when the user starts extraction on it (Chrome prompts "this site"), and injects its content script then. A multi-page job re-injects on each new page of the same site without asking again, because the per-site grant persists. It reads page content only when the user asks it to, from the panel. |
 | `activeTab` | Reads the address and title of the tab the user opens PageHarvest on, to show the page and decide whether extraction can run there. |
 | `sidePanel` | The whole interface is in Chrome's side panel. |
 | `storage` | Remembers whether the user has finished the first-run tour. |
@@ -64,9 +64,9 @@ Then certify all three:
 
 **Privacy policy URL:** `https://github.com/Pawan-pv/pageharvest/blob/main/PRIVACY.md` (valid once `PRIVACY.md` is on `main`).
 
-## Expect a longer review
+## Install warnings
 
-The content script matches `<all_urls>`, which Chrome shows as "Read and change all your data on all websites". The Web Store reviews broad host access in more depth, so the first review can take longer than usual. The decision to declare the script statically is in [DECISIONS.md](DECISIONS.md) and in the permissions section of [CRITICAL_REMEDIATION_PLAN.md](CRITICAL_REMEDIATION_PLAN.md).
+No host warning at install (ADR-037): the extension requests one site's access at a time while in use, so Chrome shows no "all websites" warning. The decision is in [DECISIONS.md](DECISIONS.md).
 
 ## Before you submit
 

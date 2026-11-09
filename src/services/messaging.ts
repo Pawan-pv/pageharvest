@@ -10,9 +10,51 @@ import {
   extensionMessageSchema,
 } from '@/contracts/messages';
 import { MessagingClient } from '@/platform/messaging-client';
+import { injectContentScript } from '@/platform/content-script';
+import { requestSiteOrigin, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import { isHarvestableUrl } from '@/platform/tab-manager';
 import { JobIdentity } from '@/shared/contracts/job';
 import { ExtractionRecipe, FieldDefinition } from '@/types';
+
+export { SITE_PERMISSION_MESSAGE };
+
+export class SitePermissionError extends Error {
+  code = 'SITE_PERMISSION_REQUIRED' as const;
+  constructor(message = SITE_PERMISSION_MESSAGE) {
+    super(message);
+    this.name = 'SitePermissionError';
+  }
+}
+
+export function isSitePermissionError(error: unknown): error is SitePermissionError {
+  if (error instanceof SitePermissionError) return true;
+  if (typeof error !== 'object' || error === null) return false;
+  return (error as { code?: unknown }).code === 'SITE_PERMISSION_REQUIRED';
+}
+
+export async function injectContentScriptIntoTab(tabId: number): Promise<void> {
+  await injectContentScript(tabId);
+}
+
+/**
+ * Ensures the content script is present for picking / preview / detection.
+ * Uses the activeTab grant (no prompt) when the toolbar click gave one; falls
+ * back to a site-origin request. Restricted pages keep TAB_DISCONNECTED.
+ */
+export async function ensureContentScriptForPicking(tab: { id?: number; url: string }): Promise<void> {
+  if (typeof tab.id !== 'number') throw new SitePermissionError();
+  if (!isHarvestableUrl(tab.url)) {
+    throw new Error(`Cannot harvest restricted URL "${tab.url || 'unknown'}". Extensions cannot run on internal or web store pages.`);
+  }
+  if (!tab.url) throw new SitePermissionError();
+  try {
+    await injectContentScriptIntoTab(tab.id);
+  } catch {
+    const granted = await requestSiteOrigin(tab.url);
+    if (!granted) throw new SitePermissionError();
+    await injectContentScriptIntoTab(tab.id);
+  }
+}
 
 function generateId(): string {
   return 'msg_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
@@ -29,6 +71,11 @@ export interface TabInfo {
   title: string;
   favIconUrl?: string;
   isInjectable: boolean;
+  /**
+   * Chrome hides the page's address: PageHarvest has no access to this tab yet (ADR-037).
+   * A click on the toolbar button grants it for the page; browser pages stay hidden.
+   */
+  needsAccess?: boolean;
 }
 
 export interface StartJobRequest {
@@ -124,9 +171,10 @@ class ExtensionMessagingService {
           return {
             id: tab.id,
             url,
-            title,
+            title: url ? title : 'This page',
             favIconUrl: tab.favIconUrl,
             isInjectable: isHarvestableUrl(url),
+            needsAccess: !url && typeof tab.id === 'number',
           };
         }
       } catch (err) {
@@ -229,6 +277,19 @@ class ExtensionMessagingService {
     }
     if (!tab.id || !tab.isInjectable) {
       return { ok: false, code: 'TAB_DISCONNECTED', message: 'PageHarvest cannot read this tab.' };
+    }
+
+    // On-demand injection (ADR-037): ensure the document has a content script.
+    // TAB_DISCONNECTED keeps its meaning (timeout after injection); a missing
+    // grant is SITE_PERMISSION_REQUIRED only.
+    try {
+      await injectContentScriptIntoTab(tab.id);
+    } catch {
+      return {
+        ok: false,
+        code: 'SITE_PERMISSION_REQUIRED',
+        message: SITE_PERMISSION_MESSAGE,
+      };
     }
 
     let reply: unknown;

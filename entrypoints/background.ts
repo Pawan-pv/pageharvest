@@ -63,7 +63,15 @@ export default defineBackground(() => {
     void coordinator.reconcile('installed');
   });
 
-  // 6. On every wake: expire abandoned sessions. Running jobs are left alone here,
+  // 6. Revoked site access moves active jobs on that origin to RECOVERABLE
+  //    with SITE_PERMISSION_REQUIRED (ADR-037).
+  if (typeof chrome !== 'undefined' && chrome.permissions?.onRemoved) {
+    chrome.permissions.onRemoved.addListener((removed) => {
+      void coordinator.handlePermissionRemoved(removed.origins ?? []);
+    });
+  }
+
+  // 7. On every wake: expire abandoned sessions. Running jobs are left alone here,
   //    because a worker restart does not stop the page that is extracting.
   void coordinator.reconcile('wake').catch((err: unknown) => {
     console.error('[PageHarvest ServiceWorker] Reconciliation failed:', err);

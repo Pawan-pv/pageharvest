@@ -16,6 +16,7 @@ export const ExtractionErrorCodeSchema = z.enum([
   'STORAGE_ERROR',
   'VALIDATION_ERROR',
   'ABORTED_BY_USER',
+  'SITE_PERMISSION_REQUIRED',
   'UNKNOWN_ERROR',
 ]);
 

@@ -22,7 +22,10 @@ type PreviewFieldsMessage = Extract<ExtensionMessage, { type: 'PREVIEW_FIELDS' }
 const BATCH_DELIVERY_TIMEOUT_MS = 30_000;
 
 export default defineContentScript({
-  matches: ['<all_urls>'],
+  // Injected on demand via chrome.scripting.executeScript (ADR-037). Declared
+  // with runtime registration so no static <all_urls> entry appears in the
+  // manifest and there is no install-time "all websites" warning.
+  registration: 'runtime',
   runAt: 'document_idle',
   main() {
     // Prevent double injection in the same document
@@ -132,13 +135,9 @@ export default defineContentScript({
     // Read-only: replies with preview rows and changes nothing (ADR-030).
     router.on('PREVIEW_FIELDS', (msg: PreviewFieldsMessage) => coordinator.previewFields(msg));
 
+    // No load announcement: the script is injected on demand (ADR-037), often into a
+    // page a job is already running on, so the background decides when a document is
+    // new (JobCoordinator.handleTabLoaded) instead of this script reporting itself.
     router.listen();
-
-    void emitToExtension({
-      id: `content-ready_${Date.now()}`,
-      type: 'CONTENT_READY',
-      timestamp: Date.now(),
-      payload: { url: window.location.href, title: document.title },
-    });
   }
 });
