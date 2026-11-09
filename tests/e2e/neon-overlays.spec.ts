@@ -144,7 +144,7 @@ async function sampleHud(session: CDPSession): Promise<HudSample | null> {
     at: Date.now(),
     counter,
     action: textOf(view.one('px-action')),
-    rows: Number(/(\d+) rows/.exec(counter)?.[1] ?? NaN),
+    rows: Number(/(\d+) rows?(?![a-z])/.exec(counter)?.[1] ?? NaN),
     hud,
     laser,
     scanBoxes: view.all('px-scan-box').length,
@@ -234,7 +234,7 @@ async function waitForCompletedJob(panel: Page, known: Set<string>): Promise<Sto
   return found as StoredJob;
 }
 
-const COMPLETE_TEXT = '✓ Harvest Complete!';
+const COMPLETE_TEXT = 'Harvest complete';
 
 interface FadeLog {
   fadeStartedAt: number | null;
@@ -499,11 +499,12 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     expect(new Set(rows.filter((value) => value > 0)).size).toBeGreaterThan(1);
     expect(job.totalExtracted).toBeGreaterThan(0);
     expect(rows.at(-1)).toBe(job.totalExtracted);
-    expect(samples.at(-1)?.counter).toBe(`⚡ Harvesting • ${job.totalExtracted} rows`);
+    // Finished: the counter reports what was saved, not that it is still harvesting.
+    expect(samples.at(-1)?.counter).toBe(`${job.totalExtracted} ${job.totalExtracted === 1 ? 'row' : 'rows'} saved`);
 
     // The action text followed the run.
     const actions = new Set(samples.map((sample) => sample.action));
-    expect(actions.has('Scrolling...')).toBe(true);
+    expect(actions.has('Scrolling for more…')).toBe(true);
     expect(samples.at(-1)?.action).toBe(COMPLETE_TEXT);
 
     // Item pulses really rendered, capped, with ✓ #N badges, and then faded away.
