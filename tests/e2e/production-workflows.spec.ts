@@ -382,9 +382,11 @@ test.describe('PageHarvest production workflows', () => {
   test('B: a delayed message from a cancelled job cannot touch the next job', async () => {
     const panel = await openPanel(context, extensionId);
     const target = await openTarget(context, `${FIXTURES}/long-scroll.html`);
-    const world = await contentWorld(context, target);
 
     await configure(panel);
+    // The extension's isolated world exists once the panel has injected the content
+    // script for detection (no static content script, ADR-037).
+    const world = await contentWorld(context, target);
     await choosePagination(panel, 'infinite_scroll');
     await setLimits(panel, { scrollDelayMs: 2000 });
     await start(panel);
@@ -733,8 +735,10 @@ test.describe('PageHarvest production workflows', () => {
     test.setTimeout(240000);
     const panel = await openPanel(context, extensionId);
     const target = await openTarget(context, `${FIXTURES}/long-scroll.html`);
-    const world = await contentWorld(context, target);
     await configure(panel);
+    // The extension's isolated world exists once the panel has injected the content
+    // script for detection (no static content script, ADR-037).
+    const world = await contentWorld(context, target);
     await choosePagination(panel, 'infinite_scroll');
     await setLimits(panel, { scrollDelayMs: 10000 });
     await start(panel);
@@ -879,13 +883,15 @@ test.describe('PageHarvest production workflows', () => {
   test('K: the configured scroll limit is the number of real scroll actions', async () => {
     const panel = await openPanel(context, extensionId);
     const target = await openTarget(context, `${FIXTURES}/long-scroll.html`);
+    await configure(panel);
+    // The extension's isolated world exists once the panel has injected the content
+    // script for detection (no static content script, ADR-037).
     const world = await contentWorld(context, target);
     await world.evaluate(
       `(() => { const original = window.scrollBy.bind(window); window.__scrolls = 0;
         window.scrollBy = (...args) => { window.__scrolls += 1; return original(...args); }; return true; })()`
     );
 
-    await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
     await setLimits(panel, { maxScrolls: 3 });
     await setLimits(panel, { scrollDelayMs: 500 });
