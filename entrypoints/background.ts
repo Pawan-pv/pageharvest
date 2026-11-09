@@ -2,6 +2,7 @@ import { defineBackground } from 'wxt/sandbox';
 import { createChromeJobTransport } from '@/background/chrome-job-transport';
 import { JobCoordinator } from '@/background/job-coordinator';
 import { registerJobHandlers } from '@/background/register-job-handlers';
+import { registerToolbarAction } from '@/background/toolbar-action';
 import { ExtensionMessage } from '@/contracts/messages';
 import { MessageRouter } from '@/platform/message-router';
 import { MessagingClient } from '@/platform/messaging-client';
@@ -9,13 +10,10 @@ import { TabManager } from '@/platform/tab-manager';
 import { db } from '@/storage/db';
 
 export default defineBackground(() => {
-  // 1. Configure Chrome Side Panel behavior
-  if (typeof chrome !== 'undefined' && chrome.sidePanel?.setPanelBehavior) {
-    chrome.sidePanel
-      .setPanelBehavior({ openPanelOnActionClick: true })
-      .catch((err) => {
-        console.warn('Could not set side panel behavior:', err);
-      });
+  // 1. The toolbar button opens the side panel from here, so the click grants activeTab
+  //    for the page (ADR-037). Chrome's own open-on-click does not.
+  if (typeof chrome !== 'undefined') {
+    registerToolbarAction(chrome);
   }
 
   // 2. The coordinator keeps all job state in IndexedDB, so a worker restarted between

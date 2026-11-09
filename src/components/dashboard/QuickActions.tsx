@@ -3,6 +3,8 @@ import { MousePointer, Sparkles, Table, Link2, ChevronRight } from 'lucide-react
 
 export interface QuickActionsProps {
   disabled?: boolean;
+  /** The page is a website PageHarvest has not been given yet (ADR-037), not a browser page. */
+  needsAccess?: boolean;
   onSelectElements: () => void;
   onAutoDetectLists: () => void;
   onExtractTable: () => void;
@@ -76,6 +78,7 @@ const SecondaryOption: React.FC<{ label: string; icon: React.ReactNode; disabled
  */
 export const QuickActions: React.FC<QuickActionsProps> = ({
   disabled = false,
+  needsAccess = false,
   onSelectElements,
   onAutoDetectLists,
   onExtractTable,
@@ -86,7 +89,11 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
       Get data from this page
     </h2>
     {disabled && (
-      <p className="text-xs text-fg-muted">Open a normal website tab to start. Then press Refresh above.</p>
+      <p className="text-xs text-fg-muted">
+        {needsAccess
+          ? 'Click the PageHarvest button in the Chrome toolbar to start. The panel updates by itself.'
+          : 'Open a normal website tab to start. Then press Refresh above.'}
+      </p>
     )}
 
     <StartOption
