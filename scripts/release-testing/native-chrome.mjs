@@ -107,11 +107,12 @@ function devtoolsCommand(target, method, params = {}) {
   });
 }
 
-async function evaluate(target, expression) {
+async function evaluate(target, expression, { userGesture = false } = {}) {
   const result = await devtoolsCommand(target, 'Runtime.evaluate', {
     expression,
     awaitPromise: true,
     returnByValue: true,
+    userGesture,
   });
   if (result.exceptionDetails) {
     throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
@@ -153,7 +154,10 @@ const clickPanelButton = (panel, label) =>
         if (!button) return false;
         button.click();
         return true;
-      })()`
+      })()`,
+      // A person's click is a user gesture. Start asks Chrome for site access first
+      // (ADR-037), and Chrome refuses chrome.permissions.request without a gesture.
+      { userGesture: true }
     )
   );
 
