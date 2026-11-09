@@ -10,7 +10,7 @@ import { GUIDE_STORAGE_KEY } from '../../src/components/guide/preferences';
  * The only spec that does not pre-mark the tour: a fresh profile must show the welcome tour
  * on first open, remember a finish in chrome.storage.local, and not show it again.
  */
-const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 
 test.describe('First-run tour', () => {
   test.describe.configure({ mode: 'serial' });

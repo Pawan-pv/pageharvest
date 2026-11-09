@@ -169,6 +169,28 @@ describe('RecoveryBanner', () => {
     expect(onResume).toHaveBeenCalledWith('job_1');
   });
 
+  it('offers Allow access and resume when the job stopped for missing site access', async () => {
+    const onResume = vi.fn();
+    const job = makeJob({
+      interruptedReason: 'PageHarvest needs access to this site to continue. Allow access?',
+      errors: [
+        {
+          id: 'e1',
+          category: 'RUNTIME_MESSAGING',
+          code: 'SITE_PERMISSION_REQUIRED',
+          message: 'PageHarvest needs access to this site to continue. Allow access?',
+          severity: 'WARN',
+          timestamp: 1,
+        },
+      ],
+    } as Partial<ExtractionJob>);
+    render(<RecoveryBanner job={job} onResume={onResume} onDiscard={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Allow access and resume' }));
+    expect(onResume).toHaveBeenCalledWith('job_1');
+  });
+
   it('asks before discarding, and says the saved rows are kept', async () => {
     const onDiscard = vi.fn();
     render(<RecoveryBanner job={makeJob()} onResume={vi.fn()} onDiscard={onDiscard} />);

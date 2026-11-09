@@ -21,7 +21,7 @@ import {
  * or written to disk, not what the panel says.
  */
 const FIXTURES = 'http://127.0.0.1:3456';
-const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 
 type Row = Record<string, unknown>;
 interface StoredJob {

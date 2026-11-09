@@ -5,6 +5,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { prepareTestExtension } from '../testing/test-extension.mjs';
 import { decideNativeStatus } from './release-report.mjs';
 
 /**
@@ -316,12 +317,15 @@ export async function runNativeChromeCheck({
       evidence.error = `The production build is missing: ${buildLocation}`;
     } else {
       stopServer = await ensureFixtureServer();
+      // The production build with the fixture site already granted: the permission
+      // bubble cannot be answered from automation (ADR-037).
+      const extensionLocation = prepareTestExtension({ source: buildLocation });
       const port = await getFreePort();
       await mkdir(profileDirectory, { recursive: true });
       browser = spawn(browserInfo.path, [
         `--user-data-dir=${profileDirectory}`,
-        `--disable-extensions-except=${buildLocation}`,
-        `--load-extension=${buildLocation}`,
+        `--disable-extensions-except=${extensionLocation}`,
+        `--load-extension=${extensionLocation}`,
         `--remote-debugging-port=${port}`,
         '--no-first-run',
         '--no-default-browser-check',

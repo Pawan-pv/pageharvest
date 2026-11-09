@@ -97,25 +97,13 @@ describe('Message routing to the job coordinator', () => {
     expect(reply).toHaveBeenCalledWith(expect.objectContaining({ ok: false }));
   });
 
-  it('continues a job when a document in its tab reports ready', async () => {
-    const started = (await fromPanel(startMessage())) as {
-      identity: { jobId: string };
-    };
-    await db.checkpoints.update(started.identity.jobId, {
-      awaitingNavigation: true,
-      expectedUrl: 'http://localhost:3000/page-2',
-    });
-
-    await chromeMock.sendFromContentScript(TAB, {
+  it('does not route CONTENT_READY: the background detects new documents itself (ADR-037)', async () => {
+    const reply = await chromeMock.sendFromContentScript(TAB, {
       ...envelope,
       type: 'CONTENT_READY',
       payload: { url: 'http://localhost:3000/page-2' },
     });
-
-    expect(await db.checkpoints.get(started.identity.jobId)).toMatchObject({
-      awaitingNavigation: false,
-      currentUrl: 'http://localhost:3000/page-2',
-    });
+    expect(reply).not.toEqual({ ok: true });
   });
 });
 
@@ -129,6 +117,26 @@ describe('Chrome transport for the coordinator', () => {
     await transport.sendToTab(5, message);
 
     expect(send).toHaveBeenCalledWith(5, message, expect.objectContaining({ timeoutMs: expect.any(Number) }));
+  });
+
+  it('injects the content script only into a document that does not run it yet', async () => {
+    const transport = createChromeJobTransport(new MessagingClient());
+    const execute = chromeMock.scripting.executeScript;
+
+    execute.mockResolvedValueOnce([{ result: { present: false, url: 'http://localhost:3000/page-2' } }]);
+    expect(await transport.injectContentScript(5)).toEqual({ injected: true, url: 'http://localhost:3000/page-2' });
+    expect(execute).toHaveBeenLastCalledWith({ target: { tabId: 5 }, files: ['content-scripts/content.js'] });
+
+    execute.mockClear();
+    execute.mockResolvedValueOnce([{ result: { present: true, url: 'http://localhost:3000/page-2' } }]);
+    expect(await transport.injectContentScript(5)).toEqual({ injected: false, url: 'http://localhost:3000/page-2' });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a refused injection fail, so the coordinator can check the site grant', async () => {
+    const transport = createChromeJobTransport(new MessagingClient());
+    chromeMock.scripting.executeScript.mockRejectedValueOnce(new Error('Cannot access contents of the page.'));
+    await expect(transport.injectContentScript(5)).rejects.toThrow('Cannot access contents of the page.');
   });
 
   it('does not treat a closed side panel as a broadcast failure', async () => {

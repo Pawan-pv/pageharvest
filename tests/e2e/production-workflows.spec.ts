@@ -23,7 +23,7 @@ import {
  * Closing that tab is what closing the panel does to the running document.
  */
 const FIXTURES = 'http://127.0.0.1:3456';
-const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 
 interface StoredJob {
   id: string;

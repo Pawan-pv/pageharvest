@@ -11,7 +11,7 @@ import { goToPagination, markTourSeen, resultHeading, reviewFieldsHeading, start
  * open the panel as a 1280-pixel tab, so a screen that is too wide for the real panel passes
  * there and is clipped for every user. This spec opens it at 320 and checks each main screen.
  */
-const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 const FIXTURES = 'http://127.0.0.1:3456';
 const PANEL_WIDTH = 320;
 

@@ -12,11 +12,14 @@ import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
+import { prepareTestExtension } from '../testing/test-extension.mjs';
 import { computeMetrics, summarizeResults } from './metrics.mjs';
 import { selectBenchmarkSites } from './site-selection.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const extensionPath = join(root, '.output/chrome-mv3');
+// The benchmark visits many public sites, so its copy of the build is granted all of
+// them up front; the permission bubble cannot be answered from automation (ADR-037).
+const extensionPath = join(root, '.output/chrome-mv3-benchmark');
 const outputDirectory = join(root, 'artifacts/benchmark');
 const JOB_TIMEOUT_MS = 150000;
 /** The least a benchmark page is left alone between requests. */
@@ -322,6 +325,7 @@ const { sites } = JSON.parse(await readFile(join(root, 'tests/benchmark/sites.js
 const only = process.argv.slice(2);
 const selected = selectBenchmarkSites(sites, only);
 
+prepareTestExtension({ hosts: ['http://*/*', 'https://*/*'], target: extensionPath });
 const profile = await mkdtemp(join(os.tmpdir(), 'pageharvest-benchmark-'));
 const context = await chromium.launchPersistentContext(profile, {
   headless: false,
