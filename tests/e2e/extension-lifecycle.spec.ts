@@ -281,6 +281,8 @@ test.describe('PageHarvest Browser Extension E2E Suite', () => {
       if (typeof tabId !== 'number') {
         throw new Error('The fixture tab was not available to the extension context.');
       }
+      // No static content script (ADR-037): inject first, as the panel does before detection.
+      await chrome.scripting.executeScript({ target: { tabId }, files: ['content-scripts/content.js'] });
       return chrome.tabs.sendMessage(tabId, {
         id: `e2e_detect_${Date.now()}`,
         type: 'DETECT_REPEATED_ELEMENTS',
