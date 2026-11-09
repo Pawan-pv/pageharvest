@@ -97,7 +97,7 @@ describe('Message routing to the job coordinator', () => {
     expect(reply).toHaveBeenCalledWith(expect.objectContaining({ ok: false }));
   });
 
-  it('routes CONTENT_READY so injected documents continue their job (ADR-037)', async () => {
+  it('still accepts CONTENT_READY, which the on-demand content script no longer sends (ADR-037)', async () => {
     const reply = await chromeMock.sendFromContentScript(TAB, {
       ...envelope,
       type: 'CONTENT_READY',
