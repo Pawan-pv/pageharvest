@@ -145,15 +145,14 @@ describe('extraction neon overlay wiring', () => {
     const laser = root.querySelector<HTMLElement>('.px-laser-bar')!;
     expect(laser.classList.contains('px-hidden')).toBe(false);
     const hud = root.querySelector<HTMLElement>('.px-hud')!;
-    expect(hud.textContent).toContain('Scanning');
+    expect(hud.textContent).toContain('Reading the page');
 
     await coordinator.runSettled();
 
     // The committed batch feeds the live row counter, and the run completion
     // announces itself in the HUD.
-    expect(hud.textContent).toContain('⚡');
-    expect(hud.textContent).toContain('1 rows');
-    expect(hud.textContent).toContain('✓ Harvest Complete!');
+    expect(hud.textContent).toContain('1 row saved');
+    expect(hud.textContent).toContain('Harvest complete');
 
     // After the fade window the overlay removes itself entirely.
     await sleep(300);
