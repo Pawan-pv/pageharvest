@@ -1,18 +1,19 @@
 // Bundle budget gate (CI): fails if sidepanel, content.js, or background.js
-// grow more than 5% over the redesign baseline (feat/sidepanel-ux-redesign @ 30f2851).
+// grow more than 5% over the recorded baselines (see ADR-037 re-baseline below).
 // The side panel has an additional absolute cap of 530 kB. Run after `pnpm build`:
 //   pnpm build && pnpm bundle:budget
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const OUT = join(ROOT, '.output', 'chrome-mv3');
 
-// Recorded baseline sizes (bytes) after the sidepanel-ux-redesign.
+// Recorded baseline sizes (bytes) after the sidepanel-ux-redesign; content and
+// background re-baselined with ADR-037 on-demand injection (DECISIONS.md).
 const BASELINE = {
   sidepanel: 526486,
-  content: 266839,
-  background: 273078,
+  content: 266730,
+  background: 276012,
 };
 const TOLERANCE = 0.05;
 const SIDEPANEL_ABSOLUTE_LIMIT = 530000; // 530 kB (decimal, as reported by WXT)
