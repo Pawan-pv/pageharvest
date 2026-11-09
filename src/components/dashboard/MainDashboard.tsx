@@ -45,6 +45,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
       {/* 2. Quick Actions */}
       <QuickActions
         disabled={!tab.isInjectable}
+        needsAccess={tab.needsAccess === true}
         onSelectElements={onSelectElements}
         onAutoDetectLists={onAutoDetectLists}
         onExtractTable={onExtractTable}

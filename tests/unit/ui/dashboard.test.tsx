@@ -103,6 +103,28 @@ describe('UI: Main Dashboard & Website Detection', () => {
     expect(screen.getByText(/Open a normal website tab to start/)).toBeInTheDocument();
   });
 
+  it('tells the user to click the toolbar button when the page is not shared yet', () => {
+    render(
+      <MainDashboard
+        tab={{ id: 9, url: '', title: 'This page', isInjectable: false, needsAccess: true }}
+        isTabLoading={false}
+        onRefreshTab={vi.fn()}
+        onSelectElements={vi.fn()}
+        onAutoDetectLists={vi.fn()}
+        onExtractTable={vi.fn()}
+        onExtractLinks={vi.fn()}
+        datasets={[]}
+        isDatasetsLoading={false}
+        onViewDataset={vi.fn()}
+        onViewAllHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Find data automatically' })).toBeDisabled();
+    expect(screen.getByText(/Click the PageHarvest button in the Chrome toolbar to start/)).toBeInTheDocument();
+    expect(screen.queryByText(/Open a normal website tab to start/)).not.toBeInTheDocument();
+  });
+
   it('renders RecentProjectsCard with dataset list and calls onViewDataset', () => {
     const mockDatasets: Dataset[] = [
       {
