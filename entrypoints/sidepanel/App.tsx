@@ -5,9 +5,7 @@ import { useDatasets } from '@/hooks/useDatasets';
 import { useExtractionWorkflow } from '@/hooks/useExtractionWorkflow';
 import { useOnboarding } from '@/components/guide/useOnboarding';
 import { MainDashboard } from '@/components/dashboard/MainDashboard';
-import { ErrorBanner } from '@/components/common/ErrorBanner';
 import { Stepper } from '@/components/common/Stepper';
-import { RecoveryBanner } from '@/components/shell/RecoveryBanner';
 import { ScanningState } from '@/components/shell/ScanningState';
 import { flowSteps, stepForView, type FlowKind } from '@/components/shell/flow';
 import { Button } from '@/components/common/Button';
@@ -45,6 +43,13 @@ const Onboarding = lazy(() =>
 );
 const SettingsView = lazy(() =>
   import('@/components/settings/SettingsView').then((module) => ({ default: module.SettingsView }))
+);
+// Shown only after an interruption or an error, so neither is in the chunk every open pays for.
+const RecoveryBanner = lazy(() =>
+  import('@/components/shell/RecoveryBanner').then((module) => ({ default: module.RecoveryBanner }))
+);
+const ErrorBanner = lazy(() =>
+  import('@/components/common/ErrorBanner').then((module) => ({ default: module.ErrorBanner }))
 );
 
 type NavSection = 'harvest' | 'datasets' | 'settings' | 'help';
@@ -224,32 +229,34 @@ export const App: React.FC = () => {
       </header>
 
       {/* Jobs that can really be resumed: stored in RECOVERABLE with a checkpoint. */}
-      {workflow.recoverableJobs.map((job) => (
-        <div key={job.id} className="m-3 mb-0">
-          <RecoveryBanner
-            job={job}
-            onResume={(jobId) => void handleResumeRecoverable(jobId)}
-            onDiscard={(jobId) => void handleDiscardRecoverable(jobId)}
+      <Suspense fallback={null}>
+        {workflow.recoverableJobs.map((job) => (
+          <div key={job.id} className="m-3 mb-0">
+            <RecoveryBanner
+              job={job}
+              onResume={(jobId) => void handleResumeRecoverable(jobId)}
+              onDiscard={(jobId) => void handleDiscardRecoverable(jobId)}
+            />
+          </div>
+        ))}
+
+        {workflow.operationError && workflow.view !== 'extracting' && (
+          <ErrorBanner
+            error={workflow.operationError}
+            className="m-3 mb-0"
+            onDismiss={workflow.clearOperationError}
+            actions={
+              workflow.operationError.code === 'SITE_PERMISSION_REQUIRED' ? (
+                <Button size="sm" onClick={() => void handleAllowAccessForOperationError()}>
+                  Allow access
+                </Button>
+              ) : undefined
+            }
           />
-        </div>
-      ))}
+        )}
 
-      {workflow.operationError && workflow.view !== 'extracting' && (
-        <ErrorBanner
-          error={workflow.operationError}
-          className="m-3 mb-0"
-          onDismiss={workflow.clearOperationError}
-          actions={
-            workflow.operationError.code === 'SITE_PERMISSION_REQUIRED' ? (
-              <Button size="sm" onClick={() => void handleAllowAccessForOperationError()}>
-                Allow access
-              </Button>
-            ) : undefined
-          }
-        />
-      )}
-
-      {datasetsError && <ErrorBanner error={{ message: datasetsError }} className="m-3 mb-0" />}
+        {datasetsError && <ErrorBanner error={{ message: datasetsError }} className="m-3 mb-0" />}
+      </Suspense>
 
       {!isHelpOpen && activeFlow && currentStep && (
         <Stepper steps={flowSteps(activeFlow)} currentId={currentStep} className="px-4 pt-3" />
