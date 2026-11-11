@@ -241,7 +241,8 @@ async function collectEvidence({ browser, port, evidence, artifactDirectory, not
     () => true,
     () => false
   );
-  await clickPanelButton(panel, 'Find data automatically');
+  // A fresh profile opens in simple mode (ADR-039), as a new user's does.
+  await clickPanelButton(panel, 'Get the list on this page');
   await clickPanelButton(panel, 'Use this list');
   await clickPanelButton(panel, 'Next: Pagination');
   await clickPanelButton(panel, 'Start extraction');

@@ -12,6 +12,8 @@ export interface MainDashboardProps {
   onRefreshTab: () => void;
   datasets: Dataset[];
   isDatasetsLoading?: boolean;
+  /** Advanced options is on (ADR-039). */
+  advanced?: boolean;
   onSelectElements: () => void;
   onAutoDetectLists: () => void;
   onExtractTable: () => void;
@@ -26,6 +28,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
   onRefreshTab,
   datasets,
   isDatasetsLoading = false,
+  advanced = false,
   onSelectElements,
   onAutoDetectLists,
   onExtractTable,
@@ -46,6 +49,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
       <QuickActions
         disabled={!tab.isInjectable}
         needsAccess={tab.needsAccess === true}
+        advanced={advanced}
         onSelectElements={onSelectElements}
         onAutoDetectLists={onAutoDetectLists}
         onExtractTable={onExtractTable}
