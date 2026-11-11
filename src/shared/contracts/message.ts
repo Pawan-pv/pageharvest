@@ -128,6 +128,14 @@ export const detectRepeatedElementsMessageSchema = baseMessageSchema.extend({
     .optional(),
 });
 
+/**
+ * Whether the page shows a way to more items (ADR-039): a Next control, a Load more control,
+ * or neither. Display-only: the side panel words one question by it. Detection only looks
+ * for the control, and nothing in a job or in storage reads this.
+ */
+export const MoreItemsHintSchema = z.enum(['next', 'load_more', 'none']);
+export type MoreItemsHint = z.infer<typeof MoreItemsHintSchema>;
+
 export const repeatedElementsDetectedMessageSchema = baseMessageSchema.extend({
   type: z.literal('REPEATED_ELEMENTS_DETECTED'),
   payload: z.object({
@@ -138,6 +146,8 @@ export const repeatedElementsDetectedMessageSchema = baseMessageSchema.extend({
     sampleSnippets: z.array(z.string()),
     candidates: z.array(ListCandidateSchema).optional(),
     credible: z.boolean().optional(),
+    /** Optional, so a message without it still parses. */
+    moreItems: MoreItemsHintSchema.optional(),
   }),
 });
 

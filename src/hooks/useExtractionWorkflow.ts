@@ -1,4 +1,4 @@
-import { CandidateKind, ListCandidate } from '@/shared/contracts/message';
+import { CandidateKind, ListCandidate, MoreItemsHint } from '@/shared/contracts/message';
 import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ensureContentScriptForPicking, isSitePermissionError, messagingService, TabInfo } from '@/services/messaging';
@@ -60,6 +60,8 @@ export interface DetectedList {
   credible?: boolean;
   kind?: CandidateKind;
   dedupeFields?: string[];
+  /** Whether the page shows a Next or Load more control. Display-only (ADR-039). */
+  moreItems?: MoreItemsHint;
 }
 
 /** An error the panel shows. The code picks the explanation; the message is detail. */
@@ -362,7 +364,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         }
 
         case 'REPEATED_ELEMENTS_DETECTED': {
-          const { containerSelector, containerAnchor, matchCount, sampleSnippets, candidates, credible } =
+          const { containerSelector, containerAnchor, matchCount, sampleSnippets, candidates, credible, moreItems } =
             message.payload;
           setOperationError(null);
           setDetectedList({
@@ -372,6 +374,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
             sampleSnippets,
             candidates,
             credible,
+            moreItems,
             kind: candidates?.[0]?.kind,
             dedupeFields: candidates?.[0]?.dedupeFields,
           });

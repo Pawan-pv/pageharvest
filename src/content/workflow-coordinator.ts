@@ -27,7 +27,8 @@ import {
   runNavigationJob,
 } from '@/core/navigation/runner';
 import { errorReporter } from '@/core/resilience/error-reporter';
-import type { FieldPreviewResult } from '@/shared/contracts/message';
+import type { FieldPreviewResult, MoreItemsHint } from '@/shared/contracts/message';
+import { findMoreItems } from './more-items';
 import { previewFields } from './preview-fields';
 import { JobIdentity } from '@/shared/contracts/job';
 import { getVisualOverlay } from '@/content/extraction-visual-overlay';
@@ -78,6 +79,8 @@ export interface ContentWorkflowOptions {
   deliveryAttempts?: number;
   deliveryRetryDelayMs?: number;
   engineOverrides?: NavigationJobOptions['engineOverrides'];
+  /** Looks for a Next or Load more control, read-only (ADR-039). */
+  findMoreItems?: (root: Document) => MoreItemsHint;
 }
 
 function messageId(prefix: string): string {
@@ -134,6 +137,8 @@ export function createContentWorkflowCoordinator(
     ((url: string) => {
       window.location.assign(url);
     });
+
+  const lookForMoreItems = options.findMoreItems ?? findMoreItems;
 
   let activeRun: ActiveRun | null = null;
 
@@ -341,6 +346,14 @@ export function createContentWorkflowCoordinator(
       }
 
       const [best] = candidates;
+      // A hint for the panel's "more pages" question only. If the page makes the look fail,
+      // the list is still reported, without it.
+      let moreItems: MoreItemsHint | undefined;
+      try {
+        moreItems = lookForMoreItems(root);
+      } catch {
+        moreItems = undefined;
+      }
       return publish({
         id: messageId('repeated'),
         type: 'REPEATED_ELEMENTS_DETECTED',
@@ -352,6 +365,7 @@ export function createContentWorkflowCoordinator(
           sampleSnippets: best.sampleSnippets,
           candidates,
           credible: best.credible,
+          ...(moreItems ? { moreItems } : {}),
         },
       });
     },
