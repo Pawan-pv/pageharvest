@@ -7,6 +7,7 @@ import { expect, test } from './release-test';
 import {
   choosePagination,
   markTourSeen,
+  enableAdvancedOptions,
   resultHeading,
   setLimits,
   startButton,
@@ -49,6 +50,7 @@ test.beforeAll(async () => {
   extensionId = worker.url().split('/')[2];
   // The first-run tour has its own spec; here it would cover the panel.
   await markTourSeen(worker);
+  await enableAdvancedOptions(worker);
 });
 
 test.afterAll(async () => {

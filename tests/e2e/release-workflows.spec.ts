@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { expect, test } from './release-test';
-import { choosePagination, setLimits, markTourSeen, waitForCompletedDownload } from './helpers/panel';
+import { choosePagination, setLimits, markTourSeen, enableAdvancedOptions, waitForCompletedDownload } from './helpers/panel';
 
 const fixtureBaseUrl = 'http://127.0.0.1:3456';
 const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
@@ -112,6 +112,7 @@ async function getExtensionId(context: BrowserContext): Promise<{ id: string; wo
   const id = worker.url().split('/')[2];
   // The first-run tour has its own spec; here it would cover the panel.
   await markTourSeen(worker);
+  await enableAdvancedOptions(worker);
   if (!id) throw new Error(`Could not determine the unpacked extension ID from ${worker.url()}.`);
   return { id, worker };
 }

@@ -1,6 +1,6 @@
 import { chromium, BrowserContext, Page, Worker } from '@playwright/test';
 import { test, expect } from './release-test';
-import { markTourSeen } from './helpers/panel';
+import { markTourSeen, enableAdvancedOptions } from './helpers/panel';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -45,6 +45,7 @@ test.describe('Site permission (ADR-037)', () => {
     serviceWorker = sw;
     extensionId = serviceWorker.url().split('/')[2];
     await markTourSeen(serviceWorker);
+    await enableAdvancedOptions(serviceWorker);
   });
 
   test.afterAll(async () => {

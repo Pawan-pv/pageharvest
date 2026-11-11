@@ -6,12 +6,23 @@
  */
 import type { Page, Worker } from '@playwright/test';
 import { GUIDE_STORAGE_KEY } from '../../../src/components/guide/preferences';
+import { ADVANCED_STORAGE_KEY } from '../../../src/components/settings/advanced-preference';
 
 /** Marks the first-run tour as seen, so it does not cover the panel. Call before opening it. */
 export async function markTourSeen(worker: Worker): Promise<void> {
   await worker.evaluate(async (key) => {
     await chrome.storage.local.set({ [key]: { version: 1, onboardingDone: true } });
   }, GUIDE_STORAGE_KEY);
+}
+
+/**
+ * Turns Advanced options on (ADR-039). The specs written before simple mode drive the
+ * detailed controls, so they are the proof that nothing was lost when it is on.
+ */
+export async function enableAdvancedOptions(worker: Worker): Promise<void> {
+  await worker.evaluate(async (key) => {
+    await chrome.storage.local.set({ [key]: { version: 1, advanced: true } });
+  }, ADVANCED_STORAGE_KEY);
 }
 
 export type StartTool = 'auto' | 'pick' | 'table' | 'links';
