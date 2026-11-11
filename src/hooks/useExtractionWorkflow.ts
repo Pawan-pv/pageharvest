@@ -626,11 +626,11 @@ export function useExtractionWorkflow(tab: TabInfo) {
     if (!recipe) return;
 
     if (recipe.fields.length === 0) {
-      setOperationError({ message: 'Select at least one field to extract.', code: 'VALIDATION_ERROR' });
+      setOperationError({ message: 'Select at least one column to collect.', code: 'VALIDATION_ERROR' });
       return;
     }
     if (typeof tab.id !== 'number') {
-      setOperationError({ message: 'There is no active tab to extract from.', code: 'VALIDATION_ERROR' });
+      setOperationError({ message: 'There is no open page to collect from.', code: 'VALIDATION_ERROR' });
       return;
     }
 

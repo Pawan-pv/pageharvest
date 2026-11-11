@@ -21,7 +21,7 @@ export const Stepper: React.FC<StepperProps> = ({ steps, currentId, className = 
   const current = steps[currentIndex];
 
   return (
-    <nav aria-label="Extraction steps" className={`text-left ${className}`}>
+    <nav aria-label="Steps" className={`text-left ${className}`}>
       <p className="text-2xs text-fg-subtle mb-1.5">
         Step {currentIndex + 1} of {steps.length}:{' '}
         <span className="font-semibold text-fg">{current.label}</span>

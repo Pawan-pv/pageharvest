@@ -533,7 +533,7 @@ test.describe('PageHarvest production workflows', () => {
 
       expect(await readTable(panel, 'checkpoints')).toHaveLength(0);
       await panel.reload();
-      await panel.getByRole('button', { name: 'Datasets' }).waitFor();
+      await panel.getByRole('button', { name: 'My data' }).waitFor();
       await expect(panel.getByText('Extraction interrupted')).toHaveCount(0);
     } finally {
       await session.context.close();
@@ -584,7 +584,7 @@ test.describe('PageHarvest production workflows', () => {
     await expect(panel.getByLabel(/Include UTF-8 BOM/)).not.toBeChecked();
 
     // The saved defaults reach a new extraction.
-    await panel.getByRole('button', { name: 'Harvest' }).click();
+    await panel.getByRole('button', { name: 'Get data' }).click();
     await openTarget(context, `${FIXTURES}/simple-grid.html`);
     await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
@@ -616,7 +616,7 @@ test.describe('PageHarvest production workflows', () => {
     panel = await openPanel(context, extensionId);
     await target.bringToFront();
 
-    await panel.getByRole('button', { name: 'Datasets' }).click();
+    await panel.getByRole('button', { name: 'My data' }).click();
     await panel.getByRole('button', { name: 'Recipes' }).click();
     await panel.getByRole('button', { name: 'Run recipe Grid recipe' }).click();
     await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
@@ -651,7 +651,7 @@ test.describe('PageHarvest production workflows', () => {
 
     // Failure: a container selector that is not valid CSS.
     target = await openTarget(context, `${FIXTURES}/simple-grid.html`);
-    await panel.getByRole('button', { name: 'Datasets' }).click();
+    await panel.getByRole('button', { name: 'My data' }).click();
     await panel.getByRole('button', { name: 'Recipes' }).click();
     await panel.getByRole('button', { name: 'Edit recipe History recipe' }).click();
     await panel.getByLabel('Container Selector').fill('###not-valid');
@@ -678,7 +678,7 @@ test.describe('PageHarvest production workflows', () => {
 
     await panel.close();
     panel = await openPanel(context, extensionId);
-    await panel.getByRole('button', { name: 'Datasets' }).click();
+    await panel.getByRole('button', { name: 'My data' }).click();
     await panel.getByRole('button', { name: 'Run History' }).click();
 
     await expect(panel.getByText('COMPLETED')).toBeVisible();
@@ -989,7 +989,7 @@ test.describe('PageHarvest production workflows', () => {
     await target.bringToFront();
     panel = await openPanel(context, extensionId);
     panel.on('dialog', (dialog) => void dialog.accept());
-    await panel.getByRole('button', { name: 'Datasets' }).click();
+    await panel.getByRole('button', { name: 'My data' }).click();
     await panel.getByText(/20 Product Listing/).last().click();
     await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });
 

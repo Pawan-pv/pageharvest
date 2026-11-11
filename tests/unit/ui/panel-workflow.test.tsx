@@ -27,7 +27,7 @@ async function saveRecipe(overrides = {}) {
 }
 
 async function openLibraryTab(name: string) {
-  fireEvent.click(await screen.findByRole('button', { name: 'Datasets' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'My data' }));
   fireEvent.click(await screen.findByRole('button', { name }));
 }
 
@@ -116,13 +116,13 @@ describe('Side panel as a view of stored state', () => {
     });
     render(<App />);
     await screen.findByText('Get data from this page');
-    await waitFor(() => expect(screen.queryByText('Loading saved datasets...')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Loading your data…')).not.toBeInTheDocument());
     await waitFor(() => expect(reconciled).toBe(true));
     await waitFor(() => expect(activeScanned).toBe(true));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
-    const datasetsButton = await screen.findByRole('button', { name: 'Datasets' });
+    const datasetsButton = await screen.findByRole('button', { name: 'My data' });
     await act(async () => {
       fireEvent.click(datasetsButton);
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -167,7 +167,7 @@ describe('Side panel as a view of stored state', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel job' }));
 
     expect(await screen.findByText('Get data from this page')).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByText('Loading saved datasets...')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Loading your data…')).not.toBeInTheDocument());
     expect((await db.jobs.get(await jobId()))?.status).toBe('CANCELLED');
     expect(await db.history.count()).toBe(1);
   });

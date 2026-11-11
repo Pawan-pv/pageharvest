@@ -66,7 +66,7 @@ describe('Run screen', () => {
     const finish = screen.getByRole('button', { name: 'Finish and view rows' });
     const cancel = screen.getByRole('button', { name: 'Cancel job' });
     expect(finish).toHaveAccessibleDescription(/shows the rows collected so far/);
-    expect(cancel).toHaveAccessibleDescription(/saved rows stay in Datasets/);
+    expect(cancel).toHaveAccessibleDescription(/saved rows stay in My data/);
     expect(screen.getByRole('button', { name: 'Help: Finish or Cancel' })).toBeInTheDocument();
 
     await userEvent.click(finish);

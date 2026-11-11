@@ -195,7 +195,7 @@ export const App: React.FC = () => {
             aria-current={activeSection === 'harvest' ? 'page' : undefined}
             className={navButtonClass('harvest')}
           >
-            Harvest
+            Get data
           </button>
           <button
             type="button"
@@ -203,7 +203,7 @@ export const App: React.FC = () => {
             aria-current={activeSection === 'datasets' ? 'page' : undefined}
             className={navButtonClass('datasets')}
           >
-            Datasets
+            My data
           </button>
           <button
             type="button"
@@ -368,7 +368,7 @@ export const App: React.FC = () => {
 
         {/* 6. Results Data Table */}
         {workflow.view === 'results' && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading dataset…</div>}>
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your rows…</div>}>
             <DataTable
               dataset={workflow.currentDataset}
               records={workflow.records}
@@ -385,7 +385,7 @@ export const App: React.FC = () => {
 
         {/* 7. Saved Data Library */}
         {workflow.view === 'history' && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading history…</div>}>
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your data…</div>}>
             <LibraryView
               datasets={datasets}
               isLoading={isDatasetsLoading}

@@ -70,7 +70,7 @@ describe('Empty screens tell the user what to do', () => {
 
   it('recent extractions on the start screen point at the options above', () => {
     render(<RecentProjectsCard datasets={[]} onViewDataset={vi.fn()} onViewAllHistory={vi.fn()} />);
-    expect(screen.getByRole('heading', { name: 'No recent extractions' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Nothing saved yet' })).toBeInTheDocument();
     expect(screen.getByText(/Choose how to start above/)).toBeInTheDocument();
   });
 

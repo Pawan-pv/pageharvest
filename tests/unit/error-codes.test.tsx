@@ -210,7 +210,7 @@ describe('The panel receives codes', () => {
     await waitFor(() => expect(screen.getByTestId('fields')).toHaveTextContent('0'));
     act(() => screen.getByRole('button', { name: 'Start' }).click());
     await waitFor(() => expect(screen.getByTestId('code')).toHaveTextContent('VALIDATION_ERROR'));
-    expect(screen.getByTestId('message')).toHaveTextContent('Select at least one field to extract.');
+    expect(screen.getByTestId('message')).toHaveTextContent('Select at least one column to collect.');
     await settleBackgroundLoads();
   });
 
@@ -249,10 +249,10 @@ describe('The panel receives codes', () => {
 
 describe('ErrorBanner for setup problems', () => {
   it('shows the setup message itself, because VALIDATION_ERROR messages are written for people', () => {
-    render(<ErrorBanner error={{ code: 'VALIDATION_ERROR', message: 'Select at least one field to extract.' }} />);
+    render(<ErrorBanner error={{ code: 'VALIDATION_ERROR', message: 'Select at least one column to collect.' }} />);
     const banner = screen.getByRole('alert');
     expect(banner).toHaveTextContent(ERROR_COPY.VALIDATION_ERROR.title);
-    expect(banner).toHaveTextContent('Select at least one field to extract.');
+    expect(banner).toHaveTextContent('Select at least one column to collect.');
     expect(banner).not.toHaveTextContent(ERROR_COPY.VALIDATION_ERROR.whatHappened);
   });
 
