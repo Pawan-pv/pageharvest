@@ -269,7 +269,7 @@ describe('App: first run and Help', () => {
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: 'Help' }));
     await screen.findByRole('heading', { name: 'Help and guide' });
-    await userEvent.click(screen.getByRole('button', { name: 'Harvest' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Get data' }));
     expect(await screen.findByText('Get data from this page')).toBeInTheDocument();
   });
 });

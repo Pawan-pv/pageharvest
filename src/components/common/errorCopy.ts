@@ -31,7 +31,7 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     title: 'Some columns could not be read',
     whatHappened: 'One or more columns found no value in some items.',
     dataSafety: 'Those rows were kept, with the missing cells left empty.',
-    nextStep: 'Check the column in Review fields, or pick it again on the page.',
+    nextStep: 'Check the column on the Check columns step, or pick it again on the page.',
   },
   PAGINATION_BUTTON_NOT_FOUND: {
     tone: 'warning',
@@ -87,8 +87,8 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     tone: 'info',
     title: 'Extraction stopped',
     whatHappened: 'You stopped this extraction.',
-    dataSafety: 'Rows collected so far are saved in Datasets.',
-    nextStep: 'Open Datasets to see them, or start a new extraction.',
+    dataSafety: 'Rows collected so far are saved in My data.',
+    nextStep: 'Open My data to see them, or start a new extraction.',
   },
   SITE_PERMISSION_REQUIRED: {
     tone: 'warning',

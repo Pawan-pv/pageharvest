@@ -147,7 +147,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
         items: [
           'Pause holds the job where it is; Resume continues it.',
           'Finish stops now and shows the rows collected so far.',
-          'Cancel stops the job. Rows already saved stay in Datasets.',
+          'Cancel stops the job. Rows already saved stay in My data.',
         ],
       },
       { kind: 'text', text: 'Duplicates skipped: when pages overlap, a row already saved is not saved again. Only rows identical in every column count as duplicates.' },
@@ -164,7 +164,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
         kind: 'list',
         items: [
           'Resume continues from the last saved page or scroll.',
-          'Discard ends the job. Its saved rows stay in Datasets, but it can no longer be resumed.',
+          'Discard ends the job. Its saved rows stay in My data, but it can no longer be resumed.',
         ],
       },
       { kind: 'text', text: 'A scrolling job that resumes has to scroll back past the rows it already has, because feeds reload from the top. Those rows are not saved twice.' },
@@ -202,7 +202,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     keywords: ['privacy', 'local', 'data', 'cloud', 'account', 'upload', 'tracking', 'analytics', 'offline', 'storage', 'delete'],
     blocks: [
       { kind: 'text', text: 'PageHarvest works inside your browser. Rows, recipes and settings are stored on this computer, and nothing is sent to a server: no account, no upload, no analytics.' },
-      { kind: 'text', text: 'Exports are saved by your browser to your Downloads folder. Deleting a dataset in Datasets removes its rows from this computer.' },
+      { kind: 'text', text: 'Exports are saved by your browser to your Downloads folder. Deleting a dataset in My data removes its rows from this computer.' },
       { kind: 'text', text: 'PageHarvest only reads pages you open and only when you ask. It does not sign in for you or get past paywalls or CAPTCHAs.' },
     ],
   },
@@ -216,10 +216,10 @@ export const GUIDE_SECTIONS: GuideSection[] = [
         kind: 'qa',
         items: [
           { question: 'Nothing was detected.', answer: 'Wait until the page has finished loading and try again. If the items still are not found, press "Pick items myself" and click one whole item. Browser pages such as settings cannot be read at all.' },
-          { question: 'Some values are missing.', answer: 'A column may point at the wrong part of the item, or the value may load late. Open the column under Review fields and pick it again, or set a longer wait under Pagination, Advanced. Rows with missing values are kept unless the column is Required.' },
+          { question: 'Some values are missing.', answer: 'A column may point at the wrong part of the item, or the value may load late. Open the column on the Check columns step and pick it again, or set a longer wait under Pagination, Advanced. Rows with missing values are kept unless the column is Required.' },
           { question: 'The site will not scroll, or stops loading.', answer: 'Some sites load more items only with a "Load more" button: choose "Click a Next button" instead. Otherwise set a longer wait between scrolls. If the site still stops, it may be limiting visitors; try again later.' },
-          { question: 'Numbers are kept as text.', answer: 'Change the column to Number under Review fields. Number removes currency symbols and spaces; a value it cannot read as a number is left empty, so check the column after the run.' },
-          { question: 'An error appeared.', answer: 'Each error says whether your data is safe and what to do next. Rows already saved stay in Datasets. "Technical details" has information to share if you report a problem.' },
+          { question: 'Numbers are kept as text.', answer: 'Change the column to Number on the Check columns step. Number removes currency symbols and spaces; a value it cannot read as a number is left empty, so check the column after the run.' },
+          { question: 'An error appeared.', answer: 'Each error says whether your data is safe and what to do next. Rows already saved stay in My data. "Technical details" has information to share if you report a problem.' },
         ],
       },
     ],

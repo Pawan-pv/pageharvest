@@ -32,15 +32,15 @@ describe('UI: Main Dashboard & Website Detection', () => {
     expect(screen.getByText('Ready')).toBeInTheDocument();
 
     // Refresh button works
-    const refreshBtn = screen.getByRole('button', { name: /refresh active tab/i });
+    const refreshBtn = screen.getByRole('button', { name: 'Check this page again' });
     fireEvent.click(refreshBtn);
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it('renders Restricted badge and warning notice for internal chrome:// pages', () => {
+  it('renders the cannot-read badge and warning notice for internal chrome:// pages', () => {
     render(<WebsiteCard tab={mockRestrictedTab} onRefresh={vi.fn()} />);
 
-    expect(screen.getByText('Restricted')).toBeInTheDocument();
+    expect(screen.getByText("Can't read this page")).toBeInTheDocument();
     expect(
       screen.getByText(/PageHarvest cannot read browser pages like this one/i)
     ).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe('UI: Main Dashboard & Website Detection', () => {
     expect(screen.getByText('Access needed')).toBeInTheDocument();
     expect(screen.getByText(/PageHarvest cannot see this page yet/i)).toBeInTheDocument();
     expect(screen.getByText(/Click the PageHarvest button in the Chrome toolbar/i)).toBeInTheDocument();
-    expect(screen.queryByText('Restricted')).not.toBeInTheDocument();
+    expect(screen.queryByText("Can't read this page")).not.toBeInTheDocument();
     expect(screen.queryByText(/cannot read browser pages like this one/i)).not.toBeInTheDocument();
   });
 
@@ -168,7 +168,7 @@ describe('UI: Main Dashboard & Website Detection', () => {
       />
     );
 
-    expect(screen.getByText('No recent extractions')).toBeInTheDocument();
+    expect(screen.getByText('Nothing saved yet')).toBeInTheDocument();
   });
 
   it('renders the complete MainDashboard layout', () => {
@@ -189,6 +189,6 @@ describe('UI: Main Dashboard & Website Detection', () => {
     expect(screen.getByText('books.toscrape.com')).toBeInTheDocument();
     expect(screen.getByText('Get data from this page')).toBeInTheDocument();
     expect(screen.getByText(/Everything PageHarvest collects stays on this computer/)).toBeInTheDocument();
-    expect(screen.getByText('Recent Extractions')).toBeInTheDocument();
+    expect(screen.getByText('My recent data')).toBeInTheDocument();
   });
 });

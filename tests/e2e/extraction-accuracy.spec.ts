@@ -554,7 +554,7 @@ test.describe('working with results', () => {
 
 test.describe('the library', () => {
   const openLibrary = async (panel: Page, section: string) => {
-    await panel.getByRole('button', { name: 'Datasets' }).click();
+    await panel.getByRole('button', { name: 'My data' }).click();
     await panel.getByRole('navigation', { name: 'Library sections' }).getByRole('button', { name: section }).click();
   };
 

@@ -10,7 +10,7 @@ const FIRST_STEP: Record<FlowKind, string> = {
   auto: 'Find data',
   table: 'Find a table',
   links: 'Find links',
-  recipe: 'Load recipe',
+  recipe: 'Load saved setup',
 };
 
 /**
@@ -21,10 +21,10 @@ const FIRST_STEP: Record<FlowKind, string> = {
 export function flowSteps(kind: FlowKind): StepperStep[] {
   return [
     { id: 'pick', label: FIRST_STEP[kind] },
-    { id: 'fields', label: 'Review fields' },
-    { id: 'pagination', label: 'Pagination', optional: true },
-    { id: 'run', label: 'Run' },
-    { id: 'export', label: 'Export' },
+    { id: 'fields', label: 'Check columns' },
+    { id: 'pagination', label: 'More pages', optional: true },
+    { id: 'run', label: 'Collect' },
+    { id: 'export', label: 'Download' },
   ];
 }
 

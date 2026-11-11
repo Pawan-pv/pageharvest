@@ -7,7 +7,7 @@ const DATASET_ID = 'ds_grid';
 
 async function openSavedDataset() {
   render(<App />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Datasets' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'My data' }));
   fireEvent.click(await screen.findByText('Grid Dataset'));
   await screen.findByText('3 records');
 }

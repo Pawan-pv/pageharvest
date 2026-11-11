@@ -59,7 +59,7 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
                 </Badge>
               ) : (
                 <Badge variant="warning" size="sm" icon={<AlertCircle className="w-2.5 h-2.5" />}>
-                  Restricted
+                  Can't read this page
                 </Badge>
               )}
             </div>
@@ -72,8 +72,8 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
         <button
           onClick={onRefresh}
           disabled={isLoading}
-          title="Refresh active tab connection"
-          aria-label="Refresh active tab connection"
+          title="Check this page again"
+          aria-label="Check this page again"
           className="p-1.5 text-fg-subtle hover:text-fg-muted hover:bg-surface-muted rounded-lg transition-colors shrink-0 disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />

@@ -92,7 +92,7 @@ export const RecoveryBanner: React.FC<RecoveryBannerProps> = ({ job, onResume, o
         }
       >
         Its {job.totalExtracted.toLocaleString('en-US')} saved {job.totalExtracted === 1 ? 'row stays' : 'rows stay'}{' '}
-        in Datasets. The job itself ends and can no longer be resumed.
+        in My data. The job itself ends and can no longer be resumed.
       </Dialog>
     </>
   );
