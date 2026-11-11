@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type CDPSession, type Page } from '@playwright/test';
 import { expect, test } from './release-test';
-import { choosePagination, setLimits, markTourSeen } from './helpers/panel';
+import { choosePagination, setLimits, markTourSeen, enableAdvancedOptions } from './helpers/panel';
 
 /**
  * Real-Chromium verification of the Neon Indicator Overlays against the built
@@ -297,6 +297,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     extensionId = worker.url().split('/')[2];
     // The first-run tour has its own spec; here it would cover the panel.
     await markTourSeen(worker);
+    await enableAdvancedOptions(worker);
   });
 
   test.afterAll(async () => {

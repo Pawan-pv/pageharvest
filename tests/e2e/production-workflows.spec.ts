@@ -9,6 +9,7 @@ import {
   discardInterrupted,
   goToPagination,
   markTourSeen,
+  enableAdvancedOptions,
   readLimit,
   setLimits,
   setUrlTemplate,
@@ -60,6 +61,7 @@ async function launch(profile: string, downloads?: string): Promise<{ context: B
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker', { timeout: 15000 }));
   // The first-run tour has its own spec; here it would cover the panel.
   await markTourSeen(worker);
+  await enableAdvancedOptions(worker);
   return { context, extensionId: worker.url().split('/')[2] };
 }
 

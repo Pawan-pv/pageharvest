@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page } from '@playwright/test';
 import { expect, test } from './release-test';
-import { goToPagination, markTourSeen, resultHeading, reviewFieldsHeading, startExtraction, startWith, useThisList } from './helpers/panel';
+import { goToPagination, markTourSeen, enableAdvancedOptions, resultHeading, reviewFieldsHeading, startExtraction, startWith, useThisList } from './helpers/panel';
 
 /**
  * Chrome's side panel opens at about 360 CSS pixels and can be narrowed to 320. The other specs
@@ -82,6 +82,7 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     });
     const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker', { timeout: 15000 }));
     await markTourSeen(worker);
+    await enableAdvancedOptions(worker);
     extensionId = worker.url().split('/')[2];
   });
 

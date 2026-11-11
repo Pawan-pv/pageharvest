@@ -10,6 +10,7 @@ import { UserSettingsSchema } from '@/shared/contracts/settings';
 import { db } from '@/storage/db';
 import { SettingsRepository } from '@/storage/repositories/settings-repository';
 import { CsvDelimiter, DEFAULT_USER_SETTINGS, ExportFormat, UserSettings } from '@/types/settings';
+import { useAdvancedMode } from './useAdvancedMode';
 
 export interface SettingsViewProps {
   onBackToDashboard: () => void;
@@ -35,6 +36,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
   const [recordCount, setRecordCount] = useState<number>(0);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const { advanced, setAdvanced } = useAdvancedMode();
+  const [advancedNotKept, setAdvancedNotKept] = useState(false);
+
+  const handleAdvancedChange = async (next: boolean) => {
+    setAdvancedNotKept(false);
+    const kept = await setAdvanced(next);
+    if (!kept) setAdvancedNotKept(true);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -139,6 +148,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
         </Banner>
       )}
 
+      {/* Simple mode is the default (ADR-039). The switch hides controls; it removes nothing. */}
+      <Card variant="default">
+        <label className="flex items-start gap-3 cursor-pointer min-h-8">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={advanced}
+            onChange={(e) => void handleAdvancedChange(e.target.checked)}
+            aria-labelledby="advanced-options-title"
+            aria-describedby="advanced-options-description"
+            className="mt-0.5 w-5 h-5 shrink-0 rounded border-line-strong accent-brand"
+          />
+          <span className="min-w-0">
+            <span id="advanced-options-title" className="block text-sm font-semibold text-fg">
+              Advanced options
+            </span>
+            <span id="advanced-options-description" className="block text-xs text-fg-muted mt-0.5">
+              Show the detailed controls: page limits, waiting times, column types, file formats and more. Nothing is
+              removed when this is off.
+            </span>
+          </span>
+        </label>
+        {advancedNotKept && (
+          <Banner tone="warning" className="mt-3" onDismiss={() => setAdvancedNotKept(false)}>
+            Your choice is used now, but it could not be remembered for next time.
+          </Banner>
+        )}
+      </Card>
+
+      {advanced && (
+      <>
       {/* Locked until the saved values arrive, which would otherwise overwrite an early edit. */}
       <fieldset disabled={!isLoaded} className="contents">
       {/* Crawl & Extraction Defaults */}
@@ -275,6 +315,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
           Save Preferences
         </Button>
       </div>
+      </>
+      )}
 
       {/* Storage Management */}
       <Card variant="default">

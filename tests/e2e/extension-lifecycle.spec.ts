@@ -1,6 +1,6 @@
 import { chromium, BrowserContext, Page, Worker } from '@playwright/test';
 import { test, expect } from './release-test';
-import { markTourSeen } from './helpers/panel';
+import { markTourSeen, enableAdvancedOptions } from './helpers/panel';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -32,6 +32,7 @@ test.describe('PageHarvest Browser Extension E2E Suite', () => {
     extensionId = serviceWorker.url().split('/')[2];
     // The first-run tour has its own spec; here it would cover the panel.
     await markTourSeen(serviceWorker);
+    await enableAdvancedOptions(serviceWorker);
     console.log(`[E2E] Unpacked Chrome MV3 Extension Loaded with ID: ${extensionId}`);
   });
 
