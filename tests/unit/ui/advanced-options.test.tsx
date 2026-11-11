@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -10,6 +10,14 @@ import {
 import { useAdvancedMode } from '@/components/settings/useAdvancedMode';
 import { SettingsView } from '@/components/settings/SettingsView';
 import { db } from '@/storage/db';
+import { usePanelMode } from '../../utils/panel-mode';
+
+// These tests are about the switch itself, so they start where a new user does.
+beforeEach(async () => {
+  await chrome.storage.local.remove(ADVANCED_STORAGE_KEY);
+  await usePanelMode('simple');
+  await chrome.storage.local.remove(ADVANCED_STORAGE_KEY);
+});
 
 function memoryArea(initial: Record<string, unknown> = {}): AdvancedStorageArea & { data: Record<string, unknown> } {
   const data = { ...initial };

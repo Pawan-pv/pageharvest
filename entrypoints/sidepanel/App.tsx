@@ -4,6 +4,7 @@ import { useActiveTab } from '@/hooks/useActiveTab';
 import { useDatasets } from '@/hooks/useDatasets';
 import { useExtractionWorkflow } from '@/hooks/useExtractionWorkflow';
 import { useOnboarding } from '@/components/guide/useOnboarding';
+import { useAdvancedMode } from '@/components/settings/useAdvancedMode';
 import { MainDashboard } from '@/components/dashboard/MainDashboard';
 import { Stepper } from '@/components/common/Stepper';
 import { ScanningState } from '@/components/shell/ScanningState';
@@ -66,6 +67,8 @@ export const App: React.FC = () => {
   } = useDatasets();
 
   const workflow = useExtractionWorkflow(tab);
+  // Simple mode is the default; Advanced options brings the detailed controls back (ADR-039).
+  const { advanced } = useAdvancedMode();
 
   const [activeTabNav, setActiveTabNav] = useState<NavSection>('harvest');
   // How the user started this extraction. It names the stepper's first step; a view reached
@@ -278,6 +281,7 @@ export const App: React.FC = () => {
             onRefreshTab={refreshTab}
             datasets={datasets}
             isDatasetsLoading={isDatasetsLoading}
+            advanced={advanced}
             onSelectElements={() => startFlow('pick', workflow.startVisualPicker)}
             onAutoDetectLists={() => startFlow('auto', workflow.autoDetectLists)}
             onExtractTable={() => startFlow('table', () => workflow.startPresetDetection('table'))}

@@ -5,6 +5,8 @@ export interface QuickActionsProps {
   disabled?: boolean;
   /** The page is a website PageHarvest has not been given yet (ADR-037), not a browser page. */
   needsAccess?: boolean;
+  /** Advanced options is on: both large choices are shown, as before simple mode (ADR-039). */
+  advanced?: boolean;
   onSelectElements: () => void;
   onAutoDetectLists: () => void;
   onExtractTable: () => void;
@@ -65,7 +67,7 @@ const SecondaryOption: React.FC<{ label: string; icon: React.ReactNode; disabled
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className="flex items-center gap-2 px-3 py-2 rounded-control border border-line bg-surface text-xs font-medium text-fg-muted hover:text-fg hover:border-line-strong disabled:opacity-50 disabled:cursor-not-allowed"
+    className="flex items-center gap-2 min-h-8 px-3 py-2 rounded-control border border-line bg-surface text-xs font-medium text-fg-muted hover:text-fg hover:border-line-strong disabled:opacity-50 disabled:cursor-not-allowed"
   >
     <span aria-hidden="true">{icon}</span>
     {label}
@@ -73,12 +75,15 @@ const SecondaryOption: React.FC<{ label: string; icon: React.ReactNode; disabled
 );
 
 /**
- * How to start. Auto-detect comes first because it needs no knowledge of the page; picking
- * by hand is the fallback. Tables and links are rarer, so they wait under "More ways".
+ * How to start. In simple mode there is one large action, finding the list, because it needs
+ * no knowledge of the page; picking by hand is offered as the way out when that fails. With
+ * Advanced options on, both are large choices. Tables and links are rarer, so they wait under
+ * "More ways to start" in both modes.
  */
 export const QuickActions: React.FC<QuickActionsProps> = ({
   disabled = false,
   needsAccess = false,
+  advanced = false,
   onSelectElements,
   onAutoDetectLists,
   onExtractTable,
@@ -96,35 +101,68 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
       </p>
     )}
 
-    <StartOption
-      primary
-      title="Find data automatically"
-      description="PageHarvest looks for repeated items, such as products or search results, and shows you what it found."
-      icon={<Sparkles className="w-4 h-4" />}
-      disabled={disabled}
-      onClick={onAutoDetectLists}
-    />
-    <StartOption
-      title="Pick items myself"
-      description="Click one item on the page. PageHarvest finds the others like it."
-      icon={<MousePointer className="w-4 h-4" />}
-      disabled={disabled}
-      onClick={onSelectElements}
-    />
+    {advanced ? (
+      <>
+        <StartOption
+          primary
+          title="Find data automatically"
+          description="PageHarvest looks for repeated items, such as products or search results, and shows you what it found."
+          icon={<Sparkles className="w-4 h-4" />}
+          disabled={disabled}
+          onClick={onAutoDetectLists}
+        />
+        <StartOption
+          title="Pick items myself"
+          description="Click one item on the page. PageHarvest finds the others like it."
+          icon={<MousePointer className="w-4 h-4" />}
+          disabled={disabled}
+          onClick={onSelectElements}
+        />
+      </>
+    ) : (
+      <>
+        <button
+          type="button"
+          onClick={onAutoDetectLists}
+          disabled={disabled}
+          aria-describedby="start-primary-description"
+          className="w-full min-h-12 flex items-center justify-center gap-2 px-4 py-3 rounded-card bg-brand text-on-strong text-base font-semibold border border-brand shadow-sm hover:bg-brand-hover active:bg-brand-active disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Sparkles aria-hidden="true" className="w-5 h-5 shrink-0" />
+          Get the list on this page
+        </button>
+        <p id="start-primary-description" className="text-body text-fg-muted">
+          PageHarvest looks for the repeated items on this page, such as products or search results, and shows you
+          what it found before anything is saved.
+        </p>
+        <p className="flex flex-wrap items-center gap-x-1 text-body text-fg-muted">
+          <span>Not finding it?</span>
+          <button
+            type="button"
+            onClick={onSelectElements}
+            disabled={disabled}
+            className="inline-flex items-center gap-1 min-h-8 px-1 rounded-control font-medium text-brand-fg underline underline-offset-2 hover:text-brand-emphasis disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <MousePointer aria-hidden="true" className="w-3.5 h-3.5" />
+            Pick one item myself
+          </button>
+        </p>
+      </>
+    )}
 
     <details className="group">
-      <summary className="cursor-pointer select-none text-xs font-medium text-fg-muted hover:text-fg py-1">
+      <summary className="cursor-pointer select-none text-xs font-medium text-fg-muted hover:text-fg py-2">
         More ways to start
       </summary>
       <div className="flex flex-wrap gap-2 pt-1">
         <SecondaryOption
-          label="Extract a table"
+          label={advanced ? 'Extract a table' : 'Get a table'}
           icon={<Table className="w-3.5 h-3.5" />}
           disabled={disabled}
           onClick={onExtractTable}
         />
         <SecondaryOption
-          label="Extract all links"
+          label={advanced ? 'Extract all links' : 'Get all the links'}
           icon={<Link2 className="w-3.5 h-3.5" />}
           disabled={disabled}
           onClick={onExtractLinks}

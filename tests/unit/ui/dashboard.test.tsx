@@ -66,6 +66,7 @@ describe('UI: Main Dashboard & Website Detection', () => {
 
     render(
       <QuickActions
+        advanced
         onSelectElements={onSelectElements}
         onAutoDetectLists={onAutoDetectLists}
         onExtractTable={onExtractTable}
@@ -90,6 +91,7 @@ describe('UI: Main Dashboard & Website Detection', () => {
   it('disables quick actions when disabled prop is true (e.g. restricted tab)', () => {
     render(
       <QuickActions
+        advanced
         disabled={true}
         onSelectElements={vi.fn()}
         onAutoDetectLists={vi.fn()}
@@ -106,6 +108,7 @@ describe('UI: Main Dashboard & Website Detection', () => {
   it('tells the user to click the toolbar button when the page is not shared yet', () => {
     render(
       <MainDashboard
+        advanced
         tab={{ id: 9, url: '', title: 'This page', isInjectable: false, needsAccess: true }}
         isTabLoading={false}
         onRefreshTab={vi.fn()}
@@ -174,6 +177,7 @@ describe('UI: Main Dashboard & Website Detection', () => {
   it('renders the complete MainDashboard layout', () => {
     render(
       <MainDashboard
+        advanced
         tab={mockInjectableTab}
         onRefreshTab={vi.fn()}
         datasets={[]}

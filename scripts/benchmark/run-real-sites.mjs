@@ -96,6 +96,8 @@ const MODE_LABEL = {
 };
 /** The first-run tour's flag (src/components/guide/preferences.ts). The benchmark measures extraction, not the tour. */
 const GUIDE_STORAGE_KEY = 'pageharvest.guide';
+// The benchmark drives the detailed start options, which need Advanced options on (ADR-039).
+const ADVANCED_STORAGE_KEY = 'pageharvest.advanced';
 
 /** Selects the option showing a truth record, and reports where the extension ranked it. */
 async function chooseCandidate(panel, truthRecords, fields) {
@@ -336,6 +338,10 @@ const extensionId = worker.url().split('/')[2];
 await worker.evaluate(
   (key) => chrome.storage.local.set({ [key]: { version: 1, onboardingDone: true } }),
   GUIDE_STORAGE_KEY
+);
+await worker.evaluate(
+  (key) => chrome.storage.local.set({ [key]: { version: 1, advanced: true } }),
+  ADVANCED_STORAGE_KEY
 );
 
 const results = [];

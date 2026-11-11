@@ -4,6 +4,7 @@ import { beforeEach, afterEach, vi } from 'vitest';
 import { configure } from '@testing-library/react';
 import { GUIDE_STORAGE_KEY } from '@/components/guide/preferences';
 import { createChromeMock, ChromeMock } from './utils/chrome-mock';
+import { usePanelMode } from './utils/panel-mode';
 
 declare global {
   var chromeMock: ChromeMock;
@@ -26,6 +27,9 @@ beforeEach(async () => {
   mockChrome.reset();
   // The first-run tour would open over every App test. Tests of the tour clear this flag.
   await mockChrome.storage.local.set({ [GUIDE_STORAGE_KEY]: { version: 1, onboardingDone: true } });
+  // The suites written before simple mode drive the detailed controls, so they run with
+  // Advanced options on and prove nothing was lost (ADR-039). Simple-mode tests switch it off.
+  await usePanelMode('advanced');
 });
 
 afterEach(() => {
