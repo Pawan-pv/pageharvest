@@ -7,6 +7,8 @@ import {
   originPatternForUrl,
   hasHostAccess,
   requestSiteOrigin,
+  hasAllSitesAccess,
+  ALL_SITES_ORIGINS,
 } from '@/platform/permissions';
 
 describe('Permissions & Security Model', () => {
@@ -68,6 +70,21 @@ describe('Permissions & Security Model', () => {
     mockChrome.permissions.contains.mockRejectedValueOnce(new Error('Invalid pattern'));
     expect(await hasHostAccess('https://shop.test/items')).toBe(false);
     expect(await requestSiteOrigin('chrome://extensions/')).toBe(false);
+  });
+
+  it('knows whether it still holds the access to every website it was installed with (ADR-040)', async () => {
+    expect([...ALL_SITES_ORIGINS]).toEqual(['http://*/*', 'https://*/*']);
+    expect(await hasAllSitesAccess()).toBe(true);
+    expect(mockChrome.permissions.contains).toHaveBeenCalledWith({ origins: ['http://*/*', 'https://*/*'] });
+
+    // The user chose "on click" or named sites in chrome://extensions.
+    mockChrome.revokedOrigins.add('https://*/*');
+    expect(await hasAllSitesAccess()).toBe(false);
+  });
+
+  it('assumes the installed state when Chrome cannot be asked about site access', async () => {
+    mockChrome.permissions.contains.mockRejectedValueOnce(new Error('no'));
+    expect(await hasAllSitesAccess()).toBe(true);
   });
 
   it('verifies overall status of required permissions', async () => {

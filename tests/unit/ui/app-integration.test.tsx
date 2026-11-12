@@ -53,7 +53,8 @@ describe('UI: App Container & Navigation Lifecycle', () => {
 
     await waitFor(() => {
       expect(screen.getByText('PageHarvest')).toBeInTheDocument();
-      expect(screen.getByText('v1.0')).toBeInTheDocument();
+      // The version is in Help, not in the header every screen shows.
+      expect(screen.queryByText(/^v\d/)).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Get data' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'My data' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();

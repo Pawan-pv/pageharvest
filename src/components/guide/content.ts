@@ -36,6 +36,10 @@ export interface GuideSection {
 }
 
 export const PRACTICE_SITE_URL = 'https://books.toscrape.com/';
+/** The public privacy policy: the same text as PRIVACY.md in the repository. */
+export const PRIVACY_POLICY_URL = 'https://github.com/Pawan-pv/pageharvest/blob/main/PRIVACY.md';
+/** The licences of the open-source packages inside the extension, shipped as a file in the package. */
+export const THIRD_PARTY_NOTICES_PATH = '/THIRD_PARTY_NOTICES.txt';
 
 export const GUIDE_SECTIONS: GuideSection[] = [
   {

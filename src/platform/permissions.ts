@@ -7,6 +7,9 @@ export const REQUIRED_PERMISSIONS = [
   'downloads',
 ] as const;
 
+/** The site access the manifest holds from install (ADR-040). */
+export const ALL_SITES_ORIGINS = ['http://*/*', 'https://*/*'] as const;
+
 type RequestedPermission = chrome.runtime.ManifestPermissions;
 
 /** The one wording for a missing per-site grant (ADR-037), shared by background and panel. */
@@ -35,6 +38,22 @@ export async function hasHostAccess(url: string | undefined): Promise<boolean> {
     return Boolean(await (chrome.permissions.contains({ origins: [origin] }) as Promise<boolean>));
   } catch {
     return false;
+  }
+}
+
+/**
+ * Whether PageHarvest still holds access to every website, as it does when installed
+ * (ADR-040). False when the user has limited it to "on click" or to named sites in
+ * chrome://extensions. When Chrome cannot be asked, the answer is the installed state.
+ */
+export async function hasAllSitesAccess(): Promise<boolean> {
+  if (typeof chrome === 'undefined' || !chrome.permissions?.contains) {
+    return true;
+  }
+  try {
+    return Boolean(await (chrome.permissions.contains({ origins: [...ALL_SITES_ORIGINS] }) as Promise<boolean>));
+  } catch {
+    return true;
   }
 }
 

@@ -79,6 +79,31 @@ describe('Manifest permissions', () => {
     expect(config).not.toContain('optional_host_permissions');
   });
 
+  it('justifies every permission in the privacy policy and the store listing', () => {
+    const privacy = readFileSync(resolve(ROOT, 'PRIVACY.md'), 'utf8');
+    const listing = readFileSync(resolve(ROOT, 'docs/STORE_LISTING.md'), 'utf8');
+    // A table row that starts with the permission's name and gives a reason after it.
+    const hasRow = (text: string, permission: string) =>
+      text.split(/\r?\n/).some((line) => line.startsWith(`| \`${permission}\` | `) && line.length > permission.length + 40);
+    for (const permission of REQUIRED_PERMISSIONS) {
+      expect(hasRow(privacy, permission), `PRIVACY.md has no row for ${permission}`).toBe(true);
+      expect(hasRow(listing, permission), `STORE_LISTING.md has no row for ${permission}`).toBe(true);
+    }
+    // Site access is a host permission held from install (ADR-040): named in both, never called optional.
+    for (const text of [privacy, listing]) {
+      expect(text).toContain('http://*/*');
+      expect(text).toContain('https://*/*');
+      expect(text).not.toMatch(/asked at use|one site at a time/i);
+    }
+  });
+
+  it('describes on-demand injection in the privacy policy, not a script that runs on every page', () => {
+    const privacy = readFileSync(resolve(ROOT, 'PRIVACY.md'), 'utf8');
+    expect(privacy).not.toMatch(/page script runs on the pages you visit/i);
+    expect(privacy).toMatch(/does not run on pages you have not started it on/i);
+    expect(privacy).toMatch(/Limited Use/);
+  });
+
   it('built manifest has no static content scripts and grants http and https sites (ADR-037, ADR-040)', () => {
     // CI's unit layer runs `pnpm test` before `pnpm build`; when no build output
     // exists yet, verify the same contract from source and skip the built-file

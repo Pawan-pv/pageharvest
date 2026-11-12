@@ -42,6 +42,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
       <WebsiteCard
         tab={tab}
         isLoading={isTabLoading}
+        advanced={advanced}
         onRefresh={onRefreshTab}
       />
 
@@ -56,13 +57,15 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
         onExtractLinks={onExtractLinks}
       />
 
-      {/* 3. Recent Projects */}
-      <RecentProjectsCard
-        datasets={datasets}
-        isLoading={isDatasetsLoading}
-        onViewDataset={onViewDataset}
-        onViewAllHistory={onViewAllHistory}
-      />
+      {/* 3. Recent data. In simple mode an empty box would only add noise before the first run. */}
+      {(advanced || datasets.length > 0) && (
+        <RecentProjectsCard
+          datasets={datasets}
+          isLoading={isDatasetsLoading}
+          onViewDataset={onViewDataset}
+          onViewAllHistory={onViewAllHistory}
+        />
+      )}
 
       <p className="flex items-center gap-1.5 text-2xs text-fg-subtle">
         <ShieldCheck aria-hidden="true" className="w-3.5 h-3.5 shrink-0" />

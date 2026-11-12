@@ -1,53 +1,69 @@
 # PageHarvest Privacy Policy
 
-Effective date: 2026-11-08
+Effective date: 2026-11-12
 
 PageHarvest is a Chrome extension that copies data you choose from web pages into a table, and lets you save that table as a file. This policy describes what the extension handles and where it goes.
 
 ## The short version
 
-Everything PageHarvest reads or saves stays on your computer. The extension makes no network requests of its own. It has no account, no analytics, no telemetry, no advertising and no remote server.
+Everything PageHarvest reads or saves stays on your computer. The extension makes no network requests of its own. It has no account, no analytics, no telemetry, no advertising and no remote server. Its developer receives nothing: not your data, not the sites you visit, and not how you use the extension.
 
 ## What PageHarvest reads
 
-- **The content of pages you extract from.** When you pick a list, run auto-detect, preview a column or start an extraction, PageHarvest reads the text, links, images and attributes of that page, and of the further pages a multi-page job visits.
-- **The address and title of the active tab**, so the panel can show which page you are on and say whether extraction can run there.
-- **Each page's address and title as it loads.** PageHarvest's page script runs on the pages you visit, so that a multi-page job can continue after the browser loads the next page. When a page loads, the extension checks whether that tab has a running job. If it has none, the address and title are discarded and nothing is stored.
+- **The content of pages you collect from.** When you ask for the list on a page, pick an item, preview a column or start collecting, PageHarvest reads the text, links, image addresses and attributes of that page, and of the further pages a multi-page job visits. It does this by adding its script to that page at that moment. It does not run on pages you have not started it on.
+- **The address and title of the tab you are looking at**, while the side panel is open, so the panel can show which page you are on and say whether it can be read. They are shown, not stored.
+- **That a tab finished loading or was closed.** Chrome tells the extension when this happens in any tab. PageHarvest uses it only to continue, or to stop, a job that is running in that tab. For a tab with no running job, nothing is read and nothing is stored.
+
+PageHarvest does not edit, submit or delete anything on a site. While it works it draws a highlight over the page, and when you ask for more pages it clicks the site's Next button, opens the next page address or scrolls, as you would by hand.
 
 ## What PageHarvest stores, and where
 
 All of it is kept in your browser's local storage for this extension (IndexedDB and `chrome.storage.local`) on your device:
 
-- The records you extract, and the edits you make to them.
-- Your projects, saved recipes and schemas, job history, and job checkpoints used to recover an interrupted job. A job's history and error messages can include the addresses of pages it visited.
-- Your settings, and whether you have finished the first-run tour.
+- The rows you collect, and the edits you make to them.
+- Your groups, saved setups and column sets, job history, and the checkpoints used to continue a job that stopped early. A job's history and error messages can include the addresses of pages it visited.
+- Your settings, whether Advanced options is on, and whether you have finished the first-run tour.
 
-An interrupted session is kept for the number of days set under **Settings** (1 to 365), then deleted. Deleting a dataset deletes its records. Removing the extension deletes everything it stored.
+A job that stopped early is kept for the number of days set under **Settings** (1 to 365, with Advanced options on; 30 by default), then deleted. Deleting saved data in **My data** deletes its rows. **Settings** has a button that deletes everything you have saved. Removing the extension deletes everything it stored.
 
 ## What leaves your device
 
 Nothing, unless you send it somewhere yourself:
 
-- **Export** writes a CSV, JSON, NDJSON or XLSX file to your Downloads folder through Chrome's downloads feature.
+- **Download** writes an Excel, CSV, JSON or NDJSON file to your Downloads folder through Chrome's downloads feature.
 - **Copy** places the table on your clipboard.
+- **Links** you click, in your rows or in Help, open in a new tab like any other link.
 
-What happens to a file or the clipboard after that is up to you.
+What happens to a file, the clipboard or an opened page after that is up to you.
 
-PageHarvest does not sell, share or transfer any data, does not use data for anything other than extracting and exporting what you ask for, and does not use it to determine creditworthiness or for lending.
+PageHarvest does not sell, share or transfer any data, does not use data for anything other than collecting and saving what you ask for, and does not use it to determine creditworthiness or for lending.
+
+PageHarvest's use of the information it reads complies with the Chrome Web Store User Data Policy, including the Limited Use requirements.
 
 ## Permissions
 
 | Permission | Why PageHarvest needs it |
 | --- | --- |
-| Access to websites (granted when you install) | To extract data from the page you choose, and to continue a multi-page job on each page of that same site, without asking you again on every site. PageHarvest reads a page only when you start it there, and never changes the page's data. You can limit it to particular sites in Chrome's extension settings |
-| `activeTab` | To read the address and title of the tab you open PageHarvest on |
+| Access to websites (`http://*/*` and `https://*/*`, granted when you install) | To read the page you choose, and to continue a multi-page job on each following page of that site, without Chrome asking you again on every site. PageHarvest reads a page only when you start it there. You can limit it to particular sites, or to "when you click the extension", in Chrome's extension settings |
+| `activeTab` | To see which page you opened PageHarvest on, including pages it cannot work on, so it can say so |
+| `scripting` | To add PageHarvest's own script, which is part of the extension, to the page you start it on. It adds no code from anywhere else |
 | `sidePanel` | To show PageHarvest in Chrome's side panel |
-| `storage` | To remember whether you have finished the first-run tour |
-| `downloads` | To save your exports as files |
+| `storage` | To remember two choices: whether Advanced options is on, and whether you have finished the first-run tour |
+| `downloads` | To save the files you download, and to show a saved file in its folder when you ask |
 
 ## Websites you use it on
 
-PageHarvest does not bypass logins, paywalls or CAPTCHAs. You are responsible for following the terms of the websites you extract data from.
+PageHarvest does not bypass logins, paywalls or CAPTCHAs. You are responsible for following the terms of the websites you collect data from, and the law that applies to the data you collect, including personal data about other people.
+
+## Your choices
+
+- Limit which sites PageHarvest can read: right-click its toolbar button, then **This can read and change site data**.
+- Delete saved data: one item at a time in **My data**, or everything in **Settings**.
+- Remove the extension: this deletes everything it stored.
+
+## Open-source software
+
+PageHarvest includes open-source software. The licences are in the extension, under **Help**, and in `THIRD_PARTY_NOTICES.txt` in the package.
 
 ## Changes
 

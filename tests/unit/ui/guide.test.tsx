@@ -180,6 +180,16 @@ describe('Help screen', () => {
     fetchSpy.mockRestore();
   });
 
+  it('links to the privacy policy and the open-source licences, and shows the version', () => {
+    render(<HelpView onClose={vi.fn()} onRestartTour={vi.fn()} />);
+    const privacy = screen.getByRole('link', { name: /Privacy policy/ });
+    expect(privacy).toHaveAttribute('href', expect.stringMatching(/^https:\/\/github\.com\/.+\/PRIVACY\.md$/));
+    expect(privacy).toHaveAttribute('target', '_blank');
+    // A file inside the extension package, so opening it fetches nothing from the network.
+    expect(screen.getByRole('link', { name: /Open-source licences/ })).toHaveAttribute('href', '/THIRD_PARTY_NOTICES.txt');
+    expect(screen.getByText('PageHarvest 1.0.0')).toBeInTheDocument();
+  });
+
   it('can restart the tour and go back', async () => {
     const onClose = vi.fn();
     const onRestartTour = vi.fn();

@@ -6,9 +6,10 @@
   "type": "module",
   "scripts": {
     "dev": "wxt",
-    "build": "wxt build",
+    "notices": "node scripts/generate-third-party-notices.mjs",
+    "build": "node scripts/generate-third-party-notices.mjs && wxt build",
     "bundle:budget": "node scripts/check-bundle-budget.mjs",
-    "zip": "wxt zip",
+    "zip": "node scripts/generate-third-party-notices.mjs && wxt zip",
     "compile": "wxt prepare",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
