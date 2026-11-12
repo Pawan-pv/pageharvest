@@ -174,10 +174,25 @@ export const DataTable: React.FC<DataTableProps> = ({
   const [renamingCol, setRenamingCol] = useState<string | null>(null);
   const [newColName, setNewColName] = useState('');
 
-  // Auto-clear feedback toast
+  // Auto-clear feedback toast. The timer is cancelled when the grid closes, and a save
+  // that finishes after that announces nothing: there is no grid left to show it.
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gridOpen = useRef(true);
+  useEffect(() => {
+    gridOpen.current = true;
+    return () => {
+      gridOpen.current = false;
+      if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
+    };
+  }, []);
   const triggerFeedback = useCallback((msg: string) => {
+    if (!gridOpen.current) return;
+    if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
     setCleaningFeedback(msg);
-    setTimeout(() => setCleaningFeedback(null), 3000);
+    feedbackTimer.current = setTimeout(() => {
+      feedbackTimer.current = null;
+      setCleaningFeedback(null);
+    }, 3000);
   }, []);
 
   const valuesNeedingReview = useMemo(() => countValuesNeedingReview(currentRecords), [currentRecords]);
