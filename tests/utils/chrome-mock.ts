@@ -171,6 +171,16 @@ export class ChromeMock {
     });
   }
 
+  /**
+   * Delivers a one-way message from a content script to every extension listener, as Chrome
+   * does: the background and an open side panel both receive it, whichever answers first.
+   */
+  public notifyFromContentScript(tabId: number, message: unknown): void {
+    for (const listener of [...this.runtimeListeners]) {
+      listener(message, { id: this.runtime.id, tab: { ...this.activeTab, id: tabId } }, () => undefined);
+    }
+  }
+
   /** Routes tab messages for one tab to a listener, as a content script there would. */
   public setTabListener(tabId: number, listener: MessageListener) {
     this.tabListeners.set(tabId, new Set([listener]));

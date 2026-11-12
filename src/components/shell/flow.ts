@@ -28,6 +28,27 @@ export function flowSteps(kind: FlowKind): StepperStep[] {
   ];
 }
 
+const SIMPLE_FIRST_STEP: Record<FlowKind, string> = {
+  pick: 'Find the list',
+  auto: 'Find the list',
+  table: 'Find a table',
+  links: 'Find links',
+  recipe: 'Load saved setup',
+};
+
+/**
+ * Simple mode has four steps (ADR-039). Whether to get more pages is one question on the
+ * columns screen, so it is not a step of its own.
+ */
+export function simpleFlowSteps(kind: FlowKind): StepperStep[] {
+  return [
+    { id: 'pick', label: SIMPLE_FIRST_STEP[kind] },
+    { id: 'fields', label: 'Check columns' },
+    { id: 'run', label: 'Collect' },
+    { id: 'export', label: 'Download' },
+  ];
+}
+
 /** The step a panel view belongs to, or null for views outside the flow. */
 export function stepForView(view: WorkflowView): FlowStepId | null {
   switch (view) {

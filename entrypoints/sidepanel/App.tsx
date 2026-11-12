@@ -2,13 +2,14 @@ import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Wheat, Settings as SettingsIcon, HelpCircle } from 'lucide-react';
 import { useActiveTab } from '@/hooks/useActiveTab';
 import { useDatasets } from '@/hooks/useDatasets';
-import { useExtractionWorkflow } from '@/hooks/useExtractionWorkflow';
+import { useExtractionWorkflow, type DetectedList } from '@/hooks/useExtractionWorkflow';
+import type { ListCandidate } from '@/shared/contracts/message';
 import { useOnboarding } from '@/components/guide/useOnboarding';
 import { useAdvancedMode } from '@/components/settings/useAdvancedMode';
 import { MainDashboard } from '@/components/dashboard/MainDashboard';
 import { Stepper } from '@/components/common/Stepper';
 import { ScanningState } from '@/components/shell/ScanningState';
-import { flowSteps, stepForView, type FlowKind } from '@/components/shell/flow';
+import { flowSteps, simpleFlowSteps, stepForView, type FlowKind } from '@/components/shell/flow';
 import { Button } from '@/components/common/Button';
 import { requestSiteOrigin } from '@/platform/permissions';
 import type { ConfigStep } from '@/components/picker/FieldSelectionPanel';
@@ -45,6 +46,16 @@ const Onboarding = lazy(() =>
 const SettingsView = lazy(() =>
   import('@/components/settings/SettingsView').then((module) => ({ default: module.SettingsView }))
 );
+// Simple mode's first step: picking, choosing a list, and "We found N items" (ADR-039).
+const SimplePicking = lazy(() =>
+  import('@/components/simple/FindList').then((module) => ({ default: module.SimplePicking }))
+);
+const SimpleListChooser = lazy(() =>
+  import('@/components/simple/FindList').then((module) => ({ default: module.SimpleListChooser }))
+);
+const SimpleListCheck = lazy(() =>
+  import('@/components/simple/FindList').then((module) => ({ default: module.SimpleListCheck }))
+);
 // Shown only after an interruption or an error, so neither is in the chunk every open pays for.
 const RecoveryBanner = lazy(() =>
   import('@/components/shell/RecoveryBanner').then((module) => ({ default: module.RecoveryBanner }))
@@ -77,13 +88,62 @@ export const App: React.FC = () => {
   const activeFlow = workflow.view === 'dashboard' ? null : flow;
   // Review fields and Pagination share one panel view; this says which half is showing.
   const [configStep, setConfigStep] = useState<ConfigStep>('fields');
+  // Simple mode shows the columns view in two halves: "We found N items", then the columns.
+  const [simpleStage, setSimpleStage] = useState<'check' | 'columns'>('check');
+  // The user asked for the other lists, so the best match is not accepted for them.
+  const [choosingList, setChoosingList] = useState(false);
+  // The list simple mode last accepted by itself, so a failure is not retried in a loop.
+  const [acceptedList, setAcceptedList] = useState<DetectedList | null>(null);
   const viewStep = activeFlow ? stepForView(workflow.view) : null;
-  const currentStep = viewStep === 'fields' && configStep === 'pagination' ? 'pagination' : viewStep;
+  const currentStep = advanced
+    ? viewStep === 'fields' && configStep === 'pagination'
+      ? 'pagination'
+      : viewStep
+    : viewStep === 'fields' && simpleStage === 'check'
+      ? 'pick'
+      : viewStep;
 
   const startFlow = (kind: FlowKind, start: () => void) => {
     setFlow(kind);
     setConfigStep('fields');
+    setSimpleStage('check');
+    setChoosingList(false);
     start();
+  };
+
+  // In simple mode a list that looks like data is accepted without a choosing screen: the
+  // next screen shows its first rows and asks "is this it?". A list that looks like a menu,
+  // or one whose columns could not be read, is never accepted for the user.
+  const { view: workflowView, detectedList, confirmListCandidate } = workflow;
+  const acceptsListForUser =
+    !advanced &&
+    workflowView === 'review_list' &&
+    !choosingList &&
+    detectedList !== null &&
+    detectedList.credible !== false &&
+    detectedList.matchCount > 0 &&
+    acceptedList !== detectedList;
+  useEffect(() => {
+    if (!acceptsListForUser || !detectedList) return;
+    setAcceptedList(detectedList);
+    setSimpleStage('check');
+    void confirmListCandidate(detectedList);
+  }, [acceptsListForUser, detectedList, confirmListCandidate]);
+
+  const handleUseCandidate = (candidate: ListCandidate) => {
+    const chosen: DetectedList = {
+      ...(workflow.detectedList ?? { sampleSnippets: [] }),
+      containerSelector: candidate.containerSelector,
+      containerAnchor: candidate.containerAnchor,
+      matchCount: candidate.matchCount,
+      sampleSnippets: candidate.sampleSnippets,
+      kind: candidate.kind,
+      dedupeFields: candidate.dedupeFields,
+    };
+    setAcceptedList(chosen);
+    setChoosingList(false);
+    setSimpleStage('check');
+    void workflow.confirmListCandidate(chosen);
   };
 
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -262,7 +322,11 @@ export const App: React.FC = () => {
       </Suspense>
 
       {!isHelpOpen && activeFlow && currentStep && (
-        <Stepper steps={flowSteps(activeFlow)} currentId={currentStep} className="px-4 pt-3" />
+        <Stepper
+          steps={advanced ? flowSteps(activeFlow) : simpleFlowSteps(activeFlow)}
+          currentId={currentStep}
+          className="px-4 pt-3"
+        />
       )}
 
       {/* Main Content Area */}
@@ -295,7 +359,12 @@ export const App: React.FC = () => {
         {workflow.view === 'inspecting' && activeFlow && activeFlow !== 'pick' && (
           <ScanningState kind={activeFlow} onCancel={workflow.resetToDashboard} />
         )}
-        {workflow.view === 'inspecting' && (!activeFlow || activeFlow === 'pick') && (
+        {workflow.view === 'inspecting' && (!activeFlow || activeFlow === 'pick') && !advanced && (
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading…</div>}>
+            <SimplePicking inspectedElement={workflow.inspectedElement} onCancel={workflow.cancelVisualPicker} />
+          </Suspense>
+        )}
+        {workflow.view === 'inspecting' && (!activeFlow || activeFlow === 'pick') && advanced && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading picker…</div>}>
             <ElementSelectionBanner
               inspectedElement={workflow.inspectedElement}
@@ -312,7 +381,20 @@ export const App: React.FC = () => {
         )}
 
         {/* 3. Detected List Preview */}
-        {workflow.view === 'review_list' && workflow.detectedList && (
+        {workflow.view === 'review_list' && workflow.detectedList && !advanced && acceptsListForUser && (
+          <ScanningState kind={activeFlow ?? 'auto'} onCancel={workflow.resetToDashboard} />
+        )}
+        {workflow.view === 'review_list' && workflow.detectedList && !advanced && !acceptsListForUser && (
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading lists…</div>}>
+            <SimpleListChooser
+              detectedList={workflow.detectedList}
+              onUse={handleUseCandidate}
+              onPickMyself={() => startFlow('pick', workflow.startVisualPicker)}
+              onCancel={workflow.resetToDashboard}
+            />
+          </Suspense>
+        )}
+        {workflow.view === 'review_list' && workflow.detectedList && advanced && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading lists…</div>}>
             <DetectedListPreview
               detectedList={workflow.detectedList}
@@ -328,8 +410,23 @@ export const App: React.FC = () => {
         )}
 
         {/* 4. Field Selection & Pagination Config */}
-        {workflow.view === 'config_fields' && workflow.detectedList && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading fields…</div>}>
+        {workflow.view === 'config_fields' && workflow.detectedList && !advanced && simpleStage === 'check' && (
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your list…</div>}>
+            <SimpleListCheck
+              detectedList={workflow.detectedList}
+              columns={workflow.fields.filter((field) => workflow.selectedFieldIds.has(field.id))}
+              onPreviewFields={workflow.previewFields}
+              onConfirm={() => setSimpleStage('columns')}
+              onChooseAnother={() => {
+                setChoosingList(true);
+                workflow.setView('review_list');
+              }}
+              onCancel={workflow.resetToDashboard}
+            />
+          </Suspense>
+        )}
+        {workflow.view === 'config_fields' && workflow.detectedList && (advanced || simpleStage === 'columns') && (
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading columns…</div>}>
             <FieldSelectionPanel
               detectedList={workflow.detectedList}
               fields={workflow.fields}
@@ -401,12 +498,14 @@ export const App: React.FC = () => {
                 setActiveTabNav('harvest');
                 setFlow('recipe');
                 setConfigStep('fields');
+                setSimpleStage('columns');
                 workflow.loadRecipe(recipe);
               }}
               onUseSchema={(schema) => {
                 setActiveTabNav('harvest');
                 setFlow('recipe');
                 setConfigStep('fields');
+                setSimpleStage('columns');
                 workflow.loadSchema(schema);
               }}
             />
