@@ -17,8 +17,8 @@ import { computeMetrics, summarizeResults } from './metrics.mjs';
 import { selectBenchmarkSites } from './site-selection.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-// The benchmark visits many public sites, so its copy of the build is granted all of
-// them up front; the permission bubble cannot be answered from automation (ADR-037).
+// The benchmark visits many public sites and runs its own copy of the build, which
+// holds access to all of them from install (ADR-040).
 const extensionPath = join(root, '.output/chrome-mv3-benchmark');
 const outputDirectory = join(root, 'artifacts/benchmark');
 const JOB_TIMEOUT_MS = 150000;

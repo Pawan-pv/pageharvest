@@ -26,8 +26,8 @@ describe('Permissions & Security Model', () => {
   });
 
   it('verifies that default required permissions conform to least-privilege', () => {
-    // scripting is required for on-demand injection (ADR-037). Host access is
-    // optional per-site instead; <all_urls> must never appear (no broad grant).
+    // scripting is required for on-demand injection (ADR-037). Host access is a
+    // manifest host_permissions entry (ADR-040), never an API permission here.
     expect(REQUIRED_PERMISSIONS).toContain('activeTab');
     expect(REQUIRED_PERMISSIONS).toContain('scripting');
     expect(REQUIRED_PERMISSIONS).toContain('sidePanel');

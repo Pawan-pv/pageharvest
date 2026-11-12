@@ -50,7 +50,8 @@ export default defineConfig({
       'scripting',
       'downloads'
     ],
-    optional_host_permissions: ['http://*/*', 'https://*/*'],
+    // Site access is held from install, so Chrome never asks per site while in use (ADR-040).
+    host_permissions: ['http://*/*', 'https://*/*'],
     action: {
       default_title: 'Open PageHarvest',
       default_icon: {
