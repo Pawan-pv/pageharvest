@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from '../../../entrypoints/sidepanel/App';
 import { db } from '@/storage/db';
 
@@ -50,6 +50,24 @@ describe('Grid edits reach IndexedDB through the production App wiring', () => {
       const rows = await db.records.where('datasetId').equals(DATASET_ID).toArray();
       expect(rows.every((row) => !('Price' in row))).toBe(true);
     });
+  });
+
+  it('cancels the pending "saved" message timer when the grid closes', async () => {
+    const setTimer = vi.spyOn(globalThis, 'setTimeout');
+    const clearTimer = vi.spyOn(globalThis, 'clearTimeout');
+    await openSavedDataset();
+
+    fireEvent.click(screen.getAllByTitle('Delete column')[1]);
+
+    // The message is announced only after the save, and clears itself 3 s later.
+    const messageTimer = await waitFor(() => {
+      const index = setTimer.mock.calls.findIndex((call) => call[1] === 3000);
+      expect(index).toBeGreaterThanOrEqual(0);
+      return setTimer.mock.results[index]?.value as ReturnType<typeof setTimeout>;
+    });
+    cleanup();
+
+    expect(clearTimer).toHaveBeenCalledWith(messageTimer);
   });
 
   it('persists a bulk row delete and updates the saved row count', async () => {
