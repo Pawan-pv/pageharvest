@@ -41,9 +41,11 @@ export async function hasHostAccess(url: string | undefined): Promise<boolean> {
 /**
  * Requests the site's origin. Must be called as the first await in a click
  * handler so the user gesture is still valid; never precedes it with a
- * messaging round trip. Returns false when the user dismisses the prompt, or
- * when Chrome refuses the request (no user gesture, pattern not in
- * optional_host_permissions); it never throws.
+ * messaging round trip. The manifest holds http and https access from install
+ * (ADR-040), so Chrome answers true at once with no prompt; it asks only when
+ * the user has taken this site's access away. Returns false when the user
+ * dismisses that prompt, or when Chrome refuses the request (no user gesture,
+ * pattern not in the manifest); it never throws.
  */
 export async function requestSiteOrigin(url: string | undefined): Promise<boolean> {
   const origin = originPatternForUrl(url);

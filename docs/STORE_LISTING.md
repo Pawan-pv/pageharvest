@@ -46,7 +46,7 @@ What to enter in the Chrome Web Store developer dashboard, and what to check bef
 
 | Permission | Justification |
 | --- | --- |
-| Optional site access (one site at a time, asked at use) | The user can extract data from any website they choose. PageHarvest asks for access to one site at a time, only when the user starts extraction on it (Chrome prompts "this site"), and injects its content script then. A multi-page job re-injects on each new page of the same site without asking again, because the per-site grant persists. It reads page content only when the user asks it to, from the panel. |
+| Host permission (`http://*/*`, `https://*/*`) | The user can extract data from any website they choose, and which one cannot be known in advance. PageHarvest has no static content script: it injects its script only into the page the user starts extraction on, and into each following page of a multi-page job the user started. It reads page content only when the user asks it to, from the panel, never changes a page's data, and sends nothing off the device. |
 | `activeTab` | Reads the address and title of the tab the user opens PageHarvest on, to show the page and decide whether extraction can run there. |
 | `sidePanel` | The whole interface is in Chrome's side panel. |
 | `storage` | Remembers whether the user has finished the first-run tour. |
@@ -66,7 +66,7 @@ Then certify all three:
 
 ## Install warnings
 
-No host warning at install (ADR-037): the extension requests one site's access at a time while in use, so Chrome shows no "all websites" warning. The decision is in [DECISIONS.md](DECISIONS.md).
+One warning at install (ADR-040): "Read and change all your data on all websites". Chrome words it; an extension cannot change or remove it. In exchange nobody is asked for access site by site while working. A broad host permission also means the Chrome Web Store reviews the item in more depth, which can take longer. The decision is in [DECISIONS.md](DECISIONS.md).
 
 ## Before you submit
 

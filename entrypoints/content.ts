@@ -23,8 +23,8 @@ const BATCH_DELIVERY_TIMEOUT_MS = 30_000;
 
 export default defineContentScript({
   // Injected on demand via chrome.scripting.executeScript (ADR-037). Declared
-  // with runtime registration so no static <all_urls> entry appears in the
-  // manifest and there is no install-time "all websites" warning.
+  // with runtime registration so no static content script entry appears in the
+  // manifest: the script runs only on a page the user works on, never on every page.
   registration: 'runtime',
   runAt: 'document_idle',
   main() {

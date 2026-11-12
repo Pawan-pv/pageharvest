@@ -1,14 +1,11 @@
 // Prepares the copy of the production build that automated browsers load.
 //
-// Since ADR-037 the extension has no host access at install: it asks for one site at a
-// time with chrome.permissions.request, and Chrome answers with a permission bubble that
-// Playwright and CDP cannot click. Automated runs therefore load this copy, which is the
-// production build byte for byte except that its manifest also grants the sites the run
-// visits as `host_permissions`, the state of a user who already allowed those sites.
-// chrome.permissions.request then resolves true at once, as Chrome does for any origin
-// that is already granted. The prompt itself stays a manual check.
-//
-// The production build in .output/chrome-mv3 is never modified.
+// Since ADR-040 the production manifest holds http and https site access from install, so
+// the copy needs no extra grant: chrome.permissions.request resolves true at once, with no
+// permission bubble, for every site a run visits. Automated runs still load a copy, so the
+// production build in .output/chrome-mv3 is never the directory a browser profile points
+// at, and never modified. `hosts` is added only when the manifest does not already cover
+// it (a build that predates ADR-040).
 import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,8 +18,8 @@ export const TEST_BUILD = join(ROOT, '.output', 'chrome-mv3-test');
 export const FIXTURE_HOSTS = ['http://127.0.0.1:3456/*'];
 
 /**
- * Copies the production build to `target` and grants `hosts` in the copy's manifest.
- * Returns the copy's path. Throws when the production build is missing.
+ * Copies the production build to `target` and makes sure the copy's manifest grants
+ * `hosts`. Returns the copy's path. Throws when the production build is missing.
  */
 export function prepareTestExtension({ hosts = FIXTURE_HOSTS, source = PRODUCTION_BUILD, target = TEST_BUILD } = {}) {
   const manifestPath = join(source, 'manifest.json');
@@ -33,11 +30,14 @@ export function prepareTestExtension({ hosts = FIXTURE_HOSTS, source = PRODUCTIO
   cpSync(source, target, { recursive: true });
 
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-  if (manifest.host_permissions) {
-    throw new Error('The production manifest must not declare host_permissions (ADR-037).');
+  const granted = Array.isArray(manifest.host_permissions) ? manifest.host_permissions : [];
+  // "http://host/*" is covered by itself or by its scheme's all-sites pattern, "http://*/*".
+  const covered = (host) => granted.includes(host) || granted.includes(`${host.split('//')[0]}//*/*`);
+  const missing = hosts.filter((host) => !covered(host));
+  if (missing.length > 0) {
+    manifest.host_permissions = [...granted, ...missing];
+    writeFileSync(join(target, 'manifest.json'), JSON.stringify(manifest));
   }
-  manifest.host_permissions = [...hosts];
-  writeFileSync(join(target, 'manifest.json'), JSON.stringify(manifest));
   return target;
 }
 

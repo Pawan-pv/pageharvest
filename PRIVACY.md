@@ -39,7 +39,7 @@ PageHarvest does not sell, share or transfer any data, does not use data for any
 
 | Permission | Why PageHarvest needs it |
 | --- | --- |
-| Read page content on the site you choose, one site at a time | To extract data from the page you choose, and to continue a multi-page job on each page of that same site (asked at use, per site) |
+| Access to websites (granted when you install) | To extract data from the page you choose, and to continue a multi-page job on each page of that same site, without asking you again on every site. PageHarvest reads a page only when you start it there, and never changes the page's data. You can limit it to particular sites in Chrome's extension settings |
 | `activeTab` | To read the address and title of the tab you open PageHarvest on |
 | `sidePanel` | To show PageHarvest in Chrome's side panel |
 | `storage` | To remember whether you have finished the first-run tour |

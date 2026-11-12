@@ -155,8 +155,8 @@ const clickPanelButton = (panel, label) =>
         button.click();
         return true;
       })()`,
-      // A person's click is a user gesture. Start asks Chrome for site access first
-      // (ADR-037), and Chrome refuses chrome.permissions.request without a gesture.
+      // A person's click is a user gesture. Start confirms site access with Chrome first
+      // (ADR-037; already granted since ADR-040), which Chrome refuses without a gesture.
       { userGesture: true }
     )
   );
@@ -322,8 +322,7 @@ export async function runNativeChromeCheck({
       evidence.error = `The production build is missing: ${buildLocation}`;
     } else {
       stopServer = await ensureFixtureServer();
-      // The production build with the fixture site already granted: the permission
-      // bubble cannot be answered from automation (ADR-037).
+      // A copy of the production build, which holds site access from install (ADR-040).
       const extensionLocation = prepareTestExtension({ source: buildLocation });
       const port = await getFreePort();
       await mkdir(profileDirectory, { recursive: true });

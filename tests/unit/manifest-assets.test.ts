@@ -73,13 +73,18 @@ describe('Manifest permissions', () => {
     expect(declaredPermissions()).toContain('scripting');
   });
 
-  it('built manifest has no static content scripts and no broad host warning (ADR-037)', () => {
+  it('holds site access from install, so no site is ever asked for while in use (ADR-040)', () => {
+    const config = readFileSync(resolve(ROOT, 'wxt.config.ts'), 'utf8');
+    expect(config).toMatch(/[^_]host_permissions:\s*\['http:\/\/\*\/\*',\s*'https:\/\/\*\/\*'\]/);
+    expect(config).not.toContain('optional_host_permissions');
+  });
+
+  it('built manifest has no static content scripts and grants http and https sites (ADR-037, ADR-040)', () => {
     // CI's unit layer runs `pnpm test` before `pnpm build`; when no build output
     // exists yet, verify the same contract from source and skip the built-file
     // assertions (the e2e/release layers build first and get the strict check).
     if (!existsSync(resolve(ROOT, '.output/chrome-mv3/manifest.json'))) {
       const config = readFileSync(resolve(ROOT, 'wxt.config.ts'), 'utf8');
-      expect(config).toContain('optional_host_permissions');
       expect(config).not.toContain('<all_urls>');
       expect(readFileSync(resolve(ROOT, 'entrypoints/content.ts'), 'utf8')).toContain("registration: 'runtime'");
       return;
@@ -91,8 +96,8 @@ describe('Manifest permissions', () => {
     const contentScripts = manifest['content_scripts'] as unknown[] | undefined;
     expect(contentScripts === undefined || contentScripts.length === 0).toBe(true);
     expect(raw).not.toContain('<all_urls>');
-    expect('host_permissions' in manifest).toBe(false);
-    expect(manifest['optional_host_permissions']).toEqual(['http://*/*', 'https://*/*']);
+    expect(manifest['host_permissions']).toEqual(['http://*/*', 'https://*/*']);
+    expect('optional_host_permissions' in manifest).toBe(false);
     expect([...(manifest['permissions'] as string[])].sort()).toEqual(
       ['activeTab', 'downloads', 'scripting', 'sidePanel', 'storage'].sort()
     );

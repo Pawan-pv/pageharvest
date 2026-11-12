@@ -8,8 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const EXTENSION_PATH = path.resolve(__dirname, '../../.output/chrome-mv3-test');
 const FIXTURE_ORIGIN = 'http://127.0.0.1:3456';
-/** The same server under another name: a different origin, which the test build does not grant. */
-const UNGRANTED_ORIGIN = 'http://localhost:3456';
+/** The same server under another name: a different origin, granted like every other site (ADR-040). */
+const OTHER_ORIGIN = 'http://localhost:3456';
 
 interface JobState {
   status: string;
@@ -20,17 +20,16 @@ interface JobState {
 }
 
 /**
- * Site permission and on-demand injection (ADR-037), in a real Chrome.
+ * Site permission and on-demand injection (ADR-037, ADR-040), in a real Chrome.
  *
- * Playwright cannot answer Chrome's permission bubble, so the test build
- * (scripts/testing/test-extension.mjs) already holds the fixture site's grant, like a
- * user who allowed it. What these tests prove is everything after the grant: no static
- * content script, injection into each new document, recovery in a new tab, and refusal
- * for a site that is not granted. Manual checks: the prompt itself, its "this site"
- * wording, and revoking a site in chrome://extensions (covered by
- * tests/integration/site-permission.test.ts against the coordinator).
+ * The manifest holds http and https site access from install, so no site is asked for
+ * while in use. What these tests prove: no static content script, every site already
+ * granted, injection into each new document, and recovery in a new tab. A site whose
+ * access the user took away in chrome://extensions is refused with the site-access
+ * message; that path cannot be set up from Playwright and is covered by
+ * tests/integration/site-permission.test.ts against the coordinator.
  */
-test.describe('Site permission (ADR-037)', () => {
+test.describe('Site permission (ADR-037, ADR-040)', () => {
   let context: BrowserContext;
   let serviceWorker: Worker;
   let extensionId: string;
@@ -133,15 +132,15 @@ test.describe('Site permission (ADR-037)', () => {
     return waitForStatus(panel, started.identity!.jobId, ['COMPLETED', 'FAILED', 'CANCELLED', 'RECOVERABLE']);
   }
 
-  test('installs with no static content script and holds only the granted site', async () => {
+  test('installs with no static content script and already holds every http and https site', async () => {
     const { target, panel } = await open(`${FIXTURE_ORIGIN}/simple-grid.html`);
     const state = await panel.evaluate(async ({ granted, other }) => ({
       contentScripts: chrome.runtime.getManifest().content_scripts ?? [],
       granted: await chrome.permissions.contains({ origins: [`${granted}/*`] }),
       other: await chrome.permissions.contains({ origins: [`${other}/*`] }),
       allSites: await chrome.permissions.contains({ origins: ['https://*/*'] }),
-    }), { granted: FIXTURE_ORIGIN, other: UNGRANTED_ORIGIN });
-    expect(state).toEqual({ contentScripts: [], granted: true, other: false, allSites: false });
+    }), { granted: FIXTURE_ORIGIN, other: OTHER_ORIGIN });
+    expect(state).toEqual({ contentScripts: [], granted: true, other: true, allSites: true });
     await target.close(); await panel.close();
   });
 
@@ -210,11 +209,15 @@ test.describe('Site permission (ADR-037)', () => {
     await panel.close();
   });
 
-  test('a site that is not granted is refused with the site-access message', async () => {
-    const { target, panel } = await open(`${FIXTURE_ORIGIN}/simple-grid.html`);
-    const result = await startJob(panel, recipe('e2e_site_refused', '.product-card', '.product-title'), `${UNGRANTED_ORIGIN}/simple-grid.html`);
-    expect(result.ok).toBe(false);
-    expect(result.error).toBe('PageHarvest needs access to this site to continue. Allow access?');
+  test('a site never used before starts a job without being asked for access', async () => {
+    const { target, panel } = await open(`${OTHER_ORIGIN}/simple-grid.html`);
+    const state = await run(
+      panel,
+      { ...recipe('e2e_site_other', '.product-card', '.product-title'), urlPattern: `${OTHER_ORIGIN}/*` },
+      `${OTHER_ORIGIN}/simple-grid.html`
+    );
+    expect(state.status, state.reason).toBe('COMPLETED');
+    expect(state.rows).toBe(3);
     await target.close(); await panel.close();
   });
 
