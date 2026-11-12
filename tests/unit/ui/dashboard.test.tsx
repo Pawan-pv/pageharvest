@@ -12,7 +12,6 @@ describe('UI: Main Dashboard & Website Detection', () => {
     id: 101,
     url: 'https://books.toscrape.com/catalogue/category/books_1/index.html',
     title: 'All Products | Books to Scrape',
-    favIconUrl: 'https://books.toscrape.com/favicon.ico',
     isInjectable: true,
   };
 
@@ -25,7 +24,7 @@ describe('UI: Main Dashboard & Website Detection', () => {
 
   it('renders WebsiteCard with hostname, title and Ready badge for injectable web page', () => {
     const onRefresh = vi.fn();
-    render(<WebsiteCard tab={mockInjectableTab} onRefresh={onRefresh} />);
+    render(<WebsiteCard advanced tab={mockInjectableTab} onRefresh={onRefresh} />);
 
     expect(screen.getByText('books.toscrape.com')).toBeInTheDocument();
     expect(screen.getByText(/All Products \| Books to Scrape/)).toBeInTheDocument();
@@ -35,6 +34,26 @@ describe('UI: Main Dashboard & Website Detection', () => {
     const refreshBtn = screen.getByRole('button', { name: 'Check this page again' });
     fireEvent.click(refreshBtn);
     expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('never loads the site icon: the panel makes no network request of its own', () => {
+    // What Chrome reports for a tab includes the address of the site's icon.
+    const tabWithIcon = { ...mockInjectableTab, favIconUrl: 'https://books.toscrape.com/favicon.ico' };
+    const { container } = render(<WebsiteCard advanced tab={tabWithIcon} onRefresh={vi.fn()} />);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.innerHTML).not.toContain('favicon.ico');
+  });
+
+  it('has no refresh button in simple mode, because the panel follows the tab by itself', () => {
+    render(<WebsiteCard tab={mockInjectableTab} onRefresh={vi.fn()} />);
+    expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check this page again' })).not.toBeInTheDocument();
+  });
+
+  it('tells the user to switch tabs, not to press a button, on a page it cannot read', () => {
+    render(<WebsiteCard tab={mockRestrictedTab} onRefresh={vi.fn()} />);
+    expect(screen.getByText(/Switch to a tab with a website/)).toBeInTheDocument();
+    expect(screen.queryByText(/press Refresh/i)).not.toBeInTheDocument();
   });
 
   it('renders the cannot-read badge and warning notice for internal chrome:// pages', () => {
@@ -53,6 +72,8 @@ describe('UI: Main Dashboard & Website Detection', () => {
 
     expect(screen.getByText('Access needed')).toBeInTheDocument();
     expect(screen.getByText(/PageHarvest cannot see this page yet/i)).toBeInTheDocument();
+    // Since ADR-040 this happens only when the user limited site access in Chrome, and it says so.
+    expect(screen.getByText(/limited in Chrome's settings/i)).toBeInTheDocument();
     expect(screen.getByText(/Click the PageHarvest button in the Chrome toolbar/i)).toBeInTheDocument();
     expect(screen.queryByText("Can't read this page")).not.toBeInTheDocument();
     expect(screen.queryByText(/cannot read browser pages like this one/i)).not.toBeInTheDocument();
@@ -160,6 +181,25 @@ describe('UI: Main Dashboard & Website Detection', () => {
 
     fireEvent.click(screen.getByText(/View all/i));
     expect(onViewAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no empty "recent data" box in simple mode before anything is saved', () => {
+    render(
+      <MainDashboard
+        tab={mockInjectableTab}
+        onRefreshTab={vi.fn()}
+        datasets={[]}
+        onSelectElements={vi.fn()}
+        onAutoDetectLists={vi.fn()}
+        onExtractTable={vi.fn()}
+        onExtractLinks={vi.fn()}
+        onViewDataset={vi.fn()}
+        onViewAllHistory={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('My recent data')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nothing saved yet')).not.toBeInTheDocument();
+    expect(screen.getByText(/Everything PageHarvest collects stays on this computer/)).toBeInTheDocument();
   });
 
   it('renders empty state in RecentProjectsCard when no datasets exist', () => {

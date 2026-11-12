@@ -17,22 +17,23 @@ What to enter in the Chrome Web Store developer dashboard, and what to check bef
 
 > Extract lists and tables from web pages into a spreadsheet, then export CSV, JSON or Excel. Runs locally; nothing is uploaded.
 
-**Category:** Productivity, or Developer Tools.
+**Category:** Productivity (Workflow & Planning). Developer Tools also fits, but the default experience is written for people who use spreadsheets, not for developers.
 
 **Detailed description:**
 
-> PageHarvest turns the repeated parts of a web page, such as product cards, search results, listings or tables, into rows and columns you can edit and export.
+> PageHarvest turns a list on a web page, such as products, search results, listings or a table, into a spreadsheet.
 >
-> - Find data automatically, or point at one item and PageHarvest finds the others like it.
-> - Review the suggested columns, rename them, and add your own from any text, link, image or attribute.
-> - Follow Next buttons, numbered page addresses, or infinite scroll, with limits and delays you set.
-> - Close the panel at any time: the job keeps running and its rows are saved as they arrive.
-> - Edit, filter, sort, find and replace, and remove duplicates in the built-in grid.
-> - Export CSV, JSON, NDJSON or Excel, or copy the table.
+> - Press one button and PageHarvest finds the list on the page and shows you the first rows before anything is saved. If it picks the wrong thing, click one item yourself and it finds the others like it.
+> - Untick the columns you do not need and rename the rest.
+> - If the list continues on more pages, PageHarvest can follow the Next button or scroll for more, up to the number of pages you choose.
+> - Close the panel at any time: it keeps working, and rows are saved as they arrive.
+> - Download an Excel or CSV file, or copy the table.
 >
-> Everything stays on your computer. PageHarvest has no account, no analytics and no server, and makes no network requests of its own. It does not bypass logins, paywalls or CAPTCHAs.
+> Advanced options, a switch in Settings, adds the detailed controls: column types (text, link, image, number, attribute, pattern), page-number addresses, waiting times and limits, saved setups you can run again, a grid with find and replace, filters and duplicate removal, and JSON and NDJSON files.
+>
+> Everything stays on your computer. PageHarvest has no account, no analytics and no server, and makes no network requests of its own. It does not bypass logins, paywalls or CAPTCHAs. You are responsible for following the terms of the websites you collect from.
 
-**Screenshots:** 1280x800 or 640x400, one to five. `store-assets/screenshot-1280x800.png` is a draft that shows test data and `127.0.0.1` addresses; replace it with screenshots of a real public page before submitting.
+**Screenshots:** 1280x800 or 640x400, one to five. `pnpm build && node scripts/generate-screenshots.mjs` writes them to `store-assets/` from the built extension running on a public practice site (`books.toscrape.com`, a book shop made for scraping practice). They show the real panel and real collected rows; nothing in them is mocked up. Do not use screenshots that show another company's name or products as if PageHarvest were connected to them.
 
 **Small promo tile:** `store-assets/promo-440x280.png`.
 
@@ -46,15 +47,16 @@ What to enter in the Chrome Web Store developer dashboard, and what to check bef
 
 | Permission | Justification |
 | --- | --- |
-| Host permission (`http://*/*`, `https://*/*`) | The user can extract data from any website they choose, and which one cannot be known in advance. PageHarvest has no static content script: it injects its script only into the page the user starts extraction on, and into each following page of a multi-page job the user started. It reads page content only when the user asks it to, from the panel, never changes a page's data, and sends nothing off the device. |
-| `activeTab` | Reads the address and title of the tab the user opens PageHarvest on, to show the page and decide whether extraction can run there. |
+| Host permission (`http://*/*`, `https://*/*`) | The user can extract data from any website they choose, and which one cannot be known in advance. PageHarvest has no static content script: it injects its script only into the page the user starts extraction on, and into each following page of a multi-page job the user started (the job follows the site's Next button or page addresses, and has to keep working after the user closes the panel or the tab reloads, which `activeTab` alone does not allow). It reads page content only when the user asks it to, from the panel, does not edit or submit anything on a site, and sends nothing off the device. |
+| `activeTab` | When the user clicks the toolbar button, tells PageHarvest which page it was opened on, including browser pages and the Web Store, where it cannot run, so the panel can say "this page cannot be read" instead of failing. It is also what grants the page to users who have limited the extension's site access to "when you click the extension". |
+| `scripting` | Injects the extension's own bundled content script (`content-scripts/content.js`) into the page the user starts extraction on, and checks whether a page of a running job already has it. No remote code and no code strings are injected. |
 | `sidePanel` | The whole interface is in Chrome's side panel. |
-| `storage` | Remembers whether the user has finished the first-run tour. |
-| `downloads` | Saves exports (CSV, JSON, NDJSON, XLSX) to the user's Downloads folder. |
+| `storage` | Remembers two preferences in `chrome.storage.local`: whether Advanced options is on, and whether the user has finished the first-run tour. Extracted data is in IndexedDB, not here. |
+| `downloads` | Saves exports (XLSX, CSV, JSON, NDJSON) to the user's Downloads folder, reads back the name the file was saved under, and opens its folder when the user presses "Show in folder". |
 
-**Remote code:** No, I am not using remote code. All scripts are in the package; there is no `eval`, `new Function` or remote script.
+**Remote code:** No, I am not using remote code. All scripts are in the package; there is no `eval`, `new Function` or remote script, and the panel loads no remote images, fonts or styles.
 
-**Data usage:** tick **Website content** only, because the extension reads the content of pages the user extracts from. It is processed and stored only on the user's device and never transmitted. Do not tick any other category.
+**Data usage:** tick **Website content** only, because the extension reads the content of pages the user extracts from. It is processed and stored only on the user's device and never transmitted. Do not tick any other category: the address of the open tab is shown in the panel and not kept, and nothing is collected about the user.
 
 Then certify all three:
 
@@ -66,7 +68,11 @@ Then certify all three:
 
 ## Install warnings
 
-One warning at install (ADR-040): "Read and change all your data on all websites". Chrome words it; an extension cannot change or remove it. In exchange nobody is asked for access site by site while working. A broad host permission also means the Chrome Web Store reviews the item in more depth, which can take longer. The decision is in [DECISIONS.md](DECISIONS.md).
+One warning at install (ADR-040): "Read and change all your data on all websites". Chrome words it; an extension cannot change or remove it. In exchange nobody is asked for access site by site while working. A broad host permission also means the Chrome Web Store reviews the item in more depth, which can take longer, and a reviewer may ask why `activeTab` alone is not enough: the answer is in the host permission's justification above (multi-page jobs that outlive the panel and a page reload). The decision is in [DECISIONS.md](DECISIONS.md).
+
+## Open-source licences
+
+The package contains `THIRD_PARTY_NOTICES.txt`, the licence text of every bundled package (MIT, ISC and Apache-2.0, which all require it). `pnpm build` and `pnpm zip` regenerate it, a unit test fails when it is out of date, and Help links to it.
 
 ## Before you submit
 
@@ -75,5 +81,6 @@ One warning at install (ADR-040): "Read and change all your data on all websites
 - [x] `pnpm audit --prod` reports no vulnerabilities.
 - [x] `version_name` is `1.0.0`. Re-run `pnpm zip` on the commit being submitted.
 - [ ] Manual check in branded Chrome passed ([FEATURE_AUDIT.md](FEATURE_AUDIT.md), "Native Chrome Side Panel manual verification").
-- [ ] Screenshots replaced with a real public page.
+- [x] Screenshots show a real public practice page, generated from the build being submitted.
 - [ ] `PRIVACY.md` merged to `main`, and its URL opens.
+- [ ] The Excel file opens in Excel, Google Sheets and LibreOffice (open one download in each by hand).

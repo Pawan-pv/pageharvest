@@ -3,7 +3,7 @@ import { MousePointer, Sparkles, Table, Link2, ChevronRight } from 'lucide-react
 
 export interface QuickActionsProps {
   disabled?: boolean;
-  /** The page is a website PageHarvest has not been given yet (ADR-037), not a browser page. */
+  /** A website the user has kept PageHarvest off in Chrome's settings (ADR-040), not a browser page. */
   needsAccess?: boolean;
   /** Advanced options is on: both large choices are shown, as before simple mode (ADR-039). */
   advanced?: boolean;
@@ -97,7 +97,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
       <p className="text-xs text-fg-muted">
         {needsAccess
           ? 'Click the PageHarvest button in the Chrome toolbar to start. The panel updates by itself.'
-          : 'Open a normal website tab to start. Then press Refresh above.'}
+          : 'Open a normal website tab to start. This panel follows the tab you are on.'}
       </p>
     )}
 

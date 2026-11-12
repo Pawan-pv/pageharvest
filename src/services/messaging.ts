@@ -11,7 +11,7 @@ import {
 } from '@/contracts/messages';
 import { MessagingClient } from '@/platform/messaging-client';
 import { injectContentScript } from '@/platform/content-script';
-import { requestSiteOrigin, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
+import { hasAllSitesAccess, requestSiteOrigin, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import { isHarvestableUrl } from '@/platform/tab-manager';
 import { JobIdentity } from '@/shared/contracts/job';
 import { ExtractionRecipe, FieldDefinition } from '@/types';
@@ -69,11 +69,12 @@ export interface TabInfo {
   id?: number;
   url: string;
   title: string;
-  favIconUrl?: string;
   isInjectable: boolean;
   /**
-   * Chrome hides the page's address: PageHarvest has no access to this tab yet (ADR-037).
-   * A click on the toolbar button grants it for the page; browser pages stay hidden.
+   * Chrome hides the page's address because the user has limited PageHarvest's site access
+   * in Chrome's settings. A click on the toolbar button grants it for the page. While every
+   * website is allowed (the installed state, ADR-040) a hidden address is a browser page,
+   * which no click can open up, so this stays false.
    */
   needsAccess?: boolean;
 }
@@ -172,9 +173,10 @@ class ExtensionMessagingService {
             id: tab.id,
             url,
             title: url ? title : 'This page',
-            favIconUrl: tab.favIconUrl,
             isInjectable: isHarvestableUrl(url),
-            needsAccess: !url && typeof tab.id === 'number',
+            // Asked only for a hidden address: every website's address is visible while
+            // PageHarvest holds the access it was installed with.
+            needsAccess: !url && typeof tab.id === 'number' && !(await hasAllSitesAccess()),
           };
         }
       } catch (err) {

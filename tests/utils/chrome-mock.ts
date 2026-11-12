@@ -84,7 +84,8 @@ export class ChromeMock {
         responseCallback(undefined);
       }
     },
-    getURL: (path: string) => `chrome-extension://${this.runtime.id}/${path.replace(/^\//, '')}`
+    getURL: (path: string) => `chrome-extension://${this.runtime.id}/${path.replace(/^\//, '')}`,
+    getManifest: () => ({ manifest_version: 3, name: 'PageHarvest', version: '1.0.0' })
   };
 
   public tabs = {

@@ -233,21 +233,14 @@ export const App: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-canvas text-fg">
       {/* Top Header */}
-      {/* The side panel opens at about 360px and can be narrowed to 320px, so the header gives
-          way in that order: the version badge, then the wordmark (still read out), never the nav. */}
+      {/* The side panel opens at about 360px and can be narrowed to 320px, so at the narrowest
+          the wordmark gives way (it is still read out), never the nav. The version is in Help. */}
       <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-xs border-b border-line px-3 py-2.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-6 h-6 shrink-0 rounded-md bg-brand text-on-strong flex items-center justify-center shadow-xs">
             <Wheat aria-hidden="true" className="w-3.5 h-3.5" />
           </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <h1 className="text-sm font-bold tracking-tight text-fg truncate max-[339px]:sr-only">
-              PageHarvest
-            </h1>
-            <span className="shrink-0 text-2xs font-medium text-fg-subtle bg-surface-muted rounded px-1.5 py-px max-[379px]:hidden">
-              v1.0
-            </span>
-          </div>
+          <h1 className="text-sm font-bold tracking-tight text-fg truncate max-[339px]:sr-only">PageHarvest</h1>
         </div>
 
         {/* Navigation pill switcher */}
