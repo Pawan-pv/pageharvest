@@ -243,10 +243,27 @@ export class ChromeMock {
     setOptions: vi.fn().mockResolvedValue(undefined)
   };
 
+  /** What chrome.downloads.search reports for each download id. Tests set an entry to change it. */
+  public downloadItems: Map<number, Partial<chrome.downloads.DownloadItem>> = new Map();
+
   public downloads = {
-    download: vi.fn((_options: chrome.downloads.DownloadOptions) => {
-      return Promise.resolve(12345);
-    })
+    download: vi.fn((options: chrome.downloads.DownloadOptions) => {
+      const id = 12345;
+      // Chrome saves into the user's Downloads folder and finishes a small file at once.
+      if (!this.downloadItems.has(id)) {
+        this.downloadItems.set(id, {
+          id,
+          state: 'complete',
+          filename: `C:\\Users\\someone\\Downloads\\${options.filename ?? 'download'}`,
+        });
+      }
+      return Promise.resolve(id);
+    }),
+    search: vi.fn((query: chrome.downloads.DownloadQuery) => {
+      const items = [...this.downloadItems.values()].filter((item) => query.id === undefined || item.id === query.id);
+      return Promise.resolve(items as chrome.downloads.DownloadItem[]);
+    }),
+    show: vi.fn((_downloadId: number) => undefined)
   };
 
   // Implementations are passed to vi.fn(impl), not set with mockImplementation, so that
@@ -302,6 +319,9 @@ export class ChromeMock {
     this.sidePanel.setPanelBehavior.mockClear();
     this.sidePanel.setOptions.mockClear();
     this.downloads.download.mockClear();
+    this.downloads.search.mockClear();
+    this.downloads.show.mockClear();
+    this.downloadItems.clear();
     this.permissions.contains.mockClear();
     this.permissions.request.mockClear();
     this.permissions.remove.mockClear();
