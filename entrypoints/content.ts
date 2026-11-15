@@ -5,6 +5,7 @@ import { ExtensionMessage } from '@/contracts/messages';
 import { PickerMessenger } from '@/content/picker';
 import { createContentWorkflowCoordinator, DetectionError } from '@/content/workflow-coordinator';
 import { errorReporter } from '@/core/resilience/error-reporter';
+import { stopPickerWhenPanelGoes } from '@/platform/picker-lifetime';
 
 interface PageHarvestWindow extends Window {
   __PAGEHARVEST_INJECTED__?: boolean;
@@ -38,6 +39,8 @@ export default defineContentScript({
     const router = new MessageRouter();
     const client = new MessagingClient();
     const pickerMessenger = new PickerMessenger();
+    // The picker ends with the panel that started it: closed, reloaded or gone.
+    stopPickerWhenPanelGoes(() => pickerMessenger.stopPicker());
 
     const emitToExtension = async (message: ExtensionMessage): Promise<void> => {
       // One-way notification. With no panel open there is simply nobody listening.

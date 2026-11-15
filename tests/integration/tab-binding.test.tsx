@@ -199,3 +199,52 @@ describe('A saved setup, and its preview, belong to the tab it was opened on', (
     expect(pageA.received).toContain('PREVIEW_FIELDS');
   });
 });
+
+describe('The picker stops when the panel leaves it', () => {
+  let port: { name: string; disconnect: ReturnType<typeof vi.fn>; onDisconnect: { addListener: () => void } };
+  let connect: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    await db.clearAllData();
+    await usePanelMode('simple');
+    installBackgroundThatReachesThePages();
+    chromeMock.activeTab = { ...chromeMock.activeTab, id: TAB_A, url: URL_A, title: 'Books' };
+    port = { name: 'pageharvest-picker', disconnect: vi.fn(), onDisconnect: { addListener: () => undefined } };
+    connect = vi.fn(() => port);
+    Object.assign(chrome.tabs, { connect });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('holds the picking tab while picking, and lets go when the panel closes', async () => {
+    const user = userEvent.setup();
+    const pageA = installFakePage(booksHtml(20), TAB_A, { url: URL_A });
+    const view = render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Pick one item myself' }));
+    expect(await screen.findByRole('heading', { name: 'Click one item on the page' })).toBeInTheDocument();
+    expect(connect).toHaveBeenCalledWith(TAB_A, { name: 'pageharvest-picker' });
+    expect(pageA.received).toContain('START_PICKER');
+
+    view.unmount();
+    expect(port.disconnect).toHaveBeenCalled();
+  });
+
+  it('stops the picker on its own tab, and says so, when the user switches tabs', async () => {
+    const user = userEvent.setup();
+    const pageA = installFakePage(booksHtml(20), TAB_A, { url: URL_A });
+    const pageB = installFakePage(JOBS_HTML, TAB_B, { url: URL_B, listen: false });
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Pick one item myself' }));
+    await screen.findByRole('heading', { name: 'Click one item on the page' });
+
+    await activate(TAB_B, URL_B, 'Jobs');
+
+    expect(await screen.findByText(/Picking stopped because you switched to another tab/)).toBeInTheDocument();
+    await waitFor(() => expect(pageA.received).toContain('STOP_PICKER'));
+    expect(pageB.received).toEqual([]);
+    expect(port.disconnect).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Get the list on this page' })).toBeInTheDocument();
+  });
+});
