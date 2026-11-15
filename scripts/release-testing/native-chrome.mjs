@@ -241,11 +241,11 @@ async function collectEvidence({ browser, port, evidence, artifactDirectory, not
     () => true,
     () => false
   );
-  // A fresh profile opens in simple mode (ADR-039), as a new user's does.
+  // A fresh profile opens in simple mode (ADR-039), as a new user's does: the list is found
+  // and shown, the user says it is theirs, and collecting starts from the columns screen.
   await clickPanelButton(panel, 'Get the list on this page');
-  await clickPanelButton(panel, 'Use this list');
-  await clickPanelButton(panel, 'Next: Pagination');
-  await clickPanelButton(panel, 'Start extraction');
+  await clickPanelButton(panel, 'Yes, this is my list');
+  await clickPanelButton(panel, 'Start collecting');
   try {
     await waitFor('the job to complete', async () =>
       (await readFromDatabase(panel, 'jobs')).some((job) => job.status === 'COMPLETED')
