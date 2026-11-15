@@ -743,6 +743,9 @@ export function useExtractionWorkflow(tab: TabInfo) {
     });
     setView('extracting');
 
+    // Background and panel share this machine's clock, so a job started by this click has
+    // startedAt at or after it.
+    const clickedAt = Date.now();
     try {
       const identity = await messagingService.startJob({
         recipe,
@@ -757,10 +760,17 @@ export function useExtractionWorkflow(tab: TabInfo) {
         await followJob(job);
       }
     } catch (err) {
+      // The request can fail while the job runs: the reply timed out, or a retry was refused
+      // because the first attempt had already started it. Storage decides, not the reply.
+      const started = await repositories.jobs.findJobStartedInTabSince(tab.id, clickedAt).catch(() => undefined);
+      if (started && started.status !== 'FAILED') {
+        await followJob(started);
+        return;
+      }
       setStats(IDLE_STATS);
       // A grant revoked between the panel's request and START_JOB comes back as the
       // background's SITE message; operationErrorFrom keeps the typed code.
-      handleOperationError(err, 'config_fields');
+      handleOperationError(started?.errorMessage ? new Error(started.errorMessage) : err, 'config_fields');
     }
   }, [
     activeRecipeId,
