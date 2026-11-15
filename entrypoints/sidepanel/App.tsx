@@ -10,6 +10,7 @@ import { MainDashboard } from '@/components/dashboard/MainDashboard';
 import { Stepper } from '@/components/common/Stepper';
 import { ScanningState } from '@/components/shell/ScanningState';
 import { flowSteps, simpleFlowSteps, stepForView, type FlowKind } from '@/components/shell/flow';
+import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
 import { requestSiteOrigin } from '@/platform/permissions';
 import { simpleStartingPagination } from '@/components/simple/more-pages';
@@ -67,6 +68,10 @@ const SimpleProgress = lazy(() =>
 const SimpleDone = lazy(() => import('@/components/simple/Done').then((module) => ({ default: module.SimpleDone })));
 const SimpleMyData = lazy(() =>
   import('@/components/simple/MyData').then((module) => ({ default: module.SimpleMyData }))
+);
+// Shown only when the user switches tabs with a list found, so it is not in the opening chunk.
+const ListOnAnotherTab = lazy(() =>
+  import('@/components/shell/ListOnAnotherTab').then((module) => ({ default: module.ListOnAnotherTab }))
 );
 // Shown only after an interruption or an error, so neither is in the chunk every open pays for.
 const RecoveryBanner = lazy(() =>
@@ -365,6 +370,11 @@ export const App: React.FC = () => {
         ) : (
         <>
         {/* 1. Main Dashboard */}
+        {workflow.view === 'dashboard' && workflow.notice && (
+          <Banner tone="info" className="m-3 mb-0" onDismiss={workflow.clearNotice}>
+            {workflow.notice}
+          </Banner>
+        )}
         {workflow.view === 'dashboard' && (
           <MainDashboard
             tab={tab}
@@ -382,16 +392,27 @@ export const App: React.FC = () => {
           />
         )}
 
+        {/* A list found on a tab that is not in front: go back to it, or start again here. */}
+        {workflow.listElsewhere && workflow.listSource && (
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading…</div>}>
+            <ListOnAnotherTab
+              source={workflow.listSource}
+              onGoBack={() => void workflow.goBackToListTab()}
+              onStartOver={handleNewExtraction}
+            />
+          </Suspense>
+        )}
+
         {/* 2. Visual Element Picking State */}
-        {workflow.view === 'inspecting' && activeFlow && activeFlow !== 'pick' && (
+        {workflow.view === 'inspecting' && !workflow.listElsewhere && activeFlow && activeFlow !== 'pick' && (
           <ScanningState kind={activeFlow} onCancel={workflow.resetToDashboard} />
         )}
-        {workflow.view === 'inspecting' && (!activeFlow || activeFlow === 'pick') && !advanced && (
+        {workflow.view === 'inspecting' && !workflow.listElsewhere && (!activeFlow || activeFlow === 'pick') && !advanced && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading…</div>}>
             <SimplePicking inspectedElement={workflow.inspectedElement} onCancel={workflow.cancelVisualPicker} />
           </Suspense>
         )}
-        {workflow.view === 'inspecting' && (!activeFlow || activeFlow === 'pick') && advanced && (
+        {workflow.view === 'inspecting' && !workflow.listElsewhere && (!activeFlow || activeFlow === 'pick') && advanced && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading picker…</div>}>
             <ElementSelectionBanner
               inspectedElement={workflow.inspectedElement}
@@ -408,10 +429,10 @@ export const App: React.FC = () => {
         )}
 
         {/* 3. Detected List Preview */}
-        {workflow.view === 'review_list' && workflow.detectedList && !advanced && acceptsListForUser && (
+        {workflow.view === 'review_list' && !workflow.listElsewhere && workflow.detectedList && !advanced && acceptsListForUser && (
           <ScanningState kind={activeFlow ?? 'auto'} onCancel={workflow.resetToDashboard} />
         )}
-        {workflow.view === 'review_list' && workflow.detectedList && !advanced && !acceptsListForUser && (
+        {workflow.view === 'review_list' && !workflow.listElsewhere && workflow.detectedList && !advanced && !acceptsListForUser && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading lists…</div>}>
             <SimpleListChooser
               detectedList={workflow.detectedList}
@@ -421,7 +442,7 @@ export const App: React.FC = () => {
             />
           </Suspense>
         )}
-        {workflow.view === 'review_list' && workflow.detectedList && advanced && (
+        {workflow.view === 'review_list' && !workflow.listElsewhere && workflow.detectedList && advanced && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading lists…</div>}>
             <DetectedListPreview
               detectedList={workflow.detectedList}
@@ -437,7 +458,7 @@ export const App: React.FC = () => {
         )}
 
         {/* 4. Field Selection & Pagination Config */}
-        {workflow.view === 'config_fields' && workflow.detectedList && showsSimpleCheck && (
+        {workflow.view === 'config_fields' && !workflow.listElsewhere && workflow.detectedList && showsSimpleCheck && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your list…</div>}>
             <SimpleListCheck
               detectedList={workflow.detectedList}
@@ -452,7 +473,7 @@ export const App: React.FC = () => {
             />
           </Suspense>
         )}
-        {workflow.view === 'config_fields' && workflow.detectedList && showsSimpleColumns && (
+        {workflow.view === 'config_fields' && !workflow.listElsewhere && workflow.detectedList && showsSimpleColumns && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading columns…</div>}>
             <SimpleColumns
               detectedList={workflow.detectedList}
@@ -467,7 +488,7 @@ export const App: React.FC = () => {
             />
           </Suspense>
         )}
-        {workflow.view === 'config_fields' && workflow.detectedList && showsDetailedColumns && (
+        {workflow.view === 'config_fields' && !workflow.listElsewhere && workflow.detectedList && showsDetailedColumns && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading columns…</div>}>
             <FieldSelectionPanel
               detectedList={workflow.detectedList}

@@ -1,7 +1,14 @@
 import { CandidateKind, ListCandidate, MoreItemsHint } from '@/shared/contracts/message';
 import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ensureContentScriptForPicking, isSitePermissionError, messagingService, TabInfo } from '@/services/messaging';
+import {
+  ensureContentScriptForPicking,
+  isSitePermissionError,
+  messagingService,
+  type MessageOrigin,
+  TabInfo,
+} from '@/services/messaging';
+import { activateTab } from '@/platform/tab-manager';
 import { requestSiteOrigin, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import {
   ExtractionJob,
@@ -40,6 +47,27 @@ export type WorkflowView =
   | 'results'
   | 'history'
   | 'settings';
+
+/**
+ * The tab and page a list was found on. Every message about the list goes to that tab, and
+ * the list can be used only while that tab is in front and still shows that page.
+ */
+export interface ListSource {
+  tabId: number;
+  url: string;
+  title: string;
+}
+
+/** The screens that show a list the user found but has not started collecting yet. */
+const LIST_VIEWS: readonly WorkflowView[] = ['inspecting', 'review_list', 'config_fields'];
+
+/** Two addresses name the same document if they differ at most in the #fragment. */
+function sameDocument(a: string, b: string): boolean {
+  return a.split('#')[0] === b.split('#')[0];
+}
+
+export const LIST_GONE_NOTICE = 'The page changed, so the list you found is gone. Get the list again on this page.';
+const LIST_ELSEWHERE_ERROR = 'This list is on another tab. Go back to that tab to start, or get the list again on this page.';
 
 export interface InspectedElement {
   selector: string;
@@ -103,6 +131,16 @@ const IDLE_STATS: ExtractionStats = {
 };
 
 const REFRESH_INTERVAL_MS = 1000;
+
+/** Messages a page sends about the list being found on it. */
+const PAGE_REPORTS: ReadonlySet<ExtensionMessage['type']> = new Set<ExtensionMessage['type']>([
+  'ELEMENT_SELECTED',
+  'SELECTION_CANCELLED',
+  'SELECTION_CONFIRMED',
+  'REPEATED_ELEMENTS_DETECTED',
+  'FIELDS_DETECTED',
+  'EXTRACTION_ERROR',
+]);
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -200,6 +238,9 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const [activeRecipeId, setActiveRecipeId] = useState<string | undefined>(undefined);
   const [runSummary, setRunSummary] = useState<ExtractionStats | null>(null);
   const [recordWarningThreshold, setRecordWarningThreshold] = useState<number | undefined>(undefined);
+  const [listSource, setListSourceState] = useState<ListSource | null>(null);
+  // A plain message for the start screen, such as why a found list was dropped.
+  const [notice, setNotice] = useState<string | null>(null);
 
   // The job this panel is displaying. Commands and storage decide what it does; this
   // only decides which job's state is on screen.
@@ -208,6 +249,26 @@ export function useExtractionWorkflow(tab: TabInfo) {
   // Pagination settings the person, or a recipe they loaded, has set. Saved defaults arrive
   // asynchronously when the panel opens and must never overwrite these.
   const setPaginationKeysRef = useRef(new Set<keyof ExtractionPaginationConfig>());
+  // Read by the message listener and the tab watchers, which outlive any one render.
+  const listSourceRef = useRef<ListSource | null>(null);
+  const viewRef = useRef<WorkflowView>(view);
+  viewRef.current = view;
+
+  const setListSource = useCallback((source: ListSource | null) => {
+    listSourceRef.current = source;
+    setListSourceState(source);
+  }, []);
+
+  /** Binds what is found next to the tab in front now. */
+  const bindToTab = useCallback(
+    (current: TabInfo) => {
+      setListSource(typeof current.id === 'number' ? { tabId: current.id, url: current.url, title: current.title } : null);
+    },
+    [setListSource]
+  );
+
+  /** The list's tab id, for messages about the list. Undefined before anything is bound. */
+  const listTabId = () => listSourceRef.current?.tabId;
 
   const handleOperationError = useCallback((error: unknown, fallbackView: WorkflowView) => {
     console.warn('PageHarvest operation failed:', errorText(error));
@@ -336,14 +397,20 @@ export function useExtractionWorkflow(tab: TabInfo) {
 
   // Listen to incoming messages
   useEffect(() => {
-    const unsubscribe = messagingService.subscribe((message: ExtensionMessage) => {
+    const unsubscribe = messagingService.subscribe((message: ExtensionMessage, origin: MessageOrigin = {}) => {
+      // A page speaks for its own tab. What a page in any other tab reports, or a page
+      // when no list is being found, is not about this panel's list.
+      if (origin.tabId !== undefined && PAGE_REPORTS.has(message.type)) {
+        const source = listSourceRef.current;
+        if (!source || source.tabId !== origin.tabId) return;
+      }
       switch (message.type) {
         case 'ELEMENT_SELECTED': {
           const { selector, tagName, classList, textSnippet } = message.payload;
           setInspectedElement({ selector, tagName, classList, textSnippet });
 
           // Auto-trigger list detection using this selected element
-          messagingService.detectRepeatedElements(selector).catch((err: unknown) => {
+          messagingService.detectRepeatedElements(selector, undefined, listTabId()).catch((err: unknown) => {
             setOperationError({ message: errorText(err) });
           });
           break;
@@ -428,22 +495,24 @@ export function useExtractionWorkflow(tab: TabInfo) {
       // TAB_DISCONNECTED-equivalent; missing grant throws SITE (see #5).
       await ensureContentScriptForPicking(tab);
       setOperationError(null);
+      setNotice(null);
       setInspectedElement(null);
       setActiveRecipeId(undefined);
+      bindToTab(tab);
       setView('inspecting');
       pickerActiveRef.current = true;
-      await messagingService.startElementPicker();
+      await messagingService.startElementPicker(tab.id);
     } catch (err) {
       pickerActiveRef.current = false;
       handleOperationError(err, 'dashboard');
     }
-  }, [handleOperationError, tab]);
+  }, [bindToTab, handleOperationError, tab]);
 
   const stopPickerQuietly = useCallback(async () => {
     if (!pickerActiveRef.current) return;
     pickerActiveRef.current = false;
     try {
-      await messagingService.stopElementPicker();
+      await messagingService.stopElementPicker(listTabId());
     } catch (err) {
       console.warn('Could not cleanly stop element picker:', err);
     }
@@ -461,13 +530,15 @@ export function useExtractionWorkflow(tab: TabInfo) {
     try {
       await ensureContentScriptForPicking(tab);
       setOperationError(null);
+      setNotice(null);
       setActiveRecipeId(undefined);
+      bindToTab(tab);
       setView('inspecting');
-      await messagingService.detectRepeatedElements();
+      await messagingService.detectRepeatedElements(undefined, undefined, tab.id);
     } catch (err) {
       handleOperationError(err, 'dashboard');
     }
-  }, [handleOperationError, tab]);
+  }, [bindToTab, handleOperationError, tab]);
 
   const selectListCandidate = useCallback((candidate: ListCandidate) => {
     setDetectedList((current) => ({
@@ -486,14 +557,16 @@ export function useExtractionWorkflow(tab: TabInfo) {
       try {
         await ensureContentScriptForPicking(tab);
         setOperationError(null);
+        setNotice(null);
         setActiveRecipeId(undefined);
+        bindToTab(tab);
         setView('inspecting');
-        await messagingService.detectRepeatedElements(undefined, mode);
+        await messagingService.detectRepeatedElements(undefined, mode, tab.id);
       } catch (err) {
         handleOperationError(err, 'dashboard');
       }
     },
-    [handleOperationError, tab]
+    [bindToTab, handleOperationError, tab]
   );
 
   const loadProjects = useCallback(async () => {
@@ -512,7 +585,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       void loadProjects();
 
       try {
-        await messagingService.detectFields(candidate.containerSelector, candidate.kind);
+        await messagingService.detectFields(candidate.containerSelector, candidate.kind, listTabId());
       } catch (err) {
         setFields([]);
         setSelectedFieldIds(new Set());
@@ -567,6 +640,10 @@ export function useExtractionWorkflow(tab: TabInfo) {
       if (!detectedList) {
         return { ok: false, code: 'CONTAINER_NOT_FOUND', message: 'Choose a list on the page first.' };
       }
+      const source = listSourceRef.current;
+      if (source && source.tabId !== tab.id) {
+        return { ok: false, code: 'VALIDATION_ERROR', message: 'This list is on another tab.' };
+      }
       if (activeJob && isActiveJobStatus(activeJob.status) && activeJob.tabId === tab.id) {
         return {
           ok: false,
@@ -586,6 +663,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       // The backup anchor is sent only so the page can say the list moved; nothing is written back.
       return messagingService.previewFields(detectedList.containerSelector, columns, {
         containerAnchor: detectedList.containerAnchor,
+        tabId: source?.tabId ?? tab.id,
       });
     },
     [activeJob, detectedList, tab]
@@ -634,6 +712,11 @@ export function useExtractionWorkflow(tab: TabInfo) {
     }
     if (typeof tab.id !== 'number') {
       setOperationError({ message: 'There is no open page to collect from.', code: 'VALIDATION_ERROR' });
+      return;
+    }
+    const source = listSourceRef.current;
+    if (source && (source.tabId !== tab.id || (source.url && tab.url && !sameDocument(source.url, tab.url)))) {
+      setOperationError({ message: LIST_ELSEWHERE_ERROR, code: 'VALIDATION_ERROR' });
       return;
     }
 
@@ -749,13 +832,14 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setStats(IDLE_STATS);
       setInspectedElement(null);
       setDetectedList(null);
+      setListSource(null);
       setCurrentDataset(null);
       setRecords([]);
       setView('dashboard');
     } catch (err) {
       setOperationError({ message: errorText(err) });
     }
-  }, [repositories]);
+  }, [repositories, setListSource]);
 
   const recoverJob = useCallback(
     async (jobId: string) => {
@@ -812,9 +896,10 @@ export function useExtractionWorkflow(tab: TabInfo) {
     setView('dashboard');
     setInspectedElement(null);
     setDetectedList(null);
+    setListSource(null);
     setCurrentDataset(null);
     setRecords([]);
-  }, []);
+  }, [setListSource]);
 
   const updateRecordCell = useCallback(
     async (recordId: string, fieldName: string, value: string | number | null) => {
@@ -894,9 +979,12 @@ export function useExtractionWorkflow(tab: TabInfo) {
       }
       setSelectedProjectId(config.projectId);
       void loadProjects();
+      // A saved setup runs on the page it is opened on, like a list found there.
+      bindToTab(tab);
+      setNotice(null);
       setView('config_fields');
     },
-    [loadProjects]
+    [bindToTab, loadProjects, tab]
   );
 
   /** A change made on the Pagination step. What it sets is kept over the saved defaults. */
@@ -923,9 +1011,61 @@ export function useExtractionWorkflow(tab: TabInfo) {
     [applyConfiguration]
   );
 
+  /** The found list's page is gone: drop the list and say so on the start screen. */
+  const dropList = useCallback(() => {
+    if (!LIST_VIEWS.includes(viewRef.current)) return;
+    if (pickerActiveRef.current) {
+      void stopPickerQuietly();
+    }
+    resetToDashboard();
+    setNotice(LIST_GONE_NOTICE);
+  }, [resetToDashboard, stopPickerQuietly]);
+
+  // The list's own tab navigated or closed, whether or not it is in front.
+  useEffect(() => {
+    if (!listSource || typeof chrome === 'undefined' || !chrome.tabs?.onUpdated) return undefined;
+    const onUpdated = (tabId: number, changeInfo: { url?: string }) => {
+      if (tabId !== listSource.tabId || !changeInfo.url || !listSource.url) return;
+      if (!sameDocument(changeInfo.url, listSource.url)) dropList();
+    };
+    const onRemoved = (tabId: number) => {
+      if (tabId === listSource.tabId) dropList();
+    };
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.onRemoved?.addListener(onRemoved);
+    return () => {
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      chrome.tabs.onRemoved?.removeListener(onRemoved);
+    };
+  }, [dropList, listSource]);
+
+  // The same, seen through the active tab: it is the list's tab, on another page.
+  useEffect(() => {
+    if (!listSource || tab.id !== listSource.tabId || !tab.url || !listSource.url) return;
+    if (!sameDocument(tab.url, listSource.url)) dropList();
+  }, [dropList, listSource, tab.id, tab.url]);
+
+  const listElsewhere =
+    listSource !== null && LIST_VIEWS.includes(view) && typeof tab.id === 'number' && tab.id !== listSource.tabId;
+
+  const goBackToListTab = useCallback(async () => {
+    const source = listSourceRef.current;
+    if (!source) return;
+    try {
+      await activateTab(source.tabId);
+    } catch {
+      dropList();
+    }
+  }, [dropList]);
+
   return {
     view,
     setView,
+    listSource,
+    listElsewhere,
+    goBackToListTab,
+    notice,
+    clearNotice: useCallback(() => setNotice(null), []),
     inspectedElement,
     detectedList,
     fields,
