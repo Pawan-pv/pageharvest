@@ -10,6 +10,7 @@ import { ExtractionProject } from '@/shared/contracts/project';
 import { ExtractionJob, JobCheckpoint, JobStatus } from '@/shared/contracts/job';
 import { ExtractionSchema } from '@/shared/contracts/schema';
 import { UserSettingsSchema } from '@/shared/contracts/settings';
+import { MIN_PAGE_DELAY_MS } from '@/shared/contracts/pagination';
 
 export type { RecordEntity };
 
@@ -34,6 +35,13 @@ const LEGACY_RUN_STATUS: Record<string, JobStatus> = {
   PAUSED: 'CANCELLED',
   ERROR: 'FAILED',
 };
+
+/** Raises a stored page wait below the minimum (ADR-046). Returns whether it changed anything. */
+function raisePageDelay(pagination: { delayMs?: unknown } | undefined): boolean {
+  if (!pagination || typeof pagination.delayMs !== 'number' || pagination.delayMs >= MIN_PAGE_DELAY_MS) return false;
+  pagination.delayMs = MIN_PAGE_DELAY_MS;
+  return true;
+}
 
 function trailingIndex(id: string): number {
   const match = /_(\d+)$/.exec(id);
@@ -191,6 +199,27 @@ export class PageHarvestDB extends Dexie {
           await recordsTable.bulkPut(group);
         }
       });
+
+    // Version 4: the wait between pages is at least one second (ADR-046). Stored waits below
+    // it (settings, saved setups, column sets, jobs) are raised to it, so they still parse.
+    // No index changes.
+    this.version(4).upgrade(async (tx) => {
+      await tx.table<UserSettings, string>('settings').toCollection().modify((stored) => {
+        const row = stored as unknown as { defaultDelayMs?: unknown };
+        if (typeof row.defaultDelayMs === 'number' && row.defaultDelayMs < MIN_PAGE_DELAY_MS) {
+          row.defaultDelayMs = MIN_PAGE_DELAY_MS;
+        }
+      });
+      await tx.table<ExtractionRecipe, string>('recipes').toCollection().modify((recipe) => {
+        raisePageDelay(recipe.pagination);
+      });
+      await tx.table<ExtractionSchema, string>('schemas').toCollection().modify((schema) => {
+        raisePageDelay(schema.pagination);
+      });
+      await tx.table<ExtractionJob, string>('jobs').toCollection().modify((job) => {
+        raisePageDelay(job.schema?.pagination);
+      });
+    });
   }
 
   /**

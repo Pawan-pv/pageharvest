@@ -18,7 +18,7 @@ export interface SettingsViewProps {
 }
 
 const FIELD_LABELS: Partial<Record<keyof UserSettings, string>> = {
-  defaultDelayMs: 'Default page delay must be between 200 and 30000 ms.',
+  defaultDelayMs: 'Default page delay must be between 1000 and 30000 ms.',
   defaultMaxPages: 'Default max pages must be between 1 and 500.',
   defaultMaxScrolls: 'Default max scrolls must be between 1 and 200.',
   defaultScrollDelayMs: 'Default scroll delay must be between 300 and 10000 ms.',
@@ -193,7 +193,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
           <Input
             type="number"
             label="Default Page Delay (ms)"
-            min={200}
+            min={1000}
             max={30000}
             step={250}
             value={draft.defaultDelayMs}

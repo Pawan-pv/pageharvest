@@ -555,7 +555,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
       const { panel, target, session, pageErrors } = await open(`${FIXTURES}/next-page-pagination.html`);
       await configure(panel);
       await choosePagination(panel, 'next_button');
-      await setLimits(panel, { delayMs: 200 });
+      await setLimits(panel, { delayMs: 1000 });
 
       const recording = recordHud(session, {
         timeoutMs: 60000,

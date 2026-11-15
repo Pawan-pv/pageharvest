@@ -202,12 +202,12 @@ Once containers and fields are defined, the extraction pipeline processes each c
 4. **Limits**:
    - `maxPages` limits pages, `scrollCount` limits scrolls, `maxRecords` limits rows. No limit affects another dimension, and progress is reported in the job's own unit (`pages`, `scrolls` or `single`).
    - Three consecutive batches with nothing new end a job, across documents (`EMPTY_STEP_CIRCUIT_BREAKER`).
-   - `delayMs` is 200ms to 30s, default 1500ms. Pause holds at a gate before each step; cancel aborts delays immediately.
+   - `delayMs` is 1s to 30s, default 1500ms (ADR-046). Pause holds at a gate before each step; cancel aborts delays immediately.
 
 ---
 
 ### 3.7 Persistence Layer (Dexie / IndexedDB)
-All data is in `PageHarvestDB` in the extension's origin, reached through the repositories in `src/storage/repositories/`. The schema is at version 3; see [storage-schema.md](architecture/storage-schema.md) for tables and the production caller of each operation.
+All data is in `PageHarvestDB` in the extension's origin, reached through the repositories in `src/storage/repositories/`. The schema is at version 4; see [storage-schema.md](architecture/storage-schema.md) for tables and the production caller of each operation.
 
 ### 3.7.1 Job Lifecycle & Recovery
 `src/core/state/extraction-machine.ts` is the single authority on transitions. The coordinator rebuilds a machine from the stored job for each event and writes the result in the same transaction, so an illegal transition cannot reach storage.

@@ -47,7 +47,7 @@ describe('Pagination across real document changes', () => {
 
   describe('URL template', () => {
     const recipe = (overrides = {}) =>
-      makeRecipe({ type: 'url_template', urlTemplate: TEMPLATE, maxPages: 5, delayMs: 200, ...overrides });
+      makeRecipe({ type: 'url_template', urlTemplate: TEMPLATE, maxPages: 5, delayMs: 1000, ...overrides });
 
     it('visits each page once and stores every row in order', async () => {
       serveDocuments(harness, { [page(2)]: ['Two'], [page(3)]: [] });
