@@ -221,7 +221,30 @@ describe('UI: Main Dashboard & Website Detection', () => {
     );
     expect(screen.queryByText('My recent data')).not.toBeInTheDocument();
     expect(screen.queryByText('Nothing saved yet')).not.toBeInTheDocument();
-    expect(screen.getByText(/Everything PageHarvest collects stays on this computer/)).toBeInTheDocument();
+    expect(screen.getByText(/Everything it collects stays on this computer/)).toBeInTheDocument();
+  });
+
+  // The store's prominent-disclosure rule (User Data FAQ 10) wants the panel itself to say
+  // what is read and where it is kept, before the first page is read.
+  it.each([false, true])('says what it reads and where it keeps it, before anything is read (advanced: %s)', (advanced) => {
+    render(
+      <MainDashboard
+        advanced={advanced}
+        tab={mockInjectableTab}
+        onRefreshTab={vi.fn()}
+        datasets={[]}
+        onSelectElements={vi.fn()}
+        onAutoDetectLists={vi.fn()}
+        onExtractTable={vi.fn()}
+        onExtractLinks={vi.fn()}
+        onViewDataset={vi.fn()}
+        onViewAllHistory={vi.fn()}
+      />
+    );
+    const note = screen.getByText(/PageHarvest reads only the page you ask it to/);
+    expect(note).toHaveTextContent(
+      'PageHarvest reads only the page you ask it to: its text, links, image addresses and page address. Everything it collects stays on this computer, and nothing is sent anywhere.'
+    );
   });
 
   it('renders empty state in RecentProjectsCard when no datasets exist', () => {
@@ -254,7 +277,7 @@ describe('UI: Main Dashboard & Website Detection', () => {
 
     expect(screen.getByText('books.toscrape.com')).toBeInTheDocument();
     expect(screen.getByText('Get data from this page')).toBeInTheDocument();
-    expect(screen.getByText(/Everything PageHarvest collects stays on this computer/)).toBeInTheDocument();
+    expect(screen.getByText(/Everything it collects stays on this computer/)).toBeInTheDocument();
     expect(screen.getByText('My recent data')).toBeInTheDocument();
   });
 });

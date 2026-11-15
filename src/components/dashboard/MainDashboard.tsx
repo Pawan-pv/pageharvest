@@ -70,7 +70,8 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
 
       <p className="flex items-center gap-1.5 text-2xs text-fg-subtle">
         <ShieldCheck aria-hidden="true" className="w-3.5 h-3.5 shrink-0" />
-        Everything PageHarvest collects stays on this computer. Nothing is sent anywhere.
+        PageHarvest reads only the page you ask it to: its text, links, image addresses and page address. Everything it
+        collects stays on this computer, and nothing is sent anywhere.
       </p>
     </div>
   );
