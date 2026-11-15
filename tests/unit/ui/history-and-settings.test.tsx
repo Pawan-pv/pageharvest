@@ -138,7 +138,7 @@ describe('UI: History & Settings Management', () => {
       expect(await screen.findByText('Settings saved successfully.')).toBeInTheDocument();
     });
 
-    it('opens confirmation modal when clicking Clear All Saved Data', async () => {
+    it('opens a confirmation dialog when clicking Delete all saved data', async () => {
       await db.datasets.add({
         id: 'ds_cleanup',
         name: 'Cleanup Dataset',
@@ -151,13 +151,13 @@ describe('UI: History & Settings Management', () => {
 
       render(<SettingsView onBackToDashboard={vi.fn()} />);
 
-      const clearBtn = await screen.findByRole('button', { name: /clear all saved data/i });
+      const clearBtn = await screen.findByRole('button', { name: 'Delete all saved data' });
       await waitFor(() => {
         expect(clearBtn).not.toBeDisabled();
       });
       fireEvent.click(clearBtn);
 
-      expect(await screen.findByText('Clear All Saved Data?')).toBeInTheDocument();
+      expect(await screen.findByRole('dialog', { name: 'Delete all saved data?' })).toBeInTheDocument();
     });
   });
 });

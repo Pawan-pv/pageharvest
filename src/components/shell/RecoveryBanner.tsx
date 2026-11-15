@@ -8,6 +8,11 @@ import { describeProgress, formatRows } from '@/components/dashboard/progress-co
 
 export interface RecoveryBannerProps {
   job: ExtractionJob;
+  /**
+   * Simple mode (ADR-039): one plain sentence, with where and why the job stopped under
+   * Technical details, and "Continue" and "Stop here and keep my rows" as the two ways on.
+   */
+  simple?: boolean;
   onResume: (jobId: string) => void;
   onDiscard: (jobId: string) => void;
 }
@@ -29,7 +34,7 @@ function siteOf(url: string): string {
  * A stored job that stopped before finishing and can continue. Discarding ends the job but
  * keeps its rows: the background's discard touches the job, checkpoint and history only.
  */
-export const RecoveryBanner: React.FC<RecoveryBannerProps> = ({ job, onResume, onDiscard }) => {
+export const RecoveryBanner: React.FC<RecoveryBannerProps> = ({ job, simple = false, onResume, onDiscard }) => {
   const [isConfirming, setIsConfirming] = useState(false);
   const progress = describeProgress({
     kind: job.progressKind,
@@ -39,6 +44,60 @@ export const RecoveryBanner: React.FC<RecoveryBannerProps> = ({ job, onResume, o
   });
   const where = progress.stepLabel.charAt(0).toLowerCase() + progress.stepLabel.slice(1);
   const rows = formatRows(job.totalExtracted);
+
+  if (simple) {
+    return (
+      <>
+        <Banner
+          tone="warning"
+          title="Stopped early"
+          dataSafety={
+            job.totalExtracted > 0 ? `${rows} saved and safe.` : 'Nothing had been saved yet, so nothing is lost.'
+          }
+          nextStep="Continue to carry on from where it stopped, or stop here and keep the rows you have."
+          details={[`Stopped at ${where}.`, job.interruptedReason].filter(Boolean).join(' ')}
+          actions={
+            <>
+              <Button size="sm" onClick={() => onResume(job.id)}>
+                {needsSiteAccess(job) ? 'Allow access and continue' : 'Continue'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setIsConfirming(true)}>
+                Stop here and keep my rows
+              </Button>
+            </>
+          }
+        >
+          Collecting from {siteOf(job.targetUrl)} stopped before it finished.
+        </Banner>
+
+        <Dialog
+          isOpen={isConfirming}
+          onClose={() => setIsConfirming(false)}
+          title="Stop here?"
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setIsConfirming(false)}>
+                Go back
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setIsConfirming(false);
+                  onDiscard(job.id);
+                }}
+              >
+                Stop here
+              </Button>
+            </>
+          }
+        >
+          Your {job.totalExtracted.toLocaleString('en-US')} saved {job.totalExtracted === 1 ? 'row stays' : 'rows stay'}{' '}
+          in My data. After this, the list cannot be continued from where it stopped.
+        </Dialog>
+      </>
+    );
+  }
 
   return (
     <>

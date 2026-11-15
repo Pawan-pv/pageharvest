@@ -126,12 +126,12 @@ describe('Onboarding', () => {
 describe('Help screen', () => {
   const required = [
     'Getting started',
-    'Picking data',
-    'Auto-detect',
-    'Editing fields',
-    'Pagination and infinite scroll',
-    'Running, pausing and resuming jobs',
-    'Recovering interrupted jobs',
+    'Picking an item yourself',
+    'How PageHarvest finds a list',
+    'Columns',
+    'More pages',
+    'While it collects',
+    'If it stops early',
     'Exporting',
     'Privacy',
     'Troubleshooting',
@@ -156,7 +156,7 @@ describe('Help screen', () => {
     render(<HelpView onClose={vi.fn()} onRestartTour={vi.fn()} />);
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search the guide' }), 'scroll');
     expect(screen.getByRole('status')).toHaveTextContent(/sections? match "scroll"/);
-    expect(screen.getByRole('heading', { name: 'Pagination and infinite scroll' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'More pages' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Privacy' })).not.toBeInTheDocument();
   });
 

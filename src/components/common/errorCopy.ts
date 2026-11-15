@@ -12,6 +12,11 @@ export interface ErrorCopy {
    * body instead of behind the disclosure. Decided by code, never by reading the message.
    */
   bodyFromMessage?: boolean;
+  /**
+   * Wording for simple mode (ADR-039), where it differs: the usual text may point at a
+   * control that only Advanced options shows, or use a word simple mode does not.
+   */
+  simple?: Partial<Pick<ErrorCopy, 'title' | 'whatHappened' | 'nextStep'>>;
 }
 
 /**
@@ -32,6 +37,7 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     whatHappened: 'One or more columns found no value in some items.',
     dataSafety: 'Those rows were kept, with the missing cells left empty.',
     nextStep: 'Check the column on the Check columns step, or pick it again on the page.',
+    simple: { nextStep: 'Look at your rows. If a column is mostly empty, collect the list again and untick it.' },
   },
   PAGINATION_BUTTON_NOT_FOUND: {
     tone: 'warning',
@@ -39,6 +45,10 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     whatHappened: 'PageHarvest could not find a button to reach the next page, so it stopped.',
     dataSafety: 'Every row collected so far is saved.',
     nextStep: 'If there are more pages, choose the button under Pagination, or try "Page numbers in the URL".',
+    simple: {
+      nextStep:
+        'If the list has more pages, collect it again and answer "Yes, more items appear when I scroll down". You can also point at the button yourself with Advanced options, in Settings.',
+    },
   },
   PAGINATION_TIMEOUT: {
     tone: 'danger',
@@ -46,6 +56,10 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     whatHappened: 'PageHarvest tried to reach the next page, but it did not load.',
     dataSafety: 'Rows from earlier pages are saved.',
     nextStep: 'Check that the page still works in the tab, set a longer wait under Pagination, Advanced, then try again.',
+    simple: {
+      nextStep:
+        'Check that the page still works in its tab, then try again. A slow site may need a longer wait, which you can set with Advanced options, in Settings.',
+    },
   },
   INFINITE_SCROLL_STALLED: {
     tone: 'info',
@@ -53,6 +67,10 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     whatHappened: 'Scrolling stopped adding new items. This is normal at the end of a feed.',
     dataSafety: 'Every row collected so far is saved.',
     nextStep: 'If items are still missing, set a longer wait between scrolls and try again.',
+    simple: {
+      nextStep:
+        'If items are still missing, try again. A slow site may need a longer wait, which you can set with Advanced options, in Settings.',
+    },
   },
   TAB_DISCONNECTED: {
     tone: 'danger',
@@ -60,6 +78,7 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     whatHappened: 'The tab was closed, reloaded, or moved to another site.',
     dataSafety: 'Rows saved before this are safe.',
     nextStep: 'Open the page again, then resume or start a new extraction.',
+    simple: { nextStep: 'Open the page again, then press Continue, or start again.' },
   },
   RATE_LIMITED: {
     tone: 'warning',
@@ -67,6 +86,7 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     whatHappened: 'The site refused pages that were requested too quickly.',
     dataSafety: 'Every row collected so far is saved.',
     nextStep: 'Wait a few minutes, set a longer wait under Pagination, Advanced, then try again.',
+    simple: { nextStep: 'Wait a few minutes, then try again with fewer pages.' },
   },
   STORAGE_ERROR: {
     tone: 'danger',
@@ -89,6 +109,11 @@ export const ERROR_COPY: Record<ExtractionErrorCode, ErrorCopy> = {
     whatHappened: 'You stopped this extraction.',
     dataSafety: 'Rows collected so far are saved in My data.',
     nextStep: 'Open My data to see them, or start a new extraction.',
+    simple: {
+      title: 'Stopped',
+      whatHappened: 'You stopped the collecting.',
+      nextStep: 'Open My data to see your rows, or get another list.',
+    },
   },
   SITE_PERMISSION_REQUIRED: {
     tone: 'warning',
@@ -117,12 +142,16 @@ export interface DescribedError extends ErrorCopy {
   details?: string;
 }
 
-/** Plain-language copy for an error. A missing or unrecognised code gets the generic copy. */
-export function describeError(error: PanelError): DescribedError {
+/**
+ * Plain-language copy for an error. A missing or unrecognised code gets the generic copy.
+ * With `simple`, a code's simple-mode wording replaces the parts it names.
+ */
+export function describeError(error: PanelError, options: { simple?: boolean } = {}): DescribedError {
   const parsed = ExtractionErrorCodeSchema.safeParse(error.code);
   const code: ExtractionErrorCode = parsed.success ? parsed.data : 'UNKNOWN_ERROR';
   const message = error.message?.trim();
-  const copy = ERROR_COPY[code];
+  const { simple: simpleCopy, ...shared } = ERROR_COPY[code];
+  const copy: ErrorCopy = options.simple && simpleCopy ? { ...shared, ...simpleCopy } : shared;
   if (copy.bodyFromMessage && message) {
     return { ...copy, code, whatHappened: message, details: undefined };
   }

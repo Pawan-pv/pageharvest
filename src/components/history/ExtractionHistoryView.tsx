@@ -14,6 +14,7 @@ import { Input } from '@/components/common/Input';
 import { Dialog } from '@/components/common/Dialog';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Banner } from '@/components/common/Banner';
+import { SavedFileNotice } from '@/components/common/SavedFileNotice';
 import { Dataset, ExtractedRecord } from '@/types';
 import {
   recordsToCsv,
@@ -43,6 +44,8 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // The download last started here, so the list can say where the file went (ADR-042).
+  const [downloadId, setDownloadId] = useState<number | null>(null);
 
   const filtered = datasets.filter((ds) => {
     const q = search.toLowerCase();
@@ -51,10 +54,13 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
 
   const runExport = async (build: () => Promise<DownloadOptions>) => {
     setActionError(null);
+    setDownloadId(null);
     try {
       const result = await triggerDownload(await build());
       if (!result.success) {
         setActionError(`Export failed: ${result.error ?? 'the download did not start.'}`);
+      } else if (typeof result.downloadId === 'number') {
+        setDownloadId(result.downloadId);
       }
     } catch (error: unknown) {
       setActionError(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -137,6 +143,8 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
           {actionError}
         </Banner>
       )}
+
+      {downloadId !== null && <SavedFileNotice downloadId={downloadId} onDismiss={() => setDownloadId(null)} />}
 
       {/* Search Input */}
       {datasets.length > 0 && (

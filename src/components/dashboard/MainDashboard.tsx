@@ -51,6 +51,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
         disabled={!tab.isInjectable}
         needsAccess={tab.needsAccess === true}
         advanced={advanced}
+        stateExplained
         onSelectElements={onSelectElements}
         onAutoDetectLists={onAutoDetectLists}
         onExtractTable={onExtractTable}

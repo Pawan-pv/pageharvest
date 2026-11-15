@@ -183,6 +183,28 @@ describe('UI: Main Dashboard & Website Detection', () => {
     expect(onViewAll).toHaveBeenCalledTimes(1);
   });
 
+  it('says once, not twice, what to do on a page it cannot read, and offers nothing that cannot work', () => {
+    render(
+      <MainDashboard
+        tab={mockRestrictedTab}
+        onRefreshTab={vi.fn()}
+        datasets={[]}
+        onSelectElements={vi.fn()}
+        onAutoDetectLists={vi.fn()}
+        onExtractTable={vi.fn()}
+        onExtractLinks={vi.fn()}
+        onViewDataset={vi.fn()}
+        onViewAllHistory={vi.fn()}
+      />
+    );
+    // The card explains the page; the start section does not repeat it.
+    expect(screen.getAllByText(/Switch to a tab with a website/)).toHaveLength(1);
+    expect(screen.queryByText(/Open a normal website tab to start/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Get the list on this page' })).toBeDisabled();
+    expect(screen.queryByText('More ways to start')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick one item myself' })).not.toBeInTheDocument();
+  });
+
   it('shows no empty "recent data" box in simple mode before anything is saved', () => {
     render(
       <MainDashboard
