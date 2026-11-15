@@ -137,4 +137,26 @@ test.describe('A found list stays with its tab', () => {
     await tabA.close();
     await panel.close();
   });
+  test('closing the panel stops the picker: the overlay goes and the page clicks again', async () => {
+    const tabA = await context.newPage();
+    await tabA.goto(`${FIXTURES}/twenty-cards.html`);
+    const panel = await context.newPage();
+    await panel.setViewportSize({ width: 360, height: 800 });
+    await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+    await tabA.bringToFront();
+
+    await panel.getByRole('button', { name: 'Pick one item myself' }).click();
+    await expect(panel.getByRole('heading', { name: 'Click one item on the page' })).toBeVisible({ timeout: 15000 });
+    const firstLink = tabA.locator('a[href]').first();
+    await firstLink.hover();
+    await expect(tabA.locator('#pageharvest-picker-overlay-host')).toHaveCount(1, { timeout: 10000 });
+
+    await panel.close();
+
+    await expect(tabA.locator('#pageharvest-picker-overlay-host')).toHaveCount(0, { timeout: 10000 });
+    const before = tabA.url();
+    await firstLink.click();
+    await expect.poll(() => tabA.url(), { timeout: 10000 }).not.toBe(before);
+    await tabA.close();
+  });
 });

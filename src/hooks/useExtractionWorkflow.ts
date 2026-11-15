@@ -9,6 +9,7 @@ import {
   TabInfo,
 } from '@/services/messaging';
 import { activateTab } from '@/platform/tab-manager';
+import { holdPickerOpen } from '@/platform/picker-lifetime';
 import { requestSiteOrigin, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import {
   ExtractionJob,
@@ -66,6 +67,8 @@ function sameDocument(a: string, b: string): boolean {
   return a.split('#')[0] === b.split('#')[0];
 }
 
+export const PICKER_LEFT_NOTICE =
+  'Picking stopped because you switched to another tab. Start again when you are on the page you want.';
 export const LIST_GONE_NOTICE = 'The page changed, so the list you found is gone. Get the list again on this page.';
 const LIST_ELSEWHERE_ERROR = 'This list is on another tab. Go back to that tab to start, or get the list again on this page.';
 
@@ -246,6 +249,13 @@ export function useExtractionWorkflow(tab: TabInfo) {
   // only decides which job's state is on screen.
   const followedJobIdRef = useRef<string | null>(null);
   const pickerActiveRef = useRef(false);
+  // Lets go of the port that keeps the page's picker alive (see platform/picker-lifetime).
+  const releasePickerRef = useRef<() => void>(() => undefined);
+  const releasePicker = useCallback(() => {
+    const release = releasePickerRef.current;
+    releasePickerRef.current = () => undefined;
+    release();
+  }, []);
   // Pagination settings the person, or a recipe they loaded, has set. Saved defaults arrive
   // asynchronously when the panel opens and must never overwrite these.
   const setPaginationKeysRef = useRef(new Set<keyof ExtractionPaginationConfig>());
@@ -418,6 +428,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
 
         case 'SELECTION_CANCELLED': {
           pickerActiveRef.current = false;
+          releasePicker();
           setInspectedElement(null);
           setView((current) =>
             current === 'inspecting' || current === 'review_list' ? 'dashboard' : current
@@ -427,6 +438,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
 
         case 'SELECTION_CONFIRMED': {
           pickerActiveRef.current = false;
+          releasePicker();
           break;
         }
 
@@ -484,7 +496,11 @@ export function useExtractionWorkflow(tab: TabInfo) {
     });
 
     return () => unsubscribe();
-  }, [refreshFollowedJob, refreshRecoverableJobs]);
+  }, [refreshFollowedJob, refreshRecoverableJobs, releasePicker]);
+
+  // A panel that closes lets go of the picker, so the page stops it. Chrome closes the port
+  // too when the panel's document goes away; this covers an unmount without that.
+  useEffect(() => releasePicker, [releasePicker]);
 
   /**
    * Visual Element Picker
@@ -501,22 +517,27 @@ export function useExtractionWorkflow(tab: TabInfo) {
       bindToTab(tab);
       setView('inspecting');
       pickerActiveRef.current = true;
+      releasePicker();
+      if (typeof tab.id === 'number') releasePickerRef.current = holdPickerOpen(tab.id);
       await messagingService.startElementPicker(tab.id);
     } catch (err) {
       pickerActiveRef.current = false;
+      releasePicker();
       handleOperationError(err, 'dashboard');
     }
-  }, [bindToTab, handleOperationError, tab]);
+  }, [bindToTab, handleOperationError, releasePicker, tab]);
 
   const stopPickerQuietly = useCallback(async () => {
     if (!pickerActiveRef.current) return;
     pickerActiveRef.current = false;
+    const tabId = listTabId();
+    releasePicker();
     try {
-      await messagingService.stopElementPicker(listTabId());
+      await messagingService.stopElementPicker(tabId);
     } catch (err) {
       console.warn('Could not cleanly stop element picker:', err);
     }
-  }, []);
+  }, [releasePicker]);
 
   const cancelVisualPicker = useCallback(async () => {
     await stopPickerQuietly();
@@ -1054,6 +1075,14 @@ export function useExtractionWorkflow(tab: TabInfo) {
     if (!listSource || tab.id !== listSource.tabId || !tab.url || !listSource.url) return;
     if (!sameDocument(tab.url, listSource.url)) dropList();
   }, [dropList, listSource, tab.id, tab.url]);
+
+  useEffect(() => {
+    if (view !== 'inspecting' || !pickerActiveRef.current || !listSource) return;
+    if (typeof tab.id !== 'number' || tab.id === listSource.tabId) return;
+    void stopPickerQuietly();
+    resetToDashboard();
+    setNotice(PICKER_LEFT_NOTICE);
+  }, [listSource, resetToDashboard, stopPickerQuietly, tab.id, view]);
 
   const listElsewhere =
     listSource !== null && LIST_VIEWS.includes(view) && typeof tab.id === 'number' && tab.id !== listSource.tabId;
