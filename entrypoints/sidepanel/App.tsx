@@ -12,6 +12,7 @@ import { ScanningState } from '@/components/shell/ScanningState';
 import { flowSteps, simpleFlowSteps, stepForView, type FlowKind } from '@/components/shell/flow';
 import { Button } from '@/components/common/Button';
 import { requestSiteOrigin } from '@/platform/permissions';
+import { simpleStartingPagination } from '@/components/simple/more-pages';
 import type { ConfigStep } from '@/components/picker/FieldSelectionPanel';
 
 // Each step of the flow is its own chunk, so the panel opens on the dashboard alone (ADR-014).
@@ -56,6 +57,17 @@ const SimpleListChooser = lazy(() =>
 const SimpleListCheck = lazy(() =>
   import('@/components/simple/FindList').then((module) => ({ default: module.SimpleListCheck }))
 );
+// The rest of simple mode: columns and more pages, progress, the Done screen and My data.
+const SimpleColumns = lazy(() =>
+  import('@/components/simple/Columns').then((module) => ({ default: module.SimpleColumns }))
+);
+const SimpleProgress = lazy(() =>
+  import('@/components/simple/Progress').then((module) => ({ default: module.SimpleProgress }))
+);
+const SimpleDone = lazy(() => import('@/components/simple/Done').then((module) => ({ default: module.SimpleDone })));
+const SimpleMyData = lazy(() =>
+  import('@/components/simple/MyData').then((module) => ({ default: module.SimpleMyData }))
+);
 // Shown only after an interruption or an error, so neither is in the chunk every open pays for.
 const RecoveryBanner = lazy(() =>
   import('@/components/shell/RecoveryBanner').then((module) => ({ default: module.RecoveryBanner }))
@@ -94,6 +106,10 @@ export const App: React.FC = () => {
   const [choosingList, setChoosingList] = useState(false);
   // The list simple mode last accepted by itself, so a failure is not retried in a loop.
   const [acceptedList, setAcceptedList] = useState<DetectedList | null>(null);
+  // Simple mode ends on a summary; the full table is opened from it.
+  const [showAllRows, setShowAllRows] = useState(false);
+  // The rows on screen were opened from saved data, not collected just now.
+  const [openedSavedData, setOpenedSavedData] = useState(false);
   const viewStep = activeFlow ? stepForView(workflow.view) : null;
   const currentStep = advanced
     ? viewStep === 'fields' && configStep === 'pagination'
@@ -108,13 +124,15 @@ export const App: React.FC = () => {
     setConfigStep('fields');
     setSimpleStage('check');
     setChoosingList(false);
+    setShowAllRows(false);
+    setOpenedSavedData(false);
     start();
   };
 
   // In simple mode a list that looks like data is accepted without a choosing screen: the
   // next screen shows its first rows and asks "is this it?". A list that looks like a menu,
   // or one whose columns could not be read, is never accepted for the user.
-  const { view: workflowView, detectedList, confirmListCandidate } = workflow;
+  const { view: workflowView, detectedList, confirmListCandidate, updatePagination } = workflow;
   const acceptsListForUser =
     !advanced &&
     workflowView === 'review_list' &&
@@ -127,8 +145,10 @@ export const App: React.FC = () => {
     if (!acceptsListForUser || !detectedList) return;
     setAcceptedList(detectedList);
     setSimpleStage('check');
+    // Follow the list when the page shows a way to more of it; otherwise just this page.
+    updatePagination(simpleStartingPagination(detectedList.moreItems));
     void confirmListCandidate(detectedList);
-  }, [acceptsListForUser, detectedList, confirmListCandidate]);
+  }, [acceptsListForUser, detectedList, confirmListCandidate, updatePagination]);
 
   const handleUseCandidate = (candidate: ListCandidate) => {
     const chosen: DetectedList = {
@@ -143,8 +163,15 @@ export const App: React.FC = () => {
     setAcceptedList(chosen);
     setChoosingList(false);
     setSimpleStage('check');
+    workflow.updatePagination(simpleStartingPagination(chosen.moreItems));
     void workflow.confirmListCandidate(chosen);
   };
+
+  // A saved setup is an Advanced feature; when one is loaded, its detailed screen is shown as it is.
+  const simpleColumnsFlow = !advanced && flow !== 'recipe';
+  const showsSimpleCheck = simpleColumnsFlow && simpleStage === 'check';
+  const showsSimpleColumns = simpleColumnsFlow && simpleStage === 'columns';
+  const showsDetailedColumns = !simpleColumnsFlow;
 
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const onboarding = useOnboarding();
@@ -182,11 +209,15 @@ export const App: React.FC = () => {
   const handleViewDataset = (dataset: (typeof datasets)[0]) => {
     setActiveTabNav('harvest');
     setFlow(null);
+    setShowAllRows(false);
+    setOpenedSavedData(true);
     workflow.viewDatasetInTable(dataset);
   };
 
   const handleNewExtraction = () => {
     setActiveTabNav('harvest');
+    setShowAllRows(false);
+    setOpenedSavedData(false);
     workflow.resetToDashboard();
     refreshDatasets();
   };
@@ -209,6 +240,8 @@ export const App: React.FC = () => {
     setIsHelpOpen(false);
     setActiveTabNav('harvest');
     setFlow(null);
+    setShowAllRows(false);
+    setOpenedSavedData(false);
     const job = workflow.recoverableJobs.find((candidate) => candidate.id === jobId);
     if (job) {
       await requestSiteOrigin(job.targetUrl);
@@ -290,6 +323,7 @@ export const App: React.FC = () => {
           <div key={job.id} className="m-3 mb-0">
             <RecoveryBanner
               job={job}
+              simple={!advanced}
               onResume={(jobId) => void handleResumeRecoverable(jobId)}
               onDiscard={(jobId) => void handleDiscardRecoverable(jobId)}
             />
@@ -403,7 +437,7 @@ export const App: React.FC = () => {
         )}
 
         {/* 4. Field Selection & Pagination Config */}
-        {workflow.view === 'config_fields' && workflow.detectedList && !advanced && simpleStage === 'check' && (
+        {workflow.view === 'config_fields' && workflow.detectedList && showsSimpleCheck && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your list…</div>}>
             <SimpleListCheck
               detectedList={workflow.detectedList}
@@ -418,7 +452,22 @@ export const App: React.FC = () => {
             />
           </Suspense>
         )}
-        {workflow.view === 'config_fields' && workflow.detectedList && (advanced || simpleStage === 'columns') && (
+        {workflow.view === 'config_fields' && workflow.detectedList && showsSimpleColumns && (
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading columns…</div>}>
+            <SimpleColumns
+              detectedList={workflow.detectedList}
+              fields={workflow.fields}
+              selectedFieldIds={workflow.selectedFieldIds}
+              pagination={workflow.pagination}
+              onToggleField={workflow.toggleFieldSelection}
+              onRenameField={(id, name) => workflow.updateField(id, { name })}
+              onPaginationChange={workflow.updatePagination}
+              onBack={() => setSimpleStage('check')}
+              onStart={workflow.startExtraction}
+            />
+          </Suspense>
+        )}
+        {workflow.view === 'config_fields' && workflow.detectedList && showsDetailedColumns && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading columns…</div>}>
             <FieldSelectionPanel
               detectedList={workflow.detectedList}
@@ -447,7 +496,18 @@ export const App: React.FC = () => {
         )}
 
         {/* 5. Extraction Progress */}
-        {workflow.view === 'extracting' && (
+        {workflow.view === 'extracting' && !advanced && (
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading progress…</div>}>
+            <SimpleProgress
+              stats={workflow.stats}
+              onPause={workflow.pauseExtraction}
+              onResume={workflow.resumeExtraction}
+              onStop={workflow.stopExtraction}
+              onClose={() => void handleCancelExtraction()}
+            />
+          </Suspense>
+        )}
+        {workflow.view === 'extracting' && advanced && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading progress…</div>}>
             <ExtractionProgressView
               stats={workflow.stats}
@@ -461,9 +521,24 @@ export const App: React.FC = () => {
         )}
 
         {/* 6. Results Data Table */}
-        {workflow.view === 'results' && (
+        {workflow.view === 'results' && !advanced && !showAllRows && (
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your rows…</div>}>
+            <SimpleDone
+              dataset={workflow.currentDataset}
+              records={workflow.records}
+              fields={workflow.fields}
+              justFinished={!openedSavedData}
+              runSummary={workflow.runSummary}
+              onOpenTable={() => setShowAllRows(true)}
+              onNewExtraction={handleNewExtraction}
+            />
+          </Suspense>
+        )}
+        {workflow.view === 'results' && (advanced || showAllRows) && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your rows…</div>}>
             <DataTable
+              simple={!advanced}
+              onBack={() => setShowAllRows(false)}
               dataset={workflow.currentDataset}
               records={workflow.records}
               fields={workflow.fields}
@@ -478,7 +553,19 @@ export const App: React.FC = () => {
         )}
 
         {/* 7. Saved Data Library */}
-        {workflow.view === 'history' && (
+        {workflow.view === 'history' && !advanced && (
+          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your data…</div>}>
+            <SimpleMyData
+              datasets={datasets}
+              isLoading={isDatasetsLoading}
+              onViewDataset={handleViewDataset}
+              onDeleteDataset={deleteDataset}
+              onGetDatasetRecords={getDatasetRecords}
+              onNewExtraction={handleNewExtraction}
+            />
+          </Suspense>
+        )}
+        {workflow.view === 'history' && advanced && (
           <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your data…</div>}>
             <LibraryView
               datasets={datasets}

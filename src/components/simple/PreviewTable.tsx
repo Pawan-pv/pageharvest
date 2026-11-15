@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { FieldPreviewResult } from '@/shared/contracts/message';
 import type { FieldDefinition } from '@/types';
+import { PlainTable } from './PlainTable';
 
 export interface PreviewTableProps {
   /** The columns that will be collected, in order. */
@@ -84,40 +85,6 @@ export const PreviewTable: React.FC<PreviewTableProps> = ({ columns, samples, on
   }
 
   return (
-    <div className="overflow-x-auto rounded-control border border-line">
-      <table aria-label="The first rows" className="w-full text-body text-left">
-        <thead className="bg-surface-muted">
-          <tr>
-            {columns.map((column) => (
-              <th key={column.id} scope="col" className="px-2.5 py-2 font-semibold text-fg whitespace-nowrap">
-                {column.name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {live.rows.slice(0, ROWS).map((row, index) => (
-            <tr key={index} className="border-t border-line-subtle">
-              {columns.map((column) => {
-                const value = row[column.name];
-                const empty = value === null || value === undefined || value === '';
-                return (
-                  <td key={column.id} className="px-2.5 py-2 text-fg-muted max-w-[11rem] truncate">
-                    {empty ? (
-                      <>
-                        <span aria-hidden="true">—</span>
-                        <span className="sr-only">empty</span>
-                      </>
-                    ) : (
-                      String(value)
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <PlainTable label="The first rows" columns={columns.map((column) => column.name)} rows={live.rows.slice(0, ROWS)} />
   );
 };

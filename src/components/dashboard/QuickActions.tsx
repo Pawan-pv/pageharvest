@@ -7,6 +7,12 @@ export interface QuickActionsProps {
   needsAccess?: boolean;
   /** Advanced options is on: both large choices are shown, as before simple mode (ADR-039). */
   advanced?: boolean;
+  /**
+   * Something above this section already says why the page cannot be read and what to do.
+   * Simple mode then shows only the switched-off button, not the advice a second time or
+   * the other ways to start, none of which can work on this page.
+   */
+  stateExplained?: boolean;
   onSelectElements: () => void;
   onAutoDetectLists: () => void;
   onExtractTable: () => void;
@@ -84,16 +90,20 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
   disabled = false,
   needsAccess = false,
   advanced = false,
+  stateExplained = false,
   onSelectElements,
   onAutoDetectLists,
   onExtractTable,
   onExtractLinks,
-}) => (
+}) => {
+  // Simple mode on a page that cannot be read: the reason is on screen already.
+  const onlyTheButton = disabled && stateExplained && !advanced;
+  return (
   <section aria-labelledby="start-heading" className="flex flex-col gap-2 text-left">
     <h2 id="start-heading" className="text-sm font-semibold text-fg">
       Get data from this page
     </h2>
-    {disabled && (
+    {disabled && !onlyTheButton && (
       <p className="text-xs text-fg-muted">
         {needsAccess
           ? 'Click the PageHarvest button in the Chrome toolbar to start. The panel updates by itself.'
@@ -125,12 +135,14 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
           type="button"
           onClick={onAutoDetectLists}
           disabled={disabled}
-          aria-describedby="start-primary-description"
+          aria-describedby={onlyTheButton ? undefined : 'start-primary-description'}
           className="w-full min-h-12 flex items-center justify-center gap-2 px-4 py-3 rounded-card bg-brand text-on-strong text-base font-semibold border border-brand shadow-sm hover:bg-brand-hover active:bg-brand-active disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Sparkles aria-hidden="true" className="w-5 h-5 shrink-0" />
           Get the list on this page
         </button>
+        {!onlyTheButton && (
+        <>
         <p id="start-primary-description" className="text-body text-fg-muted">
           PageHarvest looks for the repeated items on this page, such as products or search results, and shows you
           what it found before anything is saved.
@@ -147,9 +159,12 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
             Pick one item myself
           </button>
         </p>
+        </>
+        )}
       </>
     )}
 
+    {!onlyTheButton && (
     <details className="group">
       <summary className="cursor-pointer select-none text-xs font-medium text-fg-muted hover:text-fg py-2">
         More ways to start
@@ -169,5 +184,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         />
       </div>
     </details>
+    )}
   </section>
-);
+  );
+};

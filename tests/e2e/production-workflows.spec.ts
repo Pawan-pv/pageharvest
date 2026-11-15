@@ -967,7 +967,6 @@ test.describe('PageHarvest production workflows', () => {
   test('grid edits persist to storage and survive reopening', async () => {
     let panel = await openPanel(context, extensionId);
     const target = await openTarget(context, `${FIXTURES}/twenty-cards.html`);
-    panel.on('dialog', (dialog) => void dialog.accept());
     await configure(panel);
     await start(panel);
     await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });
@@ -975,6 +974,8 @@ test.describe('PageHarvest production workflows', () => {
     const columns = () => panel.getByTitle('Delete column').count();
     const startingColumns = await columns();
     await panel.getByTitle('Delete column').first().click({ force: true });
+    // The grid asks in a dialog of its own, never with a browser confirm box.
+    await panel.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
     await expect.poll(columns).toBe(startingColumns - 1);
 
     // Editing a cell afterwards must not bring the deleted column back.
@@ -988,7 +989,6 @@ test.describe('PageHarvest production workflows', () => {
     await panel.close();
     await target.bringToFront();
     panel = await openPanel(context, extensionId);
-    panel.on('dialog', (dialog) => void dialog.accept());
     await panel.getByRole('button', { name: 'My data' }).click();
     await panel.getByText(/20 Product Listing/).last().click();
     await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });

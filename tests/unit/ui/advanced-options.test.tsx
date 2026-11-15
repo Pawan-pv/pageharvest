@@ -130,7 +130,9 @@ describe('Settings: the Advanced options switch', () => {
     }
     expect(screen.queryByRole('button', { name: 'Save Preferences' })).not.toBeInTheDocument();
     // What a beginner still needs from Settings stays.
-    expect(screen.getByRole('button', { name: 'Clear All Saved Data' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete all saved data' })).toBeInTheDocument();
+    // Nothing on the simple screen names the storage technology.
+    expect(document.body.textContent).not.toMatch(/IndexedDB|dataset|client-side|telemetry/i);
   });
 
   it('brings every detailed default back when turned on, and stores the choice', async () => {

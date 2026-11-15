@@ -15,11 +15,14 @@ import {
   withValueDetails,
 } from '@/core/export/exporter';
 import { triggerDownload } from '@/platform/downloads';
+import { XLSX_MIME } from './download-rows';
 import { SettingsRepository } from '@/storage/repositories/settings-repository';
 
 export interface ExportDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Told when Chrome has accepted the download, with its id, so the caller can say where the file went. */
+  onExported?: (downloadId: number | undefined) => void;
   records: ExtractedRecord[];
   fields: FieldDefinition[];
   dataset?: Dataset | null;
@@ -42,7 +45,6 @@ const DELIMITERS: { value: Delimiter; label: string }[] = [
   { value: '\t', label: 'Tab' },
 ];
 
-const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 const FormatOption: React.FC<{
   option: (typeof FORMATS)[number];
@@ -81,6 +83,7 @@ const FormatOption: React.FC<{
 export const ExportDialog: React.FC<ExportDialogProps> = ({
   isOpen,
   onClose,
+  onExported,
   records,
   fields,
   dataset,
@@ -173,6 +176,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
       // The dialog only closes once the browser has accepted the download.
       if (result.success) {
+        onExported?.(result.downloadId);
         onClose();
       } else {
         setExportError(result.error ?? 'The download did not start.');
@@ -215,7 +219,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
             tone="danger"
             title="The file was not saved"
             dataSafety="Your rows are still saved in PageHarvest."
-            nextStep="Try again. If you closed the save window, press Download File again."
+            nextStep="Press Download File again."
             details={exportError}
           >
             The browser did not start the download.
