@@ -845,7 +845,8 @@ export class JobCoordinator {
     }
 
     if (recoverable) {
-      await this.interruptJob(identity.jobId, message);
+      // The code says why, for the panel (for example RATE_LIMITED).
+      await this.interruptJob(identity.jobId, message, code);
     } else {
       await this.failJob(identity.jobId, message, category, code);
     }

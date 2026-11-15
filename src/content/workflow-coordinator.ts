@@ -81,6 +81,22 @@ export interface ContentWorkflowOptions {
   engineOverrides?: NavigationJobOptions['engineOverrides'];
   /** Looks for a Next or Load more control, read-only (ADR-039). */
   findMoreItems?: (root: Document) => MoreItemsHint;
+  /** The HTTP status this document was served with, when the browser says. */
+  getDocumentStatus?: () => number | undefined;
+}
+
+/** HTTP 429 Too Many Requests: the site asks for fewer requests. */
+const TOO_MANY_REQUESTS = 429;
+
+/**
+ * The status the page was served with, from its navigation timing entry. Chrome 109+
+ * reports it as `responseStatus`; it is undefined for a page restored from cache or when the
+ * browser does not say.
+ */
+function documentResponseStatus(): number | undefined {
+  if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') return undefined;
+  const [entry] = performance.getEntriesByType('navigation') as Array<PerformanceEntry & { responseStatus?: unknown }>;
+  return typeof entry?.responseStatus === 'number' && entry.responseStatus > 0 ? entry.responseStatus : undefined;
 }
 
 function messageId(prefix: string): string {
@@ -139,6 +155,7 @@ export function createContentWorkflowCoordinator(
     });
 
   const lookForMoreItems = options.findMoreItems ?? findMoreItems;
+  const readDocumentStatus = options.getDocumentStatus ?? documentResponseStatus;
 
   let activeRun: ActiveRun | null = null;
 
@@ -244,6 +261,28 @@ export function createContentWorkflowCoordinator(
   };
 
   const executeRun = async (run: ActiveRun, message: ExtractRecordsMessage): Promise<void> => {
+    // A page answered with 429 holds the site's refusal, not the list. Nothing is read from
+    // it, and the job stops where it can continue once the site allows it.
+    if (readDocumentStatus() === TOO_MANY_REQUESTS) {
+      getVisualOverlay().destroy();
+      await options
+        .sendToBackground?.(
+          createContentWorkflowMessage({
+            id: messageId('failed'),
+            type: 'JOB_FAILED' as const,
+            timestamp: Date.now(),
+            payload: {
+              identity: run.identity,
+              message: 'The site answered 429 Too Many Requests: it asked for fewer requests.',
+              category: 'PAGINATION_FAILED' as const,
+              code: 'RATE_LIMITED' as const,
+              recoverable: true,
+            },
+          })
+        )
+        .catch(() => undefined);
+      return;
+    }
     try {
       const outcome = await runNavigationJob({
         recipe: message.payload.recipe,
