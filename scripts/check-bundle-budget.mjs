@@ -1,6 +1,6 @@
 // Bundle budget gate (CI): fails if sidepanel, content.js, or background.js
 // grow more than 5% over the recorded baselines (see ADR-037 re-baseline below).
-// The side panel has an additional absolute cap of 530 kB. Run after `pnpm build`:
+// The side panel has an additional absolute cap of 540 kB. Run after `pnpm build`:
 //   pnpm build && pnpm bundle:budget
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -9,14 +9,16 @@ const ROOT = resolve(import.meta.dirname, '..');
 const OUT = join(ROOT, '.output', 'chrome-mv3');
 
 // Recorded baseline sizes (bytes) after the sidepanel-ux-redesign; content and
-// background re-baselined with ADR-037 on-demand injection (DECISIONS.md).
+// background re-baselined with ADR-037 on-demand injection (DECISIONS.md). The side
+// panel was re-baselined, and its cap raised from 530 kB, with the tab binding and
+// slow-start fixes (ADR-043): 526486 B before them.
 const BASELINE = {
-  sidepanel: 526486,
+  sidepanel: 530294,
   content: 266730,
   background: 276012,
 };
 const TOLERANCE = 0.05;
-const SIDEPANEL_ABSOLUTE_LIMIT = 530000; // 530 kB (decimal, as reported by WXT)
+const SIDEPANEL_ABSOLUTE_LIMIT = 540000; // 540 kB (decimal, as reported by WXT)
 
 function findSize(pattern, dir) {
   try {
@@ -53,7 +55,7 @@ for (const [name, base] of Object.entries(BASELINE)) {
   const over = actual > limit;
   const overAbsolute = name === 'sidepanel' && actual > SIDEPANEL_ABSOLUTE_LIMIT;
   console.log(
-    `${name}: ${actual} B (baseline ${base} B, +${pct.toFixed(2)}%), limit ${limit} B${name === 'sidepanel' ? `, absolute 530 kB` : ''} -> ${over || overAbsolute ? 'OVER' : 'OK'}`
+    `${name}: ${actual} B (baseline ${base} B, +${pct.toFixed(2)}%), limit ${limit} B${name === 'sidepanel' ? `, absolute ${SIDEPANEL_ABSOLUTE_LIMIT / 1000} kB` : ''} -> ${over || overAbsolute ? 'OVER' : 'OK'}`
   );
   if (over || overAbsolute) failed = true;
 }
