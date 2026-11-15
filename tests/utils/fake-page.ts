@@ -37,11 +37,24 @@ export interface FakePage {
  * production code; only the browser boundary is the chrome mock. What the page emits
  * reaches the panel the way a content script's messages do.
  */
-export function installFakePage(html: string, tabId = 101): FakePage {
+export interface FakePageOptions {
+  /** The page's address. */
+  url?: string;
+  /**
+   * Whether to (re)attach the panel's runtime listener. Leave it on for the first page of a
+   * test; a second page in another tab turns it off, or the panel would hear every message twice.
+   */
+  listen?: boolean;
+}
+
+export function installFakePage(html: string, tabId = 101, options: FakePageOptions = {}): FakePage {
+  const pageUrl = options.url ?? 'http://127.0.0.1:3456/simple-grid.html';
   // The panel's messaging service listens to chrome.runtime once, when its module loads, and
   // the chrome mock forgets every listener before each test. Listen again, as a panel that
   // has just opened does.
-  (messagingService as unknown as { initRuntimeListener(): void }).initRuntimeListener();
+  if (options.listen !== false) {
+    (messagingService as unknown as { initRuntimeListener(): void }).initRuntimeListener();
+  }
 
   const page = document.implementation.createHTMLDocument('Books to Scrape');
   page.body.innerHTML = html;
@@ -53,7 +66,7 @@ export function installFakePage(html: string, tabId = 101): FakePage {
     },
     page,
     {
-      getCurrentUrl: () => 'http://127.0.0.1:3456/simple-grid.html',
+      getCurrentUrl: () => pageUrl,
       sendToBackground: (message) => chromeMock.sendFromContentScript(tabId, JSON.parse(JSON.stringify(message))),
     }
   );
@@ -62,7 +75,7 @@ export function installFakePage(html: string, tabId = 101): FakePage {
     id: `pong_${Date.now()}`,
     type: 'PONG',
     timestamp: Date.now(),
-    payload: { status: 'OK', url: 'http://127.0.0.1:3456/simple-grid.html', title },
+    payload: { status: 'OK', url: pageUrl, title },
   });
 
   chromeMock.setTabListener(tabId, (raw, _sender, sendResponse) => {

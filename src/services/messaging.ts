@@ -88,7 +88,12 @@ export interface StartJobRequest {
   recipeId?: string;
 }
 
-export type MessageListener = (message: ExtensionMessage) => void;
+/** Where a message came from. `tabId` is set for a page's content script, unset for extension pages. */
+export interface MessageOrigin {
+  tabId?: number;
+}
+
+export type MessageListener = (message: ExtensionMessage, origin?: MessageOrigin) => void;
 
 /**
  * The side panel's connection to the rest of the extension. Delivery, validation and
@@ -104,10 +109,10 @@ class ExtensionMessagingService {
 
   private initRuntimeListener() {
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-      chrome.runtime.onMessage.addListener((message: unknown) => {
+      chrome.runtime.onMessage.addListener((message: unknown, sender?: chrome.runtime.MessageSender) => {
         const parsed = extensionMessageSchema.safeParse(message);
         if (parsed.success) {
-          this.notifyListeners(parsed.data);
+          this.notifyListeners(parsed.data, { tabId: sender?.tab?.id });
         }
       });
     }
@@ -120,10 +125,10 @@ class ExtensionMessagingService {
     };
   }
 
-  private notifyListeners(message: ExtensionMessage) {
+  private notifyListeners(message: ExtensionMessage, origin: MessageOrigin) {
     this.listeners.forEach((listener) => {
       try {
-        listener(message);
+        listener(message, origin);
       } catch (err) {
         console.error('Error in message listener:', err);
       }
@@ -189,22 +194,28 @@ class ExtensionMessagingService {
   }
 
   /**
-   * Sends a typed message to the content script of the active tab.
+   * Sends a typed message to the content script of a tab: the one named, or else the active
+   * tab. A message about a list the user found names the tab it was found in, so it never
+   * reaches a page the user switched to afterwards.
    */
-  public async sendToActiveTab(message: ExtensionMessage): Promise<unknown> {
+  public async sendToActiveTab(message: ExtensionMessage, tabId?: number): Promise<unknown> {
     const validated = extensionMessageSchema.parse(message);
 
     if (typeof chrome === 'undefined' || !chrome.tabs?.sendMessage) {
       throw new Error('Chrome tab messaging is unavailable in this runtime.');
     }
 
-    const tab = await this.getActiveTab();
-    if (!tab.id || !tab.isInjectable) {
-      throw new Error(`Cannot communicate with tab ${tab.url}. Extraction is only available on web pages.`);
+    let targetTabId = tabId;
+    if (targetTabId === undefined) {
+      const tab = await this.getActiveTab();
+      if (!tab.id || !tab.isInjectable) {
+        throw new Error(`Cannot communicate with tab ${tab.url}. Extraction is only available on web pages.`);
+      }
+      targetTabId = tab.id;
     }
 
     try {
-      return await this.client.sendToTab<unknown>(tab.id, validated, {
+      return await this.client.sendToTab<unknown>(targetTabId, validated, {
         timeoutMs: TAB_MESSAGE_TIMEOUT_MS,
       });
     } catch (err) {
@@ -216,31 +227,44 @@ class ExtensionMessagingService {
     }
   }
 
-  public async startElementPicker(): Promise<void> {
-    await this.sendToActiveTab({
-      id: generateId(),
-      timestamp: Date.now(),
-      type: 'START_PICKER',
-      payload: { highlightColor: '#16a34a' },
-    });
+  public async startElementPicker(tabId?: number): Promise<void> {
+    await this.sendToActiveTab(
+      {
+        id: generateId(),
+        timestamp: Date.now(),
+        type: 'START_PICKER',
+        payload: { highlightColor: '#16a34a' },
+      },
+      tabId
+    );
   }
 
-  public async stopElementPicker(): Promise<void> {
-    await this.sendToActiveTab({
-      id: generateId(),
-      timestamp: Date.now(),
-      type: 'STOP_PICKER',
-      payload: {},
-    });
+  public async stopElementPicker(tabId?: number): Promise<void> {
+    await this.sendToActiveTab(
+      {
+        id: generateId(),
+        timestamp: Date.now(),
+        type: 'STOP_PICKER',
+        payload: {},
+      },
+      tabId
+    );
   }
 
-  public async detectRepeatedElements(targetSelector?: string, mode?: 'table' | 'links'): Promise<void> {
-    await this.sendToActiveTab({
-      id: generateId(),
-      timestamp: Date.now(),
-      type: 'DETECT_REPEATED_ELEMENTS',
-      payload: { targetSelector, mode },
-    });
+  public async detectRepeatedElements(
+    targetSelector?: string,
+    mode?: 'table' | 'links',
+    tabId?: number
+  ): Promise<void> {
+    await this.sendToActiveTab(
+      {
+        id: generateId(),
+        timestamp: Date.now(),
+        type: 'DETECT_REPEATED_ELEMENTS',
+        payload: { targetSelector, mode },
+      },
+      tabId
+    );
   }
 
   /**
@@ -250,7 +274,7 @@ class ExtensionMessagingService {
   public async previewFields(
     containerSelector: string,
     fields: FieldDefinition[],
-    options: { limit?: number; timeoutMs?: number; containerAnchor?: MultiAnchorSelector } = {}
+    options: { limit?: number; timeoutMs?: number; containerAnchor?: MultiAnchorSelector; tabId?: number } = {}
   ): Promise<FieldPreviewResult> {
     const message = extensionMessageSchema.safeParse({
       id: generateId(),
@@ -271,21 +295,25 @@ class ExtensionMessagingService {
       };
     }
 
-    let tab: TabInfo;
-    try {
-      tab = await this.getActiveTab();
-    } catch {
-      return { ok: false, code: 'TAB_DISCONNECTED', message: 'There is no page to preview.' };
-    }
-    if (!tab.id || !tab.isInjectable) {
-      return { ok: false, code: 'TAB_DISCONNECTED', message: 'PageHarvest cannot read this tab.' };
+    let tabId = options.tabId;
+    if (tabId === undefined) {
+      let tab: TabInfo;
+      try {
+        tab = await this.getActiveTab();
+      } catch {
+        return { ok: false, code: 'TAB_DISCONNECTED', message: 'There is no page to preview.' };
+      }
+      if (!tab.id || !tab.isInjectable) {
+        return { ok: false, code: 'TAB_DISCONNECTED', message: 'PageHarvest cannot read this tab.' };
+      }
+      tabId = tab.id;
     }
 
     // On-demand injection (ADR-037): ensure the document has a content script.
     // TAB_DISCONNECTED keeps its meaning (timeout after injection); a missing
     // grant is SITE_PERMISSION_REQUIRED only.
     try {
-      await injectContentScriptIntoTab(tab.id);
+      await injectContentScriptIntoTab(tabId);
     } catch {
       return {
         ok: false,
@@ -296,7 +324,7 @@ class ExtensionMessagingService {
 
     let reply: unknown;
     try {
-      reply = await this.client.sendToTab<unknown>(tab.id, message.data, {
+      reply = await this.client.sendToTab<unknown>(tabId, message.data, {
         timeoutMs: options.timeoutMs ?? PREVIEW_TIMEOUT_MS,
         retries: 0,
       });
@@ -310,13 +338,16 @@ class ExtensionMessagingService {
       : { ok: false, code: 'UNKNOWN_ERROR', message: 'The page sent a preview PageHarvest could not read.' };
   }
 
-  public async detectFields(containerSelector: string, kind?: CandidateKind): Promise<void> {
-    await this.sendToActiveTab({
-      id: generateId(),
-      timestamp: Date.now(),
-      type: 'DETECT_FIELDS',
-      payload: { containerSelector, kind },
-    });
+  public async detectFields(containerSelector: string, kind?: CandidateKind, tabId?: number): Promise<void> {
+    await this.sendToActiveTab(
+      {
+        id: generateId(),
+        timestamp: Date.now(),
+        type: 'DETECT_FIELDS',
+        payload: { containerSelector, kind },
+      },
+      tabId
+    );
   }
 
   /**

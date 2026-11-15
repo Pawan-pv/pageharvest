@@ -298,7 +298,8 @@ describe('The panel after a backup-anchor preview', () => {
     });
 
     expect(result).toMatchObject({ ok: true, usedFallback: true });
-    expect(preview).toHaveBeenCalledWith('.card', expect.any(Array), { containerAnchor: anchor });
+    // The preview goes to the tab the saved setup was opened on (ADR-043).
+    expect(preview).toHaveBeenCalledWith('.card', expect.any(Array), { containerAnchor: anchor, tabId: TAB });
     expect(workflow?.detectedList?.containerSelector).toBe('.card');
     expect(workflow?.detectedList?.containerAnchor).toEqual(anchor);
     expect({ recipes: await db.recipes.count(), schemas: await db.schemas.count() }).toEqual(before);

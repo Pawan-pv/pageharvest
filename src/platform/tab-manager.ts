@@ -213,3 +213,8 @@ export class TabManager {
     this.loadedListeners.clear();
   }
 }
+
+/** Brings a tab to the front, as clicking it does. Needs no permission. */
+export async function activateTab(tabId: number): Promise<void> {
+  await chrome.tabs.update(tabId, { active: true });
+}

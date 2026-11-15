@@ -39,6 +39,15 @@ export function createChromeJobTransport(
       await chrome.tabs.update(tabId, { url });
     },
 
+    getTabUrl: async (tabId) => {
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        return tab.url || undefined;
+      } catch {
+        return undefined;
+      }
+    },
+
     getTabLoadStatus: async (tabId) => {
       try {
         const tab = await chrome.tabs.get(tabId);

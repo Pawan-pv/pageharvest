@@ -76,6 +76,20 @@ export interface JobTransport {
    * cannot be scripted.
    */
   injectContentScript(tabId: number): Promise<InjectionResult>;
+  /**
+   * The address the tab shows now, or undefined when Chrome does not say. Used to check
+   * that a job starts on the page its list was found on.
+   */
+  getTabUrl?(tabId: number): Promise<string | undefined>;
+}
+
+/** Said when the tab no longer shows the page a list was found on (the tab-binding check). */
+export const LIST_PAGE_CHANGED_MESSAGE =
+  'This tab is not the page the list was found on. Get the list again on this page.';
+
+/** Two addresses name the same document if they differ at most in the #fragment. */
+export function sameDocument(a: string, b: string): boolean {
+  return a.split('#')[0] === b.split('#')[0];
 }
 
 export interface JobCoordinatorDeps {
@@ -226,6 +240,12 @@ export class JobCoordinator {
       // Start click's user gesture; the background only checks it (contains).
       if (!(await hasHostAccess(payload.sourceUrl))) {
         return { ok: false, error: SITE_PERMISSION_MESSAGE };
+      }
+      // The list was found on sourceUrl. If the tab has moved on, its selectors describe
+      // another page, so nothing is created.
+      const shownNow = await this.transport.getTabUrl?.(payload.tabId).catch(() => undefined);
+      if (shownNow && !sameDocument(shownNow, payload.sourceUrl)) {
+        return { ok: false, error: LIST_PAGE_CHANGED_MESSAGE };
       }
 
       const { recipe, tabId, sourceUrl } = payload;
