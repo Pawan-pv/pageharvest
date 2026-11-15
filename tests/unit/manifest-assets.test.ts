@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { REQUIRED_PERMISSIONS } from '@/platform/permissions';
@@ -42,6 +42,30 @@ describe('Extension icon assets', () => {
   it('declares the minimum Chrome version that supports the side panel', () => {
     const config = readFileSync(resolve(ROOT, 'wxt.config.ts'), 'utf8');
     expect(config).toContain("minimum_chrome_version: '116'");
+  });
+});
+
+describe('Chrome Web Store assets', () => {
+  const ASSETS = resolve(ROOT, 'store-assets');
+  const pngSize = (file: string) => {
+    const buffer = readFileSync(resolve(ASSETS, file));
+    expect(Array.from(buffer.subarray(0, 8)), file).toEqual(PNG_SIGNATURE);
+    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+  };
+  const screenshots = () => readdirSync(ASSETS).filter((name) => /^screenshot.*\.png$/.test(name));
+
+  // The store's upload form refuses any other size, whatever the file is called.
+  it('has a small promo tile of exactly 440x280', () => {
+    expect(pngSize('promo-440x280.png')).toEqual({ width: 440, height: 280 });
+  });
+
+  it('has one to five screenshots, each exactly 1280x800', () => {
+    const files = screenshots();
+    expect(files.length).toBeGreaterThanOrEqual(1);
+    expect(files.length).toBeLessThanOrEqual(5);
+    for (const file of files) {
+      expect(pngSize(file), file).toEqual({ width: 1280, height: 800 });
+    }
   });
 });
 

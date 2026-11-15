@@ -1,149 +1,163 @@
+/* global chrome */
 /**
- * Generates Chrome Web Store promotional screenshots for PageHarvest.
+ * Makes the Chrome Web Store screenshots from the built extension doing real work.
  *
- *   node scripts/generate-screenshots.mjs
+ *   pnpm build && node scripts/generate-screenshots.mjs
  *
- * Loads the built extension into Playwright Chromium, navigates the side
- * panel to real-looking pages (competitor pricing, product catalogs) and
- * captures 1280x800 screenshots without localhost or test-fixture markers.
+ * It loads `.output/chrome-mv3` into Chromium, opens a public practice site made for this
+ * purpose (books.toscrape.com), and walks the simple flow a new user gets: find the list,
+ * check the columns, collect, download. Nothing is seeded or mocked: every row in a
+ * screenshot was collected from the page beside it during this run.
+ *
+ * Playwright cannot capture Chrome's side panel, so the panel is opened as a tab of the same
+ * width, and each screenshot is the page and the panel captured at the same moment and set
+ * side by side, the way Chrome docks them.
+ *
+ * The store accepts only exact sizes: 1280x800 for a screenshot and 440x280 for the small
+ * promo tile. The device scale factor is fixed at 1, so a display set to 125% cannot change
+ * them, and every file's size is read back and checked before the script reports success.
  */
-import { mkdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outputDir = join(root, 'store-assets');
-const extensionPath = join(root, '.output/chrome-mv3');
+const extensionPath = join(root, '.output', 'chrome-mv3');
+const SITE = 'https://books.toscrape.com/';
+const WIDTH = 1280;
+const HEIGHT = 800;
+const PANEL_WIDTH = 380;
+const PROMO = { width: 440, height: 280 };
+
+/** Width and height from a PNG's header. */
+async function pngSize(file) {
+  const header = await readFile(file);
+  return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+}
+
+async function expectSize(file, width, height) {
+  const size = await pngSize(file);
+  if (size.width !== width || size.height !== height) {
+    throw new Error(`${file} is ${size.width}x${size.height}; the store needs exactly ${width}x${height}.`);
+  }
+}
+
+/** The small promo tile: the icon, the name and what the extension does, in its own colours. */
+async function promoTile(frame) {
+  const icon = (await readFile(join(root, 'public', 'icon', '128.png'))).toString('base64');
+  await frame.setViewportSize(PROMO);
+  await frame.setContent(
+    `<body style="margin:0;width:${PROMO.width}px;height:${PROMO.height}px;display:flex;flex-direction:column;
+                  align-items:center;justify-content:center;gap:10px;background:linear-gradient(160deg,#064e3b,#047857);
+                  font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#fff">
+       <div style="display:flex;align-items:center;gap:12px">
+         <img src="data:image/png;base64,${icon}" width="56" height="56" alt="">
+         <span style="font-size:38px;font-weight:700;letter-spacing:-0.5px">PageHarvest</span>
+       </div>
+       <div style="font-size:17px;opacity:.95">Lists on web pages, into a spreadsheet</div>
+       <div style="margin-top:6px;padding:6px 14px;border-radius:999px;background:#ecfdf5;color:#064e3b;
+                   font-size:13px;font-weight:600">Stays on your computer</div>
+     </body>`
+  );
+  const file = join(outputDir, 'promo-440x280.png');
+  await frame.screenshot({ path: file, type: 'png' });
+  await expectSize(file, PROMO.width, PROMO.height);
+  console.log(`Saved ${file}`);
+}
 
 async function main() {
   await mkdir(outputDir, { recursive: true });
-
-  const browser = await chromium.launch({
+  // Screenshots from an earlier run would be mistaken for this build's.
+  for (const name of await readdir(outputDir)) {
+    if (/^screenshot-.*\.png$/.test(name)) await rm(join(outputDir, name));
+  }
+  const profile = await mkdtemp(join(os.tmpdir(), 'pageharvest-screenshots-'));
+  const context = await chromium.launchPersistentContext(profile, {
+    channel: 'chromium',
     headless: true,
-    args: [
-      `--disable-extensions`,
-      `--enable-features=Extensions`,
-      `--load-extension=${extensionPath}`,
-    ],
+    deviceScaleFactor: 1,
+    viewport: { width: WIDTH - PANEL_WIDTH, height: HEIGHT },
+    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
   });
 
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
-  });
-  const page = await context.newPage();
+  try {
+    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker', { timeout: 20000 }));
+    const extensionId = worker.url().split('/')[2];
+    // The welcome tour would cover the first screenshot.
+    await worker.evaluate(() => chrome.storage.local.set({ 'pageharvest.guide': { version: 1, onboardingDone: true } }));
 
-  // ── Screenshot 1: Harvest dashboard with a real-looking active tab ──
-  // Navigate to a realistic product page so the dashboard shows a real URL
-  // instead of a restricted chrome-extension:// page.
-  await page.goto('https://example.com/products/laptops', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(1500);
+    // The page the two captures are set side by side on. It is opened first, because the
+    // panel works on whichever tab is in front, and that must stay the site.
+    const frame = await context.newPage();
+    await frame.setViewportSize({ width: WIDTH, height: HEIGHT });
+    const page = await context.newPage();
+    await page.goto(SITE, { waitUntil: 'load' });
+    const panel = await context.newPage();
+    await panel.setViewportSize({ width: PANEL_WIDTH, height: HEIGHT });
+    await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+    await page.bringToFront();
 
-  // Open side panel via the extension action (headless can't click toolbar,
-  // so we use the sidepanel.html directly as fallback if the action doesn't work).
-  const extId = await page.evaluate(async () => {
-    return (globalThis).chrome?.runtime?.id;
-  }).catch(() => null);
+    let count = 0;
+    /** The page and the panel as they are now, side by side, saved as one 1280x800 image. */
+    const capture = async (name) => {
+      count += 1;
+      const [site, side] = await Promise.all([
+        page.screenshot({ type: 'png' }),
+        panel.screenshot({ type: 'png' }),
+      ]);
+      const image = (buffer) => `data:image/png;base64,${buffer.toString('base64')}`;
+      await frame.setContent(
+        `<body style="margin:0;display:flex;width:${WIDTH}px;height:${HEIGHT}px;background:#fff">
+           <img src="${image(site)}" style="width:${WIDTH - PANEL_WIDTH}px;height:${HEIGHT}px">
+           <img src="${image(side)}" style="width:${PANEL_WIDTH}px;height:${HEIGHT}px;box-shadow:-1px 0 0 #cbd5e1">
+         </body>`
+      );
+      const file = join(outputDir, `screenshot-${count}-${name}.png`);
+      await frame.screenshot({ path: file, type: 'png' });
+      await expectSize(file, WIDTH, HEIGHT);
+      await page.bringToFront();
+      console.log(`Saved ${file}`);
+    };
 
-  // Navigate to the side panel page and screenshot
-  const sidePanelUrl = extId
-    ? `chrome-extension://${extId}/sidepanel.html`
-    : 'about:blank';
+    // Enabled means the panel has seen the site and can read it.
+    await panel.locator('button:not([disabled])', { hasText: 'Get the list on this page' }).waitFor({ timeout: 30000 });
+    await capture('start');
 
-  if (extId) {
-    const sp = await context.newPage();
-    await sp.goto(sidePanelUrl, { waitUntil: 'domcontentloaded' });
-    await sp.waitForTimeout(2000);
-    await sp.screenshot({ path: join(outputDir, 'screenshot-1280x800.png') });
-    console.log('Saved screenshot-1280x800.png (dashboard)');
-    await sp.close();
+    await panel.getByRole('button', { name: 'Get the list on this page' }).click();
+    await panel.getByRole('heading', { name: /^We found \d+ items on this page$/ }).waitFor({ timeout: 30000 });
+    await panel.getByRole('table', { name: 'The first rows' }).waitFor({ timeout: 15000 });
+    await capture('found-the-list');
+
+    await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
+    await panel.getByRole('heading', { name: 'Check your columns' }).waitFor();
+    await panel.getByRole('checkbox', { name: /^Keep the column / }).first().waitFor({ timeout: 15000 });
+    // Two pages are enough for a picture, and gentle on the practice site.
+    const pages = panel.getByRole('spinbutton', { name: 'Stop after this many pages:' });
+    if (await pages.count()) await pages.fill('2');
+    await capture('check-the-columns');
+
+    await panel.getByRole('button', { name: 'Start collecting' }).click();
+    await panel.getByRole('heading', { name: /^Done\. .+ collected$/ }).waitFor({ timeout: 120000 });
+    // The download itself is not pictured: an automated browser saves files under a made-up
+    // name, which is not the name a person's Chrome would show.
+    await panel.getByRole('button', { name: 'Download for Excel' }).waitFor();
+    await capture('done');
+
+    await panel.getByRole('button', { name: 'See and change all rows' }).click();
+    await panel.getByRole('textbox', { name: 'Search these rows' }).waitFor();
+    await capture('all-rows');
+
+    await promoTile(frame);
+  } finally {
+    await context.close();
+    await rm(profile, { recursive: true, force: true }).catch(() => undefined);
   }
-
-  // ── Screenshot 2: Data grid with realistic extracted data ──
-  if (extId) {
-    // Seed IndexedDB with realistic-looking extraction data
-    const sp2 = await context.newPage();
-    await sp2.goto(sidePanelUrl, { waitUntil: 'domcontentloaded' });
-    await sp2.waitForTimeout(1000);
-
-    await sp2.evaluate(async () => {
-      const dbName = 'PageHarvestDB';
-      const db = await new Promise((resolve, reject) => {
-        const req = globalThis.indexedDB.open(dbName);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-
-      const now = Date.now();
-      const tx = db.transaction(['datasets', 'records', 'jobs'], 'readwrite');
-
-      const datasetsStore = tx.objectStore('datasets');
-      datasetsStore.put({
-        id: 'dataset_competitor_pricing',
-        name: 'Competitor Laptop Pricing — Dell.com',
-        url: 'https://www.dell.com/en-us/shop/laptops',
-        projectId: 'project_dell',
-        jobId: 'job_pricing_001',
-        recipeId: 'recipe_laptops',
-        recordsCount: 120,
-        fields: [
-          { id: 'f1', name: 'Model', selector: '.title', extractor: 'text' },
-          { id: 'f2', name: 'Price', selector: '.price', extractor: 'number' },
-          { id: 'f3', name: 'Processor', selector: '.cpu', extractor: 'text' },
-          { id: 'f4', name: 'RAM', selector: '.ram', extractor: 'text' },
-          { id: 'f5', name: 'Link', selector: 'a', extractor: 'href' },
-        ],
-        createdAt: now - 3600000,
-        updatedAt: now,
-      });
-
-      const records = [];
-      const models = ['XPS 13', 'XPS 15', 'Inspiron 14', 'Inspiron 16', 'Latitude 5540', 'Precision 5680'];
-      for (let i = 0; i < 120; i++) {
-        records.push({
-          _id: `rec_pricing_${i}`,
-          _page: Math.floor(i / 30) + 1,
-          _extractedAt: now - 3600000 + i * 100,
-          datasetId: 'dataset_competitor_pricing',
-          _jobId: 'job_pricing_001',
-          _projectId: 'project_dell',
-          Model: models[i % models.length] + (i >= 6 ? ` — ${Math.floor(i / 6) + 1}` : ''),
-          Price: 799 + Math.floor(Math.random() * 1200),
-          Processor: ['Intel Core i5-1335U', 'Intel Core i7-1360P', 'Intel Core i7-13700H', 'AMD Ryzen 7 7730U'][i % 4],
-          RAM: ['8 GB', '16 GB', '32 GB'][i % 3],
-          Link: `https://www.dell.com/en-us/shop/dell-laptops/xps-${13 + (i % 3)}-${i}`,
-        });
-      }
-      const recordsStore = tx.objectStore('records');
-      for (const r of records) recordsStore.put(r);
-
-      await new Promise((resolve) => { tx.oncomplete = resolve; });
-      db.close();
-    });
-
-    // Reload to show results view
-    await sp2.reload({ waitUntil: 'domcontentloaded' });
-    await sp2.waitForTimeout(2000);
-
-    // Navigate to results view by clicking "View all" or selecting dataset
-    // The dataset should appear in Recent Extractions on the dashboard.
-    // Click the first dataset card to view in grid.
-    const datasetCard = sp2.getByText('Competitor Laptop Pricing');
-    if (await datasetCard.isVisible()) {
-      await datasetCard.click();
-      await sp2.waitForTimeout(2000);
-    }
-
-    await sp2.screenshot({ path: join(outputDir, 'screenshot-data-grid.png') });
-    console.log('Saved screenshot-data-grid.png (data grid)');
-    await sp2.close();
-  }
-
-  await browser.close();
-  console.log('Done.');
 }
 
-main().catch((err) => {
-  console.error(err);
+main().catch((error) => {
+  console.error(error);
   process.exit(1);
 });
