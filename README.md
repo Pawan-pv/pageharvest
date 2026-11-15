@@ -1,6 +1,8 @@
 # PageHarvest
 
-PageHarvest is a local-first Manifest V3 Chrome extension for selecting repeated page structures, extracting normalized records, editing them in a side-panel grid, and exporting CSV or JSON without sending page data to a remote service.
+PageHarvest is a local-first Manifest V3 Chrome extension that turns a list on a web page into a spreadsheet, without sending page data to a remote service.
+
+It opens in **simple mode**: one button finds the list on the page and shows the first rows, the user unticks the columns they do not need and says whether the list continues on more pages, and one more button saves an Excel file. **Advanced options**, a switch in Settings, shows the detailed controls instead: column types and selectors, four ways of paging with limits and waits, saved setups, a grid with cleaning tools, and CSV, JSON and NDJSON exports.
 
 ## Current validation
 
@@ -27,7 +29,9 @@ The fixture server used by browser tests is started automatically by Playwright.
 
 ## Releasing
 
-[docs/STORE_LISTING.md](docs/STORE_LISTING.md) has what to enter in the Chrome Web Store dashboard (permission justifications, data disclosures) and the checklist to finish before submitting. The public privacy policy is [PRIVACY.md](PRIVACY.md).
+[docs/STORE_LISTING.md](docs/STORE_LISTING.md) has what to enter in the Chrome Web Store dashboard (permission justifications, data disclosures) and the checklist to finish before submitting. The public privacy policy is [PRIVACY.md](PRIVACY.md). Both must stay true of the code: a unit test fails when a manifest permission has no justification in either (ADR-041).
+
+`pnpm build` and `pnpm zip` first write `public/THIRD_PARTY_NOTICES.txt`, the licence texts of the open-source packages inside the package; commit it when it changes. `node scripts/generate-screenshots.mjs` makes the store screenshots from the built extension collecting a public practice site.
 
 ## Architecture
 
