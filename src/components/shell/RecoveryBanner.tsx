@@ -5,6 +5,7 @@ import { Button } from '@/components/common/Button';
 import { Dialog } from '@/components/common/Dialog';
 import { HelpTip } from '@/components/common/Tooltip';
 import { describeProgress, formatRows } from '@/components/dashboard/progress-copy';
+import { describeError } from '@/components/common/errorCopy';
 
 export interface RecoveryBannerProps {
   job: ExtractionJob;
@@ -20,6 +21,11 @@ export interface RecoveryBannerProps {
 /** The job stopped because its site access was missing or revoked (ADR-037). */
 export function needsSiteAccess(job: ExtractionJob): boolean {
   return job.errors.at(-1)?.code === 'SITE_PERMISSION_REQUIRED';
+}
+
+/** The site refused pages as too many (HTTP 429): say so, and what to do. */
+function rateLimitCopy(job: ExtractionJob, simple: boolean) {
+  return job.errors.at(-1)?.code === 'RATE_LIMITED' ? describeError({ code: 'RATE_LIMITED' }, { simple }) : null;
 }
 
 function siteOf(url: string): string {
@@ -44,17 +50,22 @@ export const RecoveryBanner: React.FC<RecoveryBannerProps> = ({ job, simple = fa
   });
   const where = progress.stepLabel.charAt(0).toLowerCase() + progress.stepLabel.slice(1);
   const rows = formatRows(job.totalExtracted);
+  const slowDown = rateLimitCopy(job, simple);
 
   if (simple) {
     return (
       <>
         <Banner
           tone="warning"
-          title="Stopped early"
+          title={slowDown?.title ?? 'Stopped early'}
           dataSafety={
             job.totalExtracted > 0 ? `${rows} saved and safe.` : 'Nothing had been saved yet, so nothing is lost.'
           }
-          nextStep="Continue to carry on from where it stopped, or stop here and keep the rows you have."
+          nextStep={
+            slowDown
+              ? `${slowDown.nextStep} Continue carries on from where it stopped.`
+              : 'Continue to carry on from where it stopped, or stop here and keep the rows you have.'
+          }
           details={[`Stopped at ${where}.`, job.interruptedReason].filter(Boolean).join(' ')}
           actions={
             <>
@@ -105,14 +116,18 @@ export const RecoveryBanner: React.FC<RecoveryBannerProps> = ({ job, simple = fa
         tone="warning"
         title={
           <span className="inline-flex items-center gap-1">
-            Extraction interrupted
+            {slowDown?.title ?? 'Extraction interrupted'}
             <HelpTip tipId="recovery" />
           </span>
         }
         dataSafety={
           job.totalExtracted > 0 ? `${rows} saved and safe.` : 'Nothing had been saved yet, so nothing is lost.'
         }
-        nextStep="Resume to continue where it stopped, or discard to end this job."
+        nextStep={
+          slowDown
+            ? `${slowDown.nextStep} Resume continues where it stopped.`
+            : 'Resume to continue where it stopped, or discard to end this job.'
+        }
         actions={
           <>
             <Button size="sm" onClick={() => onResume(job.id)}>

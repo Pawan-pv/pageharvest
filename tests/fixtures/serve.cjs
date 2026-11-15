@@ -58,7 +58,9 @@ const server = http.createServer((req, res) => {
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-    res.writeHead(200, {
+    // `?status=429` serves the page with that error status, as a site refusing requests does.
+    const forced = Number(reqUrl.searchParams.get('status'));
+    res.writeHead(forced >= 400 && forced < 600 ? forced : 200, {
       'Content-Type': contentType,
       'Access-Control-Allow-Origin': '*'
     });
