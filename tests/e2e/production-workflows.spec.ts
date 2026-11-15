@@ -716,7 +716,7 @@ test.describe('PageHarvest production workflows', () => {
     await openTarget(context, `${FIXTURES}/collision-1.html`);
     await configure(panel);
     await choosePagination(panel, 'next_button');
-    await setLimits(panel, { delayMs: 200 });
+    await setLimits(panel, { delayMs: 1000 });
     await start(panel);
 
     const job = await waitForJob(panel, (candidate) => candidate.status === 'COMPLETED');
@@ -916,7 +916,7 @@ test.describe('PageHarvest production workflows', () => {
     const target = await openTarget(context, `${FIXTURES}/next-page-pagination.html`);
     await configure(panel);
     await choosePagination(panel, 'next_button');
-    await setLimits(panel, { delayMs: 200 });
+    await setLimits(panel, { delayMs: 1000 });
     await start(panel);
 
     const job = await waitForJob(panel, (candidate) => candidate.status === 'COMPLETED');

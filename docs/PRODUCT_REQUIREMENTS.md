@@ -65,7 +65,7 @@
 - **FR-4.3a**: URL Template Mode (`url_template`):
   - Visits numbered URLs built from a template with `{page}` or `{offset}`, a starting page, an increment and a maximum page count, with a preview of the generated URLs.
   - Stays on the website the job started from. Stops at the limit, on an empty page, or when a page adds nothing new.
-- **FR-4.4**: Configurable delay throttle (default 1500ms, range 200ms–30000ms) to respect host website resources.
+- **FR-4.4**: Configurable delay throttle (default 1500ms, range 1000ms–30000ms (ADR-046)) to respect host website resources.
 - **FR-4.5**: Circuit Breakers: Hard page cap (default 20, max 500) and instant user "Pause" / "Stop" abort buttons.
 
 ### 3.5 Local-First Persistence & Storage

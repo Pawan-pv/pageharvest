@@ -52,7 +52,7 @@ test.describe('Site permission (ADR-037, ADR-040)', () => {
   });
 
   const pagination = {
-    type: 'none', maxPages: 1, delayMs: 200, scrollCount: 1, scrollDelayMs: 300,
+    type: 'none', maxPages: 1, delayMs: 1000, scrollCount: 1, scrollDelayMs: 300,
     startPage: 1, pageIncrement: 1, stopCondition: 'no_new_records',
   };
 

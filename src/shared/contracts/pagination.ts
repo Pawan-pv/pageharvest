@@ -24,6 +24,12 @@ export const PaginationStopConditionSchema = z.enum([
 export type PaginationStopCondition = z.infer<typeof PaginationStopConditionSchema>;
 
 /**
+ * The shortest wait between two pages of a job (ADR-046). Gentler on the sites a job visits;
+ * earlier versions allowed 200 ms, and the database raises stored values to this.
+ */
+export const MIN_PAGE_DELAY_MS = 1000;
+
+/**
  * Canonical PaginationConfig schema.
  *
  * Limits are independent and apply only to their own dimension:
@@ -36,7 +42,7 @@ export const PaginationConfigSchema = z.object({
   nextButtonSelector: z.string().optional(),
   maxPages: z.number().int().min(1).max(500).default(20),
   maxRecords: z.number().int().min(1).optional(),
-  delayMs: z.number().int().min(200).max(30000).default(1500),
+  delayMs: z.number().int().min(MIN_PAGE_DELAY_MS).max(30000).default(1500),
   scrollCount: z.number().int().min(1).max(200).default(30),
   scrollDelayMs: z.number().int().min(300).max(10000).default(1500),
   urlTemplate: z.string().optional(),

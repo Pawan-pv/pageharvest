@@ -316,7 +316,7 @@ test.describe('PageHarvest Browser Extension E2E Suite', () => {
         pagination: {
           type: 'none',
           maxPages: 1,
-          delayMs: 200,
+          delayMs: 1000,
           scrollCount: 1,
           scrollDelayMs: 300,
           startPage: 1,
@@ -362,7 +362,7 @@ test.describe('PageHarvest Browser Extension E2E Suite', () => {
           type: 'url_template',
           urlTemplate: 'http://127.0.0.1:3456/url-page-{page}.html',
           maxPages: 3,
-          delayMs: 200,
+          delayMs: 1000,
           scrollCount: 1,
           scrollDelayMs: 300,
           startPage: 1,

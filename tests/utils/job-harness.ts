@@ -44,7 +44,7 @@ export function makeRecipe(
     pagination: {
       type: 'none',
       maxPages: 20,
-      delayMs: 200,
+      delayMs: 1000,
       scrollCount: 30,
       scrollDelayMs: 300,
       startPage: 1,

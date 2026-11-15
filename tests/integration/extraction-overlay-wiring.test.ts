@@ -53,7 +53,7 @@ function makeRecipe() {
     pagination: {
       type: 'none' as const,
       maxPages: 1,
-      delayMs: 200,
+      delayMs: 1000,
       scrollCount: 1,
       scrollDelayMs: 300,
       startPage: 1,

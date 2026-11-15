@@ -2,7 +2,7 @@
 
 PageHarvest uses Dexie over IndexedDB, in the extension's origin, for completely offline, local-first storage. Production code reaches it through the repositories in `src/storage/repositories/`.
 
-## 1. Current Schema (version 3)
+## 1. Current Schema (version 4; its tables are those of version 3)
 
 ```typescript
 datasets:    'id, name, url, projectId, jobId, createdAt, updatedAt'
@@ -49,5 +49,6 @@ Every operation listed has a production caller, not only a test.
 | 1 | Initial tables |
 | 2 | Foreign key indexes; recipes copied into schemas |
 | 3 | `checkpoints`; associations; `[datasetId+_hash]`; job and history statuses mapped to the lifecycle; settings upgraded; `_order` assigned |
+| 4 | No index change. A stored wait between pages below 1000 ms (settings `defaultDelayMs`, and `pagination.delayMs` of saved setups, column sets and jobs) is raised to 1000 ms (ADR-046) |
 
 A migration failure aborts the upgrade and leaves the previous version intact. Jobs that were running before version 3 become FAILED, because they have no checkpoint and cannot resume.

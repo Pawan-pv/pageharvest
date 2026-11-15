@@ -437,7 +437,7 @@ test.describe('pagination', () => {
     await chooseFields(panel);
     await choosePagination(panel, 'next_button');
     await setLimits(panel, { maxPages: 6 });
-    await setLimits(panel, { delayMs: 300 });
+    await setLimits(panel, { delayMs: 1000 });
     await start(panel);
 
     const { rows } = await finishedRows(panel);
@@ -454,7 +454,7 @@ test.describe('pagination', () => {
     await chooseFields(panel);
     await choosePagination(panel, 'next_button');
     await setLimits(panel, { maxPages: 5 });
-    await setLimits(panel, { delayMs: 300 });
+    await setLimits(panel, { delayMs: 1000 });
     await start(panel);
 
     const { rows } = await finishedRows(panel);
