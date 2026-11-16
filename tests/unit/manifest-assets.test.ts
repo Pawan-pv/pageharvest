@@ -128,6 +128,36 @@ describe('Manifest permissions', () => {
     expect(privacy).toMatch(/Limited Use/);
   });
 
+  it('says in the privacy policy what the job path reads and how fast it goes, as the code does', () => {
+    const privacy = readFileSync(resolve(ROOT, 'PRIVACY.md'), 'utf8');
+    const pagination = readFileSync(resolve(ROOT, 'src/shared/contracts/pagination.ts'), 'utf8');
+    const content = readFileSync(resolve(ROOT, 'src/content/workflow-coordinator.ts'), 'utf8');
+    const coordinator = readFileSync(resolve(ROOT, 'src/background/job-coordinator.ts'), 'utf8');
+    // The minimum wait between pages (ADR-046).
+    expect(pagination).toContain('export const MIN_PAGE_DELAY_MS = 1000;');
+    expect(privacy).toMatch(/waiting at least one second between pages/);
+    // The page's own status is read, and only to stop on 429 (ADR-045).
+    expect(content).toContain('TOO_MANY_REQUESTS = 429');
+    expect(privacy).toMatch(/Too Many Requests/);
+    // The found list's tab address, checked at Start (ADR-043).
+    expect(coordinator).toContain('getTabUrl');
+    expect(privacy).toMatch(/checks with Chrome that the tab still shows the page the list came from/);
+    // Every storage area the code uses is named.
+    expect(privacy).toContain('chrome.storage.local');
+    expect(privacy).toContain('chrome.storage.session');
+  });
+
+  it('declares web history in the store answers, because job history keeps page addresses', () => {
+    const listing = readFileSync(resolve(ROOT, 'docs/STORE_LISTING.md'), 'utf8');
+    expect(listing).toMatch(/^- \*\*Website content\*\*: /m);
+    expect(listing).toMatch(/^- \*\*Web history\*\*: .*addresses of the pages the job visited/m);
+  });
+
+  it.each(['TERMS_OF_USE.md', 'ACCEPTABLE_USE.md'])('marks %s as a draft for legal review, not in force', (file) => {
+    const text = readFileSync(resolve(ROOT, file), 'utf8');
+    expect(text).toMatch(/\*\*Draft for legal review\. Not in force\.\*\*/);
+  });
+
   it('built manifest has no static content scripts and grants http and https sites (ADR-037, ADR-040)', () => {
     // CI's unit layer runs `pnpm test` before `pnpm build`; when no build output
     // exists yet, verify the same contract from source and skip the built-file

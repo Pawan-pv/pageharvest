@@ -7,7 +7,7 @@ What to enter in the Chrome Web Store developer dashboard, and what to check bef
 | Item | Value | Source |
 | --- | --- | --- |
 | Name | PageHarvest | `wxt.config.ts` |
-| Version | `1.0.0`, and `version_name` `1.0.0`, which is what users see | `wxt.config.ts` |
+| Version | `1.0.0`. `wxt.config.ts` also sets `version_name` `1.0.0`; WXT leaves it out of the built manifest because it equals `version`, and Chrome then shows `version` | `wxt.config.ts` |
 | Minimum Chrome | 116 | `wxt.config.ts` |
 | Upload file | `.output/page-harvest-<version_name>-chrome.zip`, for example `page-harvest-1.0.0-chrome.zip`. Check its date: an older zip with the same name may be left in `.output/` | `pnpm zip` |
 
@@ -56,7 +56,12 @@ What to enter in the Chrome Web Store developer dashboard, and what to check bef
 
 **Remote code:** No, I am not using remote code. All scripts are in the package; there is no `eval`, `new Function` or remote script, and the panel loads no remote images, fonts or styles.
 
-**Data usage:** tick **Website content** only, because the extension reads the content of pages the user extracts from. It is processed and stored only on the user's device and never transmitted. Do not tick any other category: the address of the open tab is shown in the panel and not kept, and nothing is collected about the user.
+**Data usage:** tick two categories. Both are handled only on the user's device and never transmitted.
+
+- **Website content**: the extension reads the text, links, image addresses and attributes of the pages the user collects from, and stores the rows.
+- **Web history**: for each job it stores, on the device, the addresses of the pages the job visited and when (the saved list's address, each row's source page, the job history and the checkpoint's visited pages). The User Data FAQ counts "the domains or URLs the browser interacts with" as web browsing activity, and `PRIVACY.md` says job history includes these addresses, so leaving this box unticked would contradict the policy and the code.
+
+Do not tick the other categories. The address of the tab in front is shown in the panel and not kept; the picker follows the mouse only to highlight the element under it and records nothing (not *User activity*); no name, email or account is collected (not *Personally identifiable information*).
 
 Then certify all three:
 
@@ -84,3 +89,5 @@ The package contains `THIRD_PARTY_NOTICES.txt`, the licence text of every bundle
 - [x] Screenshots show a real public practice page, generated from the build being submitted.
 - [ ] `PRIVACY.md` merged to `main`, and its URL opens.
 - [ ] The Excel file opens in Excel, Google Sheets and LibreOffice (open one download in each by hand).
+- [ ] `TERMS_OF_USE.md` and `ACCEPTABLE_USE.md` are drafts: fill in the bracketed items, have them reviewed, then link them from the listing and from `PRIVACY.md`.
+- [ ] A support email is set in the developer dashboard.
