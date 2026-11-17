@@ -604,7 +604,7 @@ test.describe('PageHarvest production workflows', () => {
 
   test('E: a saved recipe survives a reload and runs a new job', async () => {
     let panel = await openPanel(context, extensionId);
-    let target = await openTarget(context, `${FIXTURES}/simple-grid.html`);
+    const target = await openTarget(context, `${FIXTURES}/simple-grid.html`);
     await configure(panel);
     // Saving a recipe is on the Pagination step, after the columns.
     await goToPagination(panel);
@@ -621,8 +621,8 @@ test.describe('PageHarvest production workflows', () => {
     await panel.getByRole('button', { name: 'Run recipe Grid recipe' }).click();
     await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
 
-    await target.close();
-    target = await openTarget(context, `${FIXTURES}/simple-grid.html`);
+    // The recipe is bound to the tab it was opened on (ADR-043), so the job runs there.
+    // Closing that tab drops it instead (tests/e2e/tab-binding.spec.ts).
     await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeEnabled();
     await start(panel);
 
