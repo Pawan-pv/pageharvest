@@ -246,7 +246,7 @@ export function createContentWorkflowCoordinator(
       overlay.addRows(ack.inserted);
       overlay.pulseSelector(run.containerSelector, batch.records.length);
     }
-    return { inserted: ack.inserted, shouldStop: ack.shouldStop === true };
+    return { inserted: ack.inserted, shouldStop: ack.shouldStop === true, alreadyStored: ack.status === 'duplicate' };
   };
 
   const commitCheckpoint = async (run: ActiveRun, navigation: JobNavigationState): Promise<void> => {
