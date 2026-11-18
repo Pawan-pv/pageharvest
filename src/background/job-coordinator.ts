@@ -889,32 +889,72 @@ export class JobCoordinator {
       return;
     }
 
-    const now = this.now();
-    const updatedCheckpoint: JobCheckpoint = {
-      ...checkpoint,
-      currentUrl: url,
-      awaitingNavigation: job.status === 'PAUSED',
-      expectedUrl: job.status === 'PAUSED' ? url : undefined,
-      navigationStartedAt: undefined,
-      updatedAt: now,
-    };
     await this.duringHandoff(job.tabId, async () => {
-      await this.jobs.saveCheckpoint(updatedCheckpoint);
-
-      // A paused job stays parked on the new page until the user resumes it.
-      if (job.status === 'PAUSED') return;
+      // The decision above was made on a read. A stop, pause or interruption may have
+      // committed since, so the job is read again in the transaction that writes the
+      // checkpoint: an ended job must not get a resumable checkpoint back, and only the
+      // run that was read (same status class, generation and tab) is continued.
+      const continued = await this.db.transaction('rw', this.db.jobs, this.db.checkpoints, async () => {
+        const latest = await this.jobs.getJob(job.id);
+        const current = await this.jobs.getCheckpoint(job.id);
+        if (
+          !latest ||
+          !current ||
+          !isActiveJobStatus(latest.status) ||
+          latest.generation !== job.generation ||
+          latest.tabId !== tabId
+        ) {
+          return null;
+        }
+        const now = this.now();
+        const paused = latest.status === 'PAUSED';
+        const updatedCheckpoint: JobCheckpoint = {
+          ...current,
+          currentUrl: url,
+          // A paused job stays parked on the new page until the user resumes it.
+          awaitingNavigation: paused,
+          expectedUrl: paused ? url : undefined,
+          navigationStartedAt: undefined,
+          updatedAt: now,
+        };
+        await this.jobs.saveCheckpoint(updatedCheckpoint);
+        if (!paused) await this.db.jobs.update(job.id, { updatedAt: now });
+        return { job: latest, checkpoint: updatedCheckpoint, paused };
+      });
+      if (!continued || continued.paused) return;
 
       try {
-        await this.db.jobs.update(job.id, { updatedAt: now });
-        await this.sendExtract(job, updatedCheckpoint);
+        await this.sendExtract(continued.job, continued.checkpoint);
       } catch (error: unknown) {
         if (isSitePermissionFailure(error)) {
           await this.interruptForSiteAccess(job.id);
         } else {
           await this.interruptJob(job.id, `The page could not continue: ${toMessage(error)}`);
         }
+        return;
       }
+      await this.repeatControlToNewRun(continued.job);
     });
+  }
+
+  /**
+   * A pause or stop that commits while a page is being handed the job sends its control
+   * before that page has a run, so the page ignores it. Once the page has the run, the
+   * control is repeated to it. Both controls are idempotent in the page.
+   */
+  private async repeatControlToNewRun(started: ExtractionJob): Promise<void> {
+    if (started.tabId === undefined) return;
+    const latest = await this.jobs.getJob(started.id);
+    if (latest && latest.generation === started.generation) {
+      if (latest.status === 'PAUSED') await this.sendControl(latest, 'pause');
+      return;
+    }
+    await this.transport
+      .sendToTab(started.tabId, this.buildMessage({
+        type: 'CONTROL_JOB',
+        payload: { identity: this.identityOf(started), action: 'abort' },
+      }))
+      .catch(() => undefined);
   }
 
   // -------------------------------------------------------------------------
