@@ -481,6 +481,23 @@ export class JobCoordinator {
    * re-extracted page is committed.
    */
   public async recoverJob(jobId: string): Promise<JobCommandResult> {
+    // A double click sends two requests. The second must not open a tab of its own, which
+    // would be left empty: the transaction below lets only one of them resume the session.
+    if (this.resuming.has(jobId)) {
+      return { ok: false, error: 'This session is already being resumed.' };
+    }
+    this.resuming.add(jobId);
+    try {
+      return await this.recoverJobOnce(jobId);
+    } finally {
+      this.resuming.delete(jobId);
+    }
+  }
+
+  /** Sessions whose resume is in progress in this worker. */
+  private readonly resuming = new Set<string>();
+
+  private async recoverJobOnce(jobId: string): Promise<JobCommandResult> {
     const candidate = await this.jobs.getJob(jobId);
     if (!candidate || candidate.status !== 'RECOVERABLE') {
       return { ok: false, error: 'This session can no longer be resumed.' };
