@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { DatasetInUseError } from '@/storage/db';
 import { DatasetRepository } from '@/storage/repositories';
 import { Dataset, ExtractedRecord } from '@/types';
 
@@ -42,6 +43,8 @@ export function useDatasets() {
         await repository.deleteDataset(datasetId);
         setDatasets((prev) => prev.filter((d) => d.id !== datasetId));
       } catch (err) {
+        // A list a job can still write to is kept on purpose; its message says what to do.
+        if (err instanceof DatasetInUseError) throw err;
         console.error('Failed to delete dataset:', err);
         throw new Error('Failed to delete dataset.', { cause: err });
       }

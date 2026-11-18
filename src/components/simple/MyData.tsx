@@ -50,6 +50,8 @@ export const SimpleMyData: React.FC<SimpleMyDataProps> = ({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [downloadId, setDownloadId] = useState<number | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // A list a job is still writing to is kept on purpose; its message is the next step.
+  const [notDeleted, setNotDeleted] = useState<string | null>(null);
 
   const query = search.trim().toLowerCase();
   const shown = query
@@ -79,10 +81,16 @@ export const SimpleMyData: React.FC<SimpleMyDataProps> = ({
     if (!deleting) return;
     setIsDeleting(true);
     setProblem(null);
+    setNotDeleted(null);
     try {
       await onDeleteDataset(deleting.id);
     } catch (error: unknown) {
-      setProblem(error instanceof Error ? error.message : String(error));
+      // storage/db DatasetInUseError, recognised by name so this screen does not load storage.
+      if (error instanceof Error && error.name === 'DatasetInUseError') {
+        setNotDeleted(error.message);
+      } else {
+        setProblem(error instanceof Error ? error.message : String(error));
+      }
     } finally {
       setIsDeleting(false);
       setDeleting(null);
@@ -105,6 +113,15 @@ export const SimpleMyData: React.FC<SimpleMyDataProps> = ({
           nextStep="Try again."
           details={problem}
           onDismiss={() => setProblem(null)}
+        />
+      )}
+      {notDeleted && (
+        <Banner
+          tone="warning"
+          title="Not deleted yet"
+          dataSafety="Nothing was changed."
+          nextStep={notDeleted}
+          onDismiss={() => setNotDeleted(null)}
         />
       )}
 
