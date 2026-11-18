@@ -43,4 +43,41 @@ describe('extension messaging service', () => {
       isInjectable: true,
     });
   });
+
+  it('calls a tab whose address Chrome hides a browser page while every website is allowed (ADR-040)', async () => {
+    vi.spyOn(chrome.tabs, 'query').mockResolvedValue([{ id: 43, title: '', url: undefined } as chrome.tabs.Tab]);
+    vi.spyOn(chrome.tabs, 'sendMessage').mockRejectedValue(new Error('Receiving end does not exist.'));
+
+    const tab = await messagingService.getActiveTab();
+
+    // PageHarvest can see the address of every website, so a hidden one is not a website.
+    expect(tab).toMatchObject({ id: 43, url: '', isInjectable: false, needsAccess: false });
+  });
+
+  it('asks for access on a hidden tab only when the user has limited site access in Chrome', async () => {
+    vi.spyOn(chrome.tabs, 'query').mockResolvedValue([{ id: 43, title: '', url: undefined } as chrome.tabs.Tab]);
+    vi.spyOn(chrome.tabs, 'sendMessage').mockRejectedValue(new Error('Receiving end does not exist.'));
+    chromeMock.revokedOrigins.add('https://*/*');
+
+    const tab = await messagingService.getActiveTab();
+
+    expect(tab).toMatchObject({ id: 43, url: '', isInjectable: false, needsAccess: true });
+    chromeMock.revokedOrigins.clear();
+  });
+
+  it('does not ask for access on a tab whose address Chrome shows', async () => {
+    vi.spyOn(chrome.tabs, 'query').mockResolvedValue([
+      { id: 44, title: 'Shop', url: 'https://shop.test/items' } as chrome.tabs.Tab,
+    ]);
+
+    expect(await messagingService.getActiveTab()).toMatchObject({ isInjectable: true, needsAccess: false });
+  });
+
+  it("does not pass on the address of the site's icon, so the panel cannot load it", async () => {
+    vi.spyOn(chrome.tabs, 'query').mockResolvedValue([
+      { id: 45, title: 'Shop', url: 'https://shop.test/items', favIconUrl: 'https://shop.test/favicon.ico' } as chrome.tabs.Tab,
+    ]);
+
+    expect(JSON.stringify(await messagingService.getActiveTab())).not.toContain('favicon');
+  });
 });

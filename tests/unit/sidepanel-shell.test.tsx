@@ -61,7 +61,7 @@ describe('Side Panel UI Shell (App.tsx)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Restricted/i)).toBeInTheDocument();
+      expect(screen.getByText(/Can't read this page/i)).toBeInTheDocument();
     });
   });
 
@@ -69,7 +69,7 @@ describe('Side Panel UI Shell (App.tsx)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Ready|Restricted/i)).toBeInTheDocument();
+      expect(screen.getByText(/Ready|Can't read this page/i)).toBeInTheDocument();
     });
   });
 

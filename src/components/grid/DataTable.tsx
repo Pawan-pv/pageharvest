@@ -26,6 +26,8 @@ import {
   SlidersHorizontal,
   PlusCircle,
   ExternalLink,
+  ArrowLeft,
+  Undo2,
   ChevronLeftSquare,
   ChevronRightSquare,
   Edit2,
@@ -39,6 +41,8 @@ import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { Badge } from '@/components/common/Badge';
+import { Dialog } from '@/components/common/Dialog';
+import { SavedFileNotice } from '@/components/common/SavedFileNotice';
 import { EmptyState } from '@/components/common/EmptyState';
 import { isRecordMetadataKey } from '@/shared/contracts/record';
 import { ExtractedRecord, FieldDefinition, Dataset } from '@/types';
@@ -71,6 +75,13 @@ export interface DataTableProps {
   onDeleteRecordsBatch?: (recordIds: string[]) => void;
   onRecordsChange?: (records: ExtractedRecord[], fields?: FieldDefinition[]) => void | Promise<void>;
   onNewExtraction?: () => void;
+  /**
+   * Simple mode (ADR-039): the rows, a search box and cell editing. The cleaning tools,
+   * filters, column tools and the run's counts are shown with Advanced options on.
+   */
+  simple?: boolean;
+  /** Simple mode only: goes back to the summary this table was opened from. */
+  onBack?: () => void;
   /**
    * Changes only when a different set of rows has been loaded. Once this is provided, the
    * grid owns its working copy: edits made here do not reset the grid or its undo history.
@@ -124,6 +135,8 @@ export const DataTable: React.FC<DataTableProps> = ({
   onDeleteRecordsBatch,
   onRecordsChange,
   onNewExtraction,
+  simple = false,
+  onBack,
   dataRevision,
   runSummary,
 }) => {
@@ -164,6 +177,13 @@ export const DataTable: React.FC<DataTableProps> = ({
   const [showFilterBar, setShowFilterBar] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  // The download the export dialog last started, so the grid can say where the file went.
+  const [exportedDownloadId, setExportedDownloadId] = useState<number | null>(null);
+  // A deletion waiting for the user's answer. Asked in the panel: a browser confirm() box
+  // is not reliably shown for a side panel, and would name the extension's address.
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: 'column'; name: string } | { kind: 'rows'; count: number } | null
+  >(null);
   const [cleaningFeedback, setCleaningFeedback] = useState<string | null>(null);
 
   // Editing state
@@ -174,10 +194,25 @@ export const DataTable: React.FC<DataTableProps> = ({
   const [renamingCol, setRenamingCol] = useState<string | null>(null);
   const [newColName, setNewColName] = useState('');
 
-  // Auto-clear feedback toast
+  // Auto-clear feedback toast. The timer is cancelled when the grid closes, and a save
+  // that finishes after that announces nothing: there is no grid left to show it.
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gridOpen = useRef(true);
+  useEffect(() => {
+    gridOpen.current = true;
+    return () => {
+      gridOpen.current = false;
+      if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
+    };
+  }, []);
   const triggerFeedback = useCallback((msg: string) => {
+    if (!gridOpen.current) return;
+    if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
     setCleaningFeedback(msg);
-    setTimeout(() => setCleaningFeedback(null), 3000);
+    feedbackTimer.current = setTimeout(() => {
+      feedbackTimer.current = null;
+      setCleaningFeedback(null);
+    }, 3000);
   }, []);
 
   const valuesNeedingReview = useMemo(() => countValuesNeedingReview(currentRecords), [currentRecords]);
@@ -262,7 +297,7 @@ export const DataTable: React.FC<DataTableProps> = ({
     persistChange(cleaningHistory.currentRecords, cleaningHistory.currentFields, () => {
       cleaningHistory.redo();
       showHistoryState();
-    }, 'Undone last action');
+    }, 'Undone. Your last change was taken back.');
   };
 
   const handleRedo = () => {
@@ -279,7 +314,8 @@ export const DataTable: React.FC<DataTableProps> = ({
   const applyRowChange = useCallback((
     description: string,
     nextRecords: ExtractedRecord[],
-    save: () => void | Promise<void>
+    save: () => void | Promise<void>,
+    successMessage?: string
   ) => {
     cleaningHistory.recordOperation({
       description,
@@ -289,12 +325,18 @@ export const DataTable: React.FC<DataTableProps> = ({
       nextFields: currentFields,
     });
     setCurrentRecords(nextRecords);
-    void Promise.resolve(save()).catch((error: unknown) => {
-      setGridError(`Your change was not saved: ${error instanceof Error ? error.message : String(error)}`);
-      cleaningHistory.undo();
-      showHistoryState();
-    });
-  }, [cleaningHistory, currentFields, currentRecords, showHistoryState]);
+    void Promise.resolve(save()).then(
+      () => {
+        // Said only once the change is stored.
+        if (successMessage) triggerFeedback(successMessage);
+      },
+      (error: unknown) => {
+        setGridError(`Your change was not saved: ${error instanceof Error ? error.message : String(error)}`);
+        cleaningHistory.undo();
+        showHistoryState();
+      }
+    );
+  }, [cleaningHistory, currentFields, currentRecords, showHistoryState, triggerFeedback]);
 
   const handleCellSave = useCallback((recordId: string, columnId: string, value: string) => {
     setEditingCell(null);
@@ -309,7 +351,8 @@ export const DataTable: React.FC<DataTableProps> = ({
     applyRowChange(
       'Delete row',
       currentRecords.filter((r) => r._id !== recordId),
-      () => onDeleteRecord?.(recordId)
+      () => onDeleteRecord?.(recordId),
+      'Row deleted. Undo brings it back.'
     );
   }, [applyRowChange, currentRecords, onDeleteRecord]);
 
@@ -405,7 +448,10 @@ export const DataTable: React.FC<DataTableProps> = ({
   };
 
   const handleDeleteColumn = useCallback((columnName: string) => {
-    if (!confirm(`Are you sure you want to permanently delete column "${columnName}"?`)) return;
+    setPendingDelete({ kind: 'column', name: columnName });
+  }, []);
+
+  const deleteColumnNow = useCallback((columnName: string) => {
     const { records: updatedRecords, fields: updatedFields } = deleteColumns(
       currentRecords,
       currentFields,
@@ -415,10 +461,13 @@ export const DataTable: React.FC<DataTableProps> = ({
   }, [commitCleaningState, currentFields, currentRecords]);
 
   const handleDeleteSelectedRows = () => {
+    const count = Object.keys(rowSelection).length;
+    if (count > 0) setPendingDelete({ kind: 'rows', count });
+  };
+
+  const deleteSelectedRowsNow = () => {
     const selectedIndices = Object.keys(rowSelection).map(Number);
     if (selectedIndices.length === 0) return;
-
-    if (!confirm(`Are you sure you want to delete ${selectedIndices.length} selected row(s)?`)) return;
 
     const selectedIds = selectedIndices.map((idx) => currentRecords[idx]._id);
     const remaining = currentRecords.filter((_, idx) => !rowSelection[idx]);
@@ -476,7 +525,11 @@ export const DataTable: React.FC<DataTableProps> = ({
         header: () => (
           <div className="flex items-center justify-between gap-1 w-full group/hdr">
             <span className="truncate">{field.name}</span>
-            <div className="flex items-center opacity-0 group-hover/hdr:opacity-100 transition-opacity">
+            <div
+              className={
+                simple ? 'hidden' : 'flex items-center opacity-0 group-hover/hdr:opacity-100 transition-opacity'
+              }
+            >
               <button
                 type="button"
                 onClick={(e) => {
@@ -594,7 +647,7 @@ export const DataTable: React.FC<DataTableProps> = ({
     });
 
     return cols;
-  }, [visibleFields, editingCell, handleCellSave, handleDeleteRow, handleDeleteColumn, handleMoveColumn]);
+  }, [visibleFields, editingCell, handleCellSave, handleDeleteRow, handleDeleteColumn, handleMoveColumn, simple]);
 
   const table = useReactTable({
     data: currentRecords,
@@ -648,7 +701,7 @@ export const DataTable: React.FC<DataTableProps> = ({
         </Banner>
       )}
 
-      {valuesNeedingReview > 0 && (
+      {!simple && valuesNeedingReview > 0 && (
         <Banner tone="warning">
           {valuesNeedingReview} {valuesNeedingReview === 1 ? 'value' : 'values'} could not be read as one
           certain number, so {valuesNeedingReview === 1 ? 'it was' : 'they were'} kept as written. To see why,
@@ -656,7 +709,7 @@ export const DataTable: React.FC<DataTableProps> = ({
         </Banner>
       )}
 
-      {runSummary && runSummary.recordsDetected > 0 && (
+      {!simple && runSummary && runSummary.recordsDetected > 0 && (
         <p className="text-2xs text-fg-subtle" aria-label="Extraction summary">
           {runSummary.recordsDetected} detected, {runSummary.totalExtracted} kept,{' '}
           {runSummary.recordsWithMissingFields} with missing fields, {runSummary.recordsFiltered} filtered,{' '}
@@ -664,12 +717,64 @@ export const DataTable: React.FC<DataTableProps> = ({
         </p>
       )}
 
+      {exportedDownloadId !== null && (
+        <SavedFileNotice downloadId={exportedDownloadId} onDismiss={() => setExportedDownloadId(null)} />
+      )}
+
+      {simple && (
+        <div className="flex flex-col gap-2">
+          {onBack && (
+            <div>
+              <Button
+                variant="ghost"
+                size="sm"
+                iconLeft={<ArrowLeft aria-hidden="true" className="w-3.5 h-3.5" />}
+                onClick={onBack}
+              >
+                Back
+              </Button>
+            </div>
+          )}
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-fg leading-snug break-words">{dataset?.name || 'Your rows'}</h2>
+            <p className="text-body text-fg-muted mt-0.5">
+              {currentRecords.length.toLocaleString('en-US')} {currentRecords.length === 1 ? 'row' : 'rows'},{' '}
+              {visibleFields.length} {visibleFields.length === 1 ? 'column' : 'columns'}. Double-click a cell to change
+              it. Changes are saved as you make them.
+            </p>
+          </div>
+          <Input
+            aria-label="Search these rows"
+            placeholder="Search these rows"
+            value={globalFilter ?? ''}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            iconLeft={<Search aria-hidden="true" className="w-3.5 h-3.5" />}
+          />
+          {/* A change or a deleted row can always be taken back while the table stays open. */}
+          <div className="flex flex-wrap items-center gap-2 min-h-8">
+            <Button
+              variant="outline"
+              size="sm"
+              iconLeft={<Undo2 aria-hidden="true" className="w-3.5 h-3.5" />}
+              disabled={!cleaningHistory.canUndo()}
+              onClick={handleUndo}
+            >
+              Undo
+            </Button>
+            <span role="status" className="text-body text-fg-muted">
+              {cleaningFeedback ?? ''}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Top Header & Actions */}
+      {!simple && (
       <div className="flex flex-col gap-2 bg-surface p-3 rounded-xl border border-line/80 shadow-xs">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-sm font-bold text-fg leading-tight">
-              {dataset?.name || 'Local Data Workspace'}
+              {dataset?.name || 'Your rows'}
             </h2>
             <div className="flex items-center gap-1.5 text-xs text-fg-subtle mt-0.5">
               <Badge variant="brand" size="sm">
@@ -779,8 +884,10 @@ export const DataTable: React.FC<DataTableProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* Data Cleaning Toolbar */}
+      {!simple && (
       <DataCleaningToolbar
         canUndo={cleaningHistory.canUndo()}
         canRedo={cleaningHistory.canRedo()}
@@ -795,6 +902,7 @@ export const DataTable: React.FC<DataTableProps> = ({
         fields={currentFields}
         feedbackMessage={cleaningFeedback}
       />
+      )}
 
       {/* Selection Action Banner */}
       {selectedCount > 0 && (
@@ -844,8 +952,7 @@ export const DataTable: React.FC<DataTableProps> = ({
       {isLoading ? (
         <div className="flex-1 flex flex-col items-center justify-center p-12 bg-surface border border-line rounded-xl">
           <Loader2 className="w-8 h-8 text-brand-fg animate-spin mb-3" />
-          <h4 className="text-sm font-semibold text-fg">Loading data workspace...</h4>
-          <p className="text-xs text-fg-subtle mt-1">Retrieving records from IndexedDB</p>
+          <h4 className="text-sm font-semibold text-fg">Loading your rows…</h4>
         </div>
       ) : currentRecords.length === 0 ? (
         /* Empty State */
@@ -1036,10 +1143,48 @@ export const DataTable: React.FC<DataTableProps> = ({
         </div>
       )}
 
+      {/* Delete confirmation, asked in the panel */}
+      <Dialog
+        isOpen={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        title={
+          pendingDelete?.kind === 'column'
+            ? `Delete the column "${pendingDelete.name}"?`
+            : `Delete ${pendingDelete?.kind === 'rows' ? pendingDelete.count : 0} selected ${
+                pendingDelete?.kind === 'rows' && pendingDelete.count === 1 ? 'row' : 'rows'
+              }?`
+        }
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setPendingDelete(null)}>
+              Keep
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                const pending = pendingDelete;
+                setPendingDelete(null);
+                if (pending?.kind === 'column') deleteColumnNow(pending.name);
+                if (pending?.kind === 'rows') deleteSelectedRowsNow();
+              }}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      >
+        {pendingDelete?.kind === 'column'
+          ? 'Its values are removed from every row. Undo brings it back while this table stays open.'
+          : 'Undo brings them back while this table stays open.'}
+      </Dialog>
+
       {/* Export Dialog */}
       <ExportDialog
         isOpen={showExportDialog}
         onClose={() => setShowExportDialog(false)}
+        onExported={(downloadId) => setExportedDownloadId(downloadId ?? null)}
         records={currentRecords}
         fields={currentFields}
         dataset={dataset}

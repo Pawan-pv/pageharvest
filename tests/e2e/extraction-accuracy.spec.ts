@@ -7,6 +7,7 @@ import { expect, test } from './release-test';
 import {
   choosePagination,
   markTourSeen,
+  enableAdvancedOptions,
   resultHeading,
   setLimits,
   startButton,
@@ -21,7 +22,7 @@ import {
  * or written to disk, not what the panel says.
  */
 const FIXTURES = 'http://127.0.0.1:3456';
-const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 
 type Row = Record<string, unknown>;
 interface StoredJob {
@@ -49,6 +50,7 @@ test.beforeAll(async () => {
   extensionId = worker.url().split('/')[2];
   // The first-run tour has its own spec; here it would cover the panel.
   await markTourSeen(worker);
+  await enableAdvancedOptions(worker);
 });
 
 test.afterAll(async () => {
@@ -435,7 +437,7 @@ test.describe('pagination', () => {
     await chooseFields(panel);
     await choosePagination(panel, 'next_button');
     await setLimits(panel, { maxPages: 6 });
-    await setLimits(panel, { delayMs: 300 });
+    await setLimits(panel, { delayMs: 1000 });
     await start(panel);
 
     const { rows } = await finishedRows(panel);
@@ -452,7 +454,7 @@ test.describe('pagination', () => {
     await chooseFields(panel);
     await choosePagination(panel, 'next_button');
     await setLimits(panel, { maxPages: 5 });
-    await setLimits(panel, { delayMs: 300 });
+    await setLimits(panel, { delayMs: 1000 });
     await start(panel);
 
     const { rows } = await finishedRows(panel);
@@ -552,7 +554,7 @@ test.describe('working with results', () => {
 
 test.describe('the library', () => {
   const openLibrary = async (panel: Page, section: string) => {
-    await panel.getByRole('button', { name: 'Datasets' }).click();
+    await panel.getByRole('button', { name: 'My data' }).click();
     await panel.getByRole('navigation', { name: 'Library sections' }).getByRole('button', { name: section }).click();
   };
 

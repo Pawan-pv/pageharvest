@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type CDPSession, type Page } from '@playwright/test';
 import { expect, test } from './release-test';
-import { choosePagination, setLimits, markTourSeen } from './helpers/panel';
+import { choosePagination, setLimits, markTourSeen, enableAdvancedOptions } from './helpers/panel';
 
 /**
  * Real-Chromium verification of the Neon Indicator Overlays against the built
@@ -15,7 +15,7 @@ import { choosePagination, setLimits, markTourSeen } from './helpers/panel';
  */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = 'http://127.0.0.1:3456';
-const EXTENSION_PATH = path.resolve(HERE, '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(HERE, '../../.output/chrome-mv3-test');
 const SHOTS_DIR = path.resolve(HERE, '../../test-results');
 
 const PICKER_HOST = 'pageharvest-picker-overlay-host';
@@ -144,7 +144,7 @@ async function sampleHud(session: CDPSession): Promise<HudSample | null> {
     at: Date.now(),
     counter,
     action: textOf(view.one('px-action')),
-    rows: Number(/(\d+) rows/.exec(counter)?.[1] ?? NaN),
+    rows: Number(/(\d+) rows?(?![a-z])/.exec(counter)?.[1] ?? NaN),
     hud,
     laser,
     scanBoxes: view.all('px-scan-box').length,
@@ -234,7 +234,7 @@ async function waitForCompletedJob(panel: Page, known: Set<string>): Promise<Sto
   return found as StoredJob;
 }
 
-const COMPLETE_TEXT = '✓ Harvest Complete!';
+const COMPLETE_TEXT = 'Harvest complete';
 
 interface FadeLog {
   fadeStartedAt: number | null;
@@ -297,6 +297,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     extensionId = worker.url().split('/')[2];
     // The first-run tour has its own spec; here it would cover the panel.
     await markTourSeen(worker);
+    await enableAdvancedOptions(worker);
   });
 
   test.afterAll(async () => {
@@ -499,11 +500,12 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     expect(new Set(rows.filter((value) => value > 0)).size).toBeGreaterThan(1);
     expect(job.totalExtracted).toBeGreaterThan(0);
     expect(rows.at(-1)).toBe(job.totalExtracted);
-    expect(samples.at(-1)?.counter).toBe(`⚡ Harvesting • ${job.totalExtracted} rows`);
+    // Finished: the counter reports what was saved, not that it is still harvesting.
+    expect(samples.at(-1)?.counter).toBe(`${job.totalExtracted} ${job.totalExtracted === 1 ? 'row' : 'rows'} saved`);
 
     // The action text followed the run.
     const actions = new Set(samples.map((sample) => sample.action));
-    expect(actions.has('Scrolling...')).toBe(true);
+    expect(actions.has('Scrolling for more…')).toBe(true);
     expect(samples.at(-1)?.action).toBe(COMPLETE_TEXT);
 
     // Item pulses really rendered, capped, with ✓ #N badges, and then faded away.
@@ -553,7 +555,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
       const { panel, target, session, pageErrors } = await open(`${FIXTURES}/next-page-pagination.html`);
       await configure(panel);
       await choosePagination(panel, 'next_button');
-      await setLimits(panel, { delayMs: 200 });
+      await setLimits(panel, { delayMs: 1000 });
 
       const recording = recordHud(session, {
         timeoutMs: 60000,

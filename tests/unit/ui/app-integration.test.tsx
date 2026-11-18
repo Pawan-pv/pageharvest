@@ -53,9 +53,10 @@ describe('UI: App Container & Navigation Lifecycle', () => {
 
     await waitFor(() => {
       expect(screen.getByText('PageHarvest')).toBeInTheDocument();
-      expect(screen.getByText('v1.0')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Harvest' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Datasets' })).toBeInTheDocument();
+      // The version is in Help, not in the header every screen shows.
+      expect(screen.queryByText(/^v\d/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Get data' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'My data' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
     });
   });
@@ -64,9 +65,7 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     render(<App />);
 
     await screen.findByText('Get data from this page');
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument());
   });
 
   it('displays the recovery banner for a stored recoverable job, with its real progress', async () => {
@@ -120,11 +119,11 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     });
   });
 
-  it('switches views when clicking Datasets and Settings navigation tabs', async () => {
+  it('switches views when clicking My data and Settings navigation tabs', async () => {
     render(<App />);
 
-    // Click Datasets
-    fireEvent.click(screen.getByRole('button', { name: 'Datasets' }));
+    // Click My data
+    fireEvent.click(screen.getByRole('button', { name: 'My data' }));
     await waitFor(() => expect(screen.getByText('Saved Extractions')).toBeInTheDocument());
 
     // Click Settings
@@ -132,7 +131,7 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     await waitFor(() => expect(screen.getByText('Settings & Preferences')).toBeInTheDocument());
 
     // Return to Harvest
-    fireEvent.click(screen.getByRole('button', { name: 'Harvest' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get data' }));
     await waitFor(() => expect(screen.getByText('Get data from this page')).toBeInTheDocument());
   });
 });

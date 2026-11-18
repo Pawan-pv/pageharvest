@@ -94,7 +94,7 @@ describe('ExtractionVisualOverlay (neon scan overlay)', () => {
     expect(laser.classList.contains('px-hidden')).toBe(false);
     const hud = root.querySelector<HTMLElement>('.px-hud')!;
     expect(hud.classList.contains('px-hidden')).toBe(false);
-    expect(hud.textContent).toContain('Scanning DOM');
+    expect(hud.textContent).toContain('Reading the page');
     expect(hud.textContent).toContain('0 rows');
   });
 
@@ -107,9 +107,9 @@ describe('ExtractionVisualOverlay (neon scan overlay)', () => {
     const hud = overlayRootOf(host).querySelector<HTMLElement>('.px-hud')!;
 
     overlay.setAction('scrolling');
-    expect(hud.textContent).toContain('Scrolling');
+    expect(hud.textContent).toContain('Scrolling for more');
     overlay.setAction('navigating');
-    expect(hud.textContent).toContain('Next page');
+    expect(hud.textContent).toContain('Opening the next page');
   });
 
   it('pulses at most 25 visible viewport items and shows the row badge', () => {
@@ -213,7 +213,10 @@ describe('ExtractionVisualOverlay (neon scan overlay)', () => {
       document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!
     );
     const hud = root.querySelector<HTMLElement>('.px-hud')!;
-    expect(hud.textContent).toContain('✓ Harvest Complete!');
+    expect(hud.querySelector('.px-action')!.textContent).toBe('Harvest complete');
+    // Finished: the counter no longer says it is still harvesting.
+    expect(hud.querySelector('.px-counter')!.textContent).toBe('0 rows saved');
+    expect(hud.textContent).not.toContain('Harvesting');
 
     vi.advanceTimersByTime(600);
     expect(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)).toBeNull();
@@ -253,7 +256,7 @@ describe('ExtractionVisualOverlay (neon scan overlay)', () => {
     expect(host.isConnected).toBe(true);
     const hud = overlayRootOf(host).querySelector<HTMLElement>('.px-hud')!;
     expect(hud.textContent).toContain('0 rows');
-    expect(hud.textContent).toContain('Scanning DOM');
+    expect(hud.textContent).toContain('Reading the page');
   });
 
   it('starts the counter from rows an earlier document already harvested', () => {
@@ -306,6 +309,96 @@ describe('ExtractionVisualOverlay (neon scan overlay)', () => {
     expect(laserRule).toContain('#00f5d4');
     expect(laserRule).toContain('#10b981');
     expect(laserRule).not.toContain('#a855f7');
+  });
+
+  it('sweeps a scan beam and an edge glow while running, and stops both at completion', () => {
+    overlay = new ExtractionVisualOverlay();
+    overlay.attach();
+    const root = overlayRootOf(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!);
+    const beam = root.querySelector('.px-beam')!;
+    const frame = root.querySelector('.px-frame')!;
+    expect(beam.classList.contains('px-hidden')).toBe(true);
+    expect(frame.classList.contains('px-hidden')).toBe(true);
+
+    overlay.start();
+    expect(beam.classList.contains('px-hidden')).toBe(false);
+    expect(frame.classList.contains('px-hidden')).toBe(false);
+
+    overlay.setAction('navigating');
+    expect(root.querySelector<HTMLElement>('.px-root')!.dataset.action).toBe('navigating');
+
+    overlay.complete();
+    expect(beam.classList.contains('px-hidden')).toBe(true);
+    expect(frame.classList.contains('px-frame-done')).toBe(true);
+    expect(root.querySelector('.px-hud')!.classList.contains('px-done')).toBe(true);
+  });
+
+  it('sends one spark per pulsed item toward the HUD and removes it after its flight', () => {
+    document.body.innerHTML = '<div class="card one"></div><div class="card two"></div>';
+    overlay = new ExtractionVisualOverlay();
+    overlay.start({ pulseStaggerMs: 100, pulseLifeMs: 850 });
+    for (const card of Array.from(document.querySelectorAll<HTMLElement>('.card'))) {
+      vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(viewportRect(200, 40));
+    }
+    const root = overlayRootOf(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!);
+    vi.spyOn(root.querySelector<HTMLElement>('.px-orb')!, 'getBoundingClientRect').mockReturnValue(
+      { ...viewportRect(600, 900), width: 10, height: 10 } as DOMRect
+    );
+
+    overlay.pulseSelector('.card', 2);
+
+    const sparks = Array.from(root.querySelectorAll<HTMLElement>('.px-spark'));
+    expect(sparks).toHaveLength(2);
+    // Starts at the item's centre and flies to the orb's centre.
+    expect(sparks[0].style.left).toBe('100px');
+    expect(sparks[0].style.top).toBe('215px');
+    expect(sparks[0].style.getPropertyValue('--px-dx')).toBe('805px');
+    expect(sparks[0].style.getPropertyValue('--px-dy')).toBe('390px');
+
+    vi.advanceTimersByTime(2000);
+    expect(root.querySelectorAll('.px-spark')).toHaveLength(0);
+  });
+
+  it('bumps the counter each time rows land', () => {
+    overlay = new ExtractionVisualOverlay();
+    overlay.start();
+    const counter = overlayRootOf(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!).querySelector<HTMLElement>(
+      '.px-counter'
+    )!;
+    expect(counter.classList.contains('px-bump')).toBe(false);
+    overlay.addRows(4);
+    expect(counter.classList.contains('px-bump')).toBe(true);
+    overlay.addRows(0);
+    expect(counter.textContent).toBe('⚡ Harvesting • 4 rows');
+    overlay.addRows(-3);
+    expect(counter.textContent).toBe('⚡ Harvesting • 1 row');
+  });
+
+  it('bursts on completion, and a new run clears the finished state', () => {
+    overlay = new ExtractionVisualOverlay();
+    overlay.start({ completionFadeMs: 2500 });
+    overlay.addRows(20);
+    overlay.complete();
+    const root = overlayRootOf(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!);
+    expect(root.querySelectorAll('.px-burst').length).toBeGreaterThan(0);
+    expect(root.querySelector('.px-counter')!.textContent).toBe('20 rows saved');
+
+    vi.advanceTimersByTime(1000);
+    expect(root.querySelectorAll('.px-burst')).toHaveLength(0);
+
+    overlay.start();
+    expect(root.querySelector('.px-hud')!.classList.contains('px-done')).toBe(false);
+    expect(root.querySelector('.px-frame')!.classList.contains('px-frame-done')).toBe(false);
+    expect(root.querySelector('.px-beam')!.classList.contains('px-hidden')).toBe(false);
+    expect(root.querySelector('.px-counter')!.textContent).toBe('⚡ Harvesting • 0 rows');
+  });
+
+  it('hides the moving beam and sparks for people who prefer reduced motion', () => {
+    overlay = new ExtractionVisualOverlay();
+    overlay.attach();
+    const css = overlayRootOf(document.getElementById(EXTRACTION_OVERLAY_HOST_ID)!).querySelector('style')!.textContent ?? '';
+    const block = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(block).toMatch(/\.px-beam[^{]*\.px-spark[^{]*\.px-burst[^{]*\{[^}]*display:\s*none\s*!important/);
   });
 
   it('removes the host and cancels pending timers on destroy', () => {

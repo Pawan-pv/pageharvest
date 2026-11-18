@@ -126,12 +126,12 @@ describe('Onboarding', () => {
 describe('Help screen', () => {
   const required = [
     'Getting started',
-    'Picking data',
-    'Auto-detect',
-    'Editing fields',
-    'Pagination and infinite scroll',
-    'Running, pausing and resuming jobs',
-    'Recovering interrupted jobs',
+    'Picking an item yourself',
+    'How PageHarvest finds a list',
+    'Columns',
+    'More pages',
+    'While it collects',
+    'If it stops early',
     'Exporting',
     'Privacy',
     'Troubleshooting',
@@ -156,7 +156,7 @@ describe('Help screen', () => {
     render(<HelpView onClose={vi.fn()} onRestartTour={vi.fn()} />);
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search the guide' }), 'scroll');
     expect(screen.getByRole('status')).toHaveTextContent(/sections? match "scroll"/);
-    expect(screen.getByRole('heading', { name: 'Pagination and infinite scroll' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'More pages' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Privacy' })).not.toBeInTheDocument();
   });
 
@@ -178,6 +178,16 @@ describe('Help screen', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+
+  it('links to the privacy policy and the open-source licences, and shows the version', () => {
+    render(<HelpView onClose={vi.fn()} onRestartTour={vi.fn()} />);
+    const privacy = screen.getByRole('link', { name: /Privacy policy/ });
+    expect(privacy).toHaveAttribute('href', expect.stringMatching(/^https:\/\/github\.com\/.+\/PRIVACY\.md$/));
+    expect(privacy).toHaveAttribute('target', '_blank');
+    // A file inside the extension package, so opening it fetches nothing from the network.
+    expect(screen.getByRole('link', { name: /Open-source licences/ })).toHaveAttribute('href', '/THIRD_PARTY_NOTICES.txt');
+    expect(screen.getByText('PageHarvest 1.0.0')).toBeInTheDocument();
   });
 
   it('can restart the tour and go back', async () => {
@@ -256,10 +266,9 @@ describe('App: first run and Help', () => {
     cleanup();
     render(<App />);
     await screen.findByText('Get data from this page');
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole('button', { name: 'Help' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Help' }));
     expect(await screen.findByRole('heading', { name: 'Help and guide' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Help' })).toHaveAttribute('aria-current', 'page');
     await userEvent.click(screen.getByRole('button', { name: 'Show the welcome tour again' }));
@@ -270,7 +279,7 @@ describe('App: first run and Help', () => {
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: 'Help' }));
     await screen.findByRole('heading', { name: 'Help and guide' });
-    await userEvent.click(screen.getByRole('button', { name: 'Harvest' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Get data' }));
     expect(await screen.findByText('Get data from this page')).toBeInTheDocument();
   });
 });

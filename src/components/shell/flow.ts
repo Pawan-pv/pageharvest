@@ -10,7 +10,7 @@ const FIRST_STEP: Record<FlowKind, string> = {
   auto: 'Find data',
   table: 'Find a table',
   links: 'Find links',
-  recipe: 'Load recipe',
+  recipe: 'Load saved setup',
 };
 
 /**
@@ -21,10 +21,31 @@ const FIRST_STEP: Record<FlowKind, string> = {
 export function flowSteps(kind: FlowKind): StepperStep[] {
   return [
     { id: 'pick', label: FIRST_STEP[kind] },
-    { id: 'fields', label: 'Review fields' },
-    { id: 'pagination', label: 'Pagination', optional: true },
-    { id: 'run', label: 'Run' },
-    { id: 'export', label: 'Export' },
+    { id: 'fields', label: 'Check columns' },
+    { id: 'pagination', label: 'More pages', optional: true },
+    { id: 'run', label: 'Collect' },
+    { id: 'export', label: 'Download' },
+  ];
+}
+
+const SIMPLE_FIRST_STEP: Record<FlowKind, string> = {
+  pick: 'Find the list',
+  auto: 'Find the list',
+  table: 'Find a table',
+  links: 'Find links',
+  recipe: 'Load saved setup',
+};
+
+/**
+ * Simple mode has four steps (ADR-039). Whether to get more pages is one question on the
+ * columns screen, so it is not a step of its own.
+ */
+export function simpleFlowSteps(kind: FlowKind): StepperStep[] {
+  return [
+    { id: 'pick', label: SIMPLE_FIRST_STEP[kind] },
+    { id: 'fields', label: 'Check columns' },
+    { id: 'run', label: 'Collect' },
+    { id: 'export', label: 'Download' },
   ];
 }
 

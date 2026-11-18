@@ -185,7 +185,7 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
         </div>
         <p className="text-2xs text-fg-subtle">
           <span id={finishHintId}>Finish stops now and shows the rows collected so far.</span>{' '}
-          <span id={cancelHintId}>Cancel stops the job; saved rows stay in Datasets.</span>
+          <span id={cancelHintId}>Cancel stops the job; saved rows stay in My data.</span>
         </p>
       </div>
     </div>

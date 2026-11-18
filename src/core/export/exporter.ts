@@ -263,7 +263,9 @@ export function* recordsToCsvChunks(
   for (let i = 0; i < records.length; i++) {
     const record = records[i];
     const row = columnNames.map((col) => escapeCsvCell(record[col])).join(delimiter);
-    currentChunk.push(row);
+    // With one column, a missing value would make a blank line, which readers skip and which
+    // cannot be told apart from the file's last line break. A quoted empty field keeps the row.
+    currentChunk.push(row === '' ? '""' : row);
 
     if (currentChunk.length >= chunkSize) {
       yield currentChunk.join('\r\n') + '\r\n';

@@ -5,6 +5,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { prepareTestExtension } from '../testing/test-extension.mjs';
 import { decideNativeStatus } from './release-report.mjs';
 
 /**
@@ -106,11 +107,12 @@ function devtoolsCommand(target, method, params = {}) {
   });
 }
 
-async function evaluate(target, expression) {
+async function evaluate(target, expression, { userGesture = false } = {}) {
   const result = await devtoolsCommand(target, 'Runtime.evaluate', {
     expression,
     awaitPromise: true,
     returnByValue: true,
+    userGesture,
   });
   if (result.exceptionDetails) {
     throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
@@ -152,7 +154,10 @@ const clickPanelButton = (panel, label) =>
         if (!button) return false;
         button.click();
         return true;
-      })()`
+      })()`,
+      // A person's click is a user gesture. Start confirms site access with Chrome first
+      // (ADR-037; already granted since ADR-040), which Chrome refuses without a gesture.
+      { userGesture: true }
     )
   );
 
@@ -236,10 +241,11 @@ async function collectEvidence({ browser, port, evidence, artifactDirectory, not
     () => true,
     () => false
   );
-  await clickPanelButton(panel, 'Find data automatically');
-  await clickPanelButton(panel, 'Use this list');
-  await clickPanelButton(panel, 'Next: Pagination');
-  await clickPanelButton(panel, 'Start extraction');
+  // A fresh profile opens in simple mode (ADR-039), as a new user's does: the list is found
+  // and shown, the user says it is theirs, and collecting starts from the columns screen.
+  await clickPanelButton(panel, 'Get the list on this page');
+  await clickPanelButton(panel, 'Yes, this is my list');
+  await clickPanelButton(panel, 'Start collecting');
   try {
     await waitFor('the job to complete', async () =>
       (await readFromDatabase(panel, 'jobs')).some((job) => job.status === 'COMPLETED')
@@ -316,12 +322,14 @@ export async function runNativeChromeCheck({
       evidence.error = `The production build is missing: ${buildLocation}`;
     } else {
       stopServer = await ensureFixtureServer();
+      // A copy of the production build, which holds site access from install (ADR-040).
+      const extensionLocation = prepareTestExtension({ source: buildLocation });
       const port = await getFreePort();
       await mkdir(profileDirectory, { recursive: true });
       browser = spawn(browserInfo.path, [
         `--user-data-dir=${profileDirectory}`,
-        `--disable-extensions-except=${buildLocation}`,
-        `--load-extension=${buildLocation}`,
+        `--disable-extensions-except=${extensionLocation}`,
+        `--load-extension=${extensionLocation}`,
         `--remote-debugging-port=${port}`,
         '--no-first-run',
         '--no-default-browser-check',

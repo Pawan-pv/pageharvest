@@ -10,13 +10,15 @@ import { UserSettingsSchema } from '@/shared/contracts/settings';
 import { db } from '@/storage/db';
 import { SettingsRepository } from '@/storage/repositories/settings-repository';
 import { CsvDelimiter, DEFAULT_USER_SETTINGS, ExportFormat, UserSettings } from '@/types/settings';
+import { PRIVACY_POLICY_URL } from '@/components/guide/links';
+import { useAdvancedMode } from './useAdvancedMode';
 
 export interface SettingsViewProps {
   onBackToDashboard: () => void;
 }
 
 const FIELD_LABELS: Partial<Record<keyof UserSettings, string>> = {
-  defaultDelayMs: 'Default page delay must be between 200 and 30000 ms.',
+  defaultDelayMs: 'Default page delay must be between 1000 and 30000 ms.',
   defaultMaxPages: 'Default max pages must be between 1 and 500.',
   defaultMaxScrolls: 'Default max scrolls must be between 1 and 200.',
   defaultScrollDelayMs: 'Default scroll delay must be between 300 and 10000 ms.',
@@ -35,6 +37,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
   const [recordCount, setRecordCount] = useState<number>(0);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const { advanced, setAdvanced } = useAdvancedMode();
+  const [advancedNotKept, setAdvancedNotKept] = useState(false);
+
+  const handleAdvancedChange = async (next: boolean) => {
+    setAdvancedNotKept(false);
+    const kept = await setAdvanced(next);
+    if (!kept) setAdvancedNotKept(true);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -118,7 +128,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
             Settings & Preferences
           </h2>
           <p className="text-xs text-fg-subtle mt-0.5">
-            Configure default extraction throttling and storage
+            Choices that apply every time you use PageHarvest
           </p>
         </div>
 
@@ -139,6 +149,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
         </Banner>
       )}
 
+      {/* Simple mode is the default (ADR-039). The switch hides controls; it removes nothing. */}
+      <Card variant="default">
+        <label className="flex items-start gap-3 cursor-pointer min-h-8">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={advanced}
+            onChange={(e) => void handleAdvancedChange(e.target.checked)}
+            aria-labelledby="advanced-options-title"
+            aria-describedby="advanced-options-description"
+            className="mt-0.5 w-5 h-5 shrink-0 rounded border-line-strong accent-brand"
+          />
+          <span className="min-w-0">
+            <span id="advanced-options-title" className="block text-sm font-semibold text-fg">
+              Advanced options
+            </span>
+            <span id="advanced-options-description" className="block text-xs text-fg-muted mt-0.5">
+              Show the detailed controls: page limits, waiting times, column types, file formats and more. Nothing is
+              removed when this is off.
+            </span>
+          </span>
+        </label>
+        {advancedNotKept && (
+          <Banner tone="warning" className="mt-3" onDismiss={() => setAdvancedNotKept(false)}>
+            Your choice is used now, but it could not be remembered for next time.
+          </Banner>
+        )}
+      </Card>
+
+      {advanced && (
+      <>
       {/* Locked until the saved values arrive, which would otherwise overwrite an early edit. */}
       <fieldset disabled={!isLoaded} className="contents">
       {/* Crawl & Extraction Defaults */}
@@ -152,7 +193,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
           <Input
             type="number"
             label="Default Page Delay (ms)"
-            min={200}
+            min={1000}
             max={30000}
             step={250}
             value={draft.defaultDelayMs}
@@ -167,7 +208,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
             max={500}
             value={draft.defaultMaxPages}
             onChange={(e) => update('defaultMaxPages', Number(e.target.value))}
-            helperText="Circuit breaker to prevent unintentional infinite scraping loops."
+            helperText="The most pages a new job follows, unless you change it for that job."
           />
 
           <Input
@@ -223,6 +264,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
             value={draft.defaultExportFormat}
             options={[
               { value: 'csv', label: 'CSV' },
+              { value: 'xlsx', label: 'Excel' },
               { value: 'json', label: 'JSON' },
               { value: 'ndjson', label: 'NDJSON' },
             ]}
@@ -275,23 +317,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
           Save Preferences
         </Button>
       </div>
+      </>
+      )}
 
       {/* Storage Management */}
       <Card variant="default">
-        <CardHeader
-          title="IndexedDB Storage"
-          subtitle="All extracted tables and dataset runs are stored locally on your machine."
-        />
+        <CardHeader title="Your saved data" subtitle="Everything you collect is stored on this computer." />
 
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="p-2.5 rounded-lg bg-surface-sunken border border-line">
-              <span className="text-fg-subtle block text-2xs">Saved Datasets</span>
+              <span className="text-fg-subtle block text-2xs">Saved lists</span>
               <strong className="text-sm text-fg font-semibold">{datasetCount}</strong>
             </div>
 
             <div className="p-2.5 rounded-lg bg-surface-sunken border border-line">
-              <span className="text-fg-subtle block text-2xs">Total Rows</span>
+              <span className="text-fg-subtle block text-2xs">Rows</span>
               <strong className="text-sm text-fg font-semibold">{recordCount}</strong>
             </div>
           </div>
@@ -304,7 +345,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
               onClick={() => setIsClearModalOpen(true)}
               disabled={datasetCount === 0 && recordCount === 0}
             >
-              Clear All Saved Data
+              Delete all saved data
             </Button>
           </div>
         </div>
@@ -313,13 +354,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
       {/* Privacy Notice */}
       <Card variant="flat" className="p-3.5 bg-surface-sunken/80 border-line/80">
         <div className="flex items-center gap-2 mb-1.5">
-          <ShieldCheck className="w-4 h-4 text-brand-fg" />
-          <h4 className="text-xs font-semibold text-fg">
-            Privacy & Browser Safety
-          </h4>
+          <ShieldCheck aria-hidden="true" className="w-4 h-4 text-brand-fg" />
+          <h3 className="text-sm font-semibold text-fg">Your data stays here</h3>
         </div>
-        <p className="text-2xs text-fg-muted leading-relaxed">
-          PageHarvest is 100% client-side. No remote AI endpoints, telemetry, or third-party servers receive your data.
+        <p className="text-body text-fg-muted">
+          Everything you collect is stored on this computer. PageHarvest has no account, and sends nothing to anyone.{' '}
+          <a
+            href={PRIVACY_POLICY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-fg underline underline-offset-2 hover:text-brand-emphasis"
+          >
+            Privacy policy
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
         </p>
       </Card>
 
@@ -327,8 +375,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
       <Dialog
         isOpen={isClearModalOpen}
         onClose={() => setIsClearModalOpen(false)}
-        title="Clear All Saved Data?"
-        description="This will permanently delete all datasets, projects, recipes, schemas, and history from IndexedDB. Your preferences are kept."
+        title="Delete all saved data?"
+        description="Every saved list and its rows will be removed from this computer, with your groups, saved setups and history. Your settings are kept."
         footer={
           <>
             <Button
@@ -344,13 +392,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
               isLoading={isClearing}
               onClick={() => void handleClearAllData()}
             >
-              Confirm Clear
+              Delete everything
             </Button>
           </>
         }
       >
         <p className="text-xs text-fg-muted">
-          This operation cannot be reversed. Make sure you have exported any needed CSV or JSON datasets first.
+          This cannot be undone. Files you already downloaded are not touched; download anything else you need first.
         </p>
       </Dialog>
     </div>

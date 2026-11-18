@@ -4,10 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { expect, test } from './release-test';
-import { choosePagination, setLimits, markTourSeen, waitForCompletedDownload } from './helpers/panel';
+import { choosePagination, setLimits, markTourSeen, enableAdvancedOptions, waitForCompletedDownload } from './helpers/panel';
 
 const fixtureBaseUrl = 'http://127.0.0.1:3456';
-const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 
 type DownloadSnapshot = {
   id: number;
@@ -55,6 +55,8 @@ async function sendToActiveTab(page: Page, message: ContentMessage): Promise<unk
     if (typeof tabId !== 'number') {
       throw new Error('The active fixture tab was not available to the extension context.');
     }
+    // No static content script (ADR-037): inject first, as the panel does before detection.
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content-scripts/content.js'] });
     return chrome.tabs.sendMessage(tabId, request);
   }, message);
 }
@@ -110,6 +112,7 @@ async function getExtensionId(context: BrowserContext): Promise<{ id: string; wo
   const id = worker.url().split('/')[2];
   // The first-run tour has its own spec; here it would cover the panel.
   await markTourSeen(worker);
+  await enableAdvancedOptions(worker);
   if (!id) throw new Error(`Could not determine the unpacked extension ID from ${worker.url()}.`);
   return { id, worker };
 }
@@ -170,11 +173,11 @@ test.describe('PageHarvest release workflows', () => {
     expect(records).toHaveLength(20);
     expect(records.some((record) => Object.values(record).some((value) => value === 'Item 01 - Alpha Pro Headset'))).toBe(true);
 
-    await sidePanelPage.getByRole('button', { name: 'Datasets' }).click();
+    await sidePanelPage.getByRole('button', { name: 'My data' }).click();
     await expect(sidePanelPage.getByText('Saved Extractions')).toBeVisible();
     await expect(sidePanelPage.getByText('20 rows')).toBeVisible();
     await sidePanelPage.reload();
-    await sidePanelPage.getByRole('button', { name: 'Datasets' }).click();
+    await sidePanelPage.getByRole('button', { name: 'My data' }).click();
     await expect(sidePanelPage.getByText('20 rows')).toBeVisible();
     await sidePanelPage.getByText(/20 Product Listing - PageHarvest Fixture/).last().click();
     await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible();

@@ -73,7 +73,7 @@ export const helpTips = {
   },
   'finish-vs-cancel': {
     topic: 'Finish or Cancel',
-    text: 'Finish stops now and opens the rows collected so far. Cancel stops the job too, and its saved rows stay in Datasets.',
+    text: 'Finish stops now and opens the rows collected so far. Cancel stops the job too, and its saved rows stay in My data.',
     section: 'running',
   },
 } as const satisfies Record<string, HelpTipCopy>;

@@ -57,7 +57,7 @@ describe('Storage Migration (v1 to current)', () => {
     const migratedDb = new PageHarvestDB(dbName);
     await migratedDb.open();
 
-    expect(migratedDb.verno).toBe(3);
+    expect(migratedDb.verno).toBe(4);
 
     // Verify existing v1 records and datasets preserved
     const dataset = await migratedDb.datasets.get('ds_legacy_1');

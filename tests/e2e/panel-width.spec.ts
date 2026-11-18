@@ -4,14 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page } from '@playwright/test';
 import { expect, test } from './release-test';
-import { goToPagination, markTourSeen, resultHeading, reviewFieldsHeading, startExtraction, startWith, useThisList } from './helpers/panel';
+import { goToPagination, markTourSeen, enableAdvancedOptions, resultHeading, reviewFieldsHeading, startExtraction, startWith, useThisList } from './helpers/panel';
 
 /**
  * Chrome's side panel opens at about 360 CSS pixels and can be narrowed to 320. The other specs
  * open the panel as a 1280-pixel tab, so a screen that is too wide for the real panel passes
  * there and is clipped for every user. This spec opens it at 320 and checks each main screen.
  */
-const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 const FIXTURES = 'http://127.0.0.1:3456';
 const PANEL_WIDTH = 320;
 
@@ -82,6 +82,7 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     });
     const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker', { timeout: 15000 }));
     await markTourSeen(worker);
+    await enableAdvancedOptions(worker);
     extensionId = worker.url().split('/')[2];
   });
 
@@ -106,7 +107,7 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
 
     await useThisList(panel).click();
     await expect(reviewFieldsHeading(panel)).toBeVisible({ timeout: 10000 });
-    await expectFits(panel, 'Review fields');
+    await expectFits(panel, 'Check columns');
 
     await goToPagination(panel);
     await panel.getByRole('button', { name: 'Advanced' }).click();
@@ -122,7 +123,7 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     await panel.keyboard.press('Escape');
   });
 
-  test('Help, Settings and Datasets fit', async () => {
+  test('Help, Settings and My data fit', async () => {
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
 
@@ -135,8 +136,8 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     await expect(panel.getByRole('button', { name: 'Save Preferences' })).toBeVisible({ timeout: 10000 });
     await expectFits(panel, 'Settings');
 
-    await panel.getByRole('button', { name: 'Datasets', exact: true }).click();
-    await expect(panel.getByRole('button', { name: 'Datasets', exact: true })).toHaveAttribute('aria-current', 'page');
-    await expectFits(panel, 'Datasets');
+    await panel.getByRole('button', { name: 'My data', exact: true }).click();
+    await expect(panel.getByRole('button', { name: 'My data', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expectFits(panel, 'My data');
   });
 });

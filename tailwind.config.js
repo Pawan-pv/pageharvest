@@ -120,6 +120,8 @@ export const designTokens = {
   fontSize: {
     // 11px is the smallest text the panel uses; nothing goes below it.
     '2xs': ['0.6875rem', { lineHeight: '1rem' }],
+    // 13px: the smallest size for sentences a beginner has to read (ADR-039).
+    body: ['0.8125rem', { lineHeight: '1.125rem' }],
   },
 };
 

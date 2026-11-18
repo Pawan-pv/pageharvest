@@ -12,7 +12,19 @@ export default defineConfig({
   vite: () => ({
     plugins: [react()],
     build: {
-      chunkSizeWarningLimit: 550
+      chunkSizeWarningLimit: 550,
+      rollupOptions: {
+        // Zod v4 ships @__PURE__ annotations Rollup cannot interpret; the comments
+        // are stripped and output is unaffected. Silence only these, by file.
+        onwarn(warning, warn) {
+          const id = (warning.id ?? '').replace(/\\/g, '/');
+          const fromZod = id.endsWith('zod/v4/core/util.js') || id.endsWith('zod/v4/core/regexes.js');
+          if (fromZod && warning.message.includes('contains an annotation that Rollup cannot interpret')) {
+            return;
+          }
+          warn(warning);
+        }
+      }
     }
   }),
   manifest: {
@@ -30,13 +42,16 @@ export default defineConfig({
       48: 'icon/48.png',
       128: 'icon/128.png'
     },
-    // No `scripting`: the content script is declared below, and nothing injects one (ADR-034).
+    // Content script is injected on demand via scripting (ADR-037, supersedes ADR-034).
     permissions: [
       'activeTab',
       'sidePanel',
       'storage',
+      'scripting',
       'downloads'
     ],
+    // Site access is held from install, so Chrome never asks per site while in use (ADR-040).
+    host_permissions: ['http://*/*', 'https://*/*'],
     action: {
       default_title: 'Open PageHarvest',
       default_icon: {

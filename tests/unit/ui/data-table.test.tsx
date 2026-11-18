@@ -123,7 +123,7 @@ describe('UI: Data Table & Spreadsheet Management', () => {
     expect(onUpdateCell).toHaveBeenCalledWith('rec_1', 'Title', 'Ergonomic Wireless Mouse');
   });
 
-  it('deletes a record when trash button is clicked', () => {
+  it('deletes a record when trash button is clicked', async () => {
     const onDeleteRecord = vi.fn();
     render(
       <DataTable
@@ -136,6 +136,8 @@ describe('UI: Data Table & Spreadsheet Management', () => {
 
     const deleteButtons = screen.getAllByLabelText('Delete row');
     fireEvent.click(deleteButtons[0]);
+    // Said once the deletion is stored, and it names the way back.
+    expect(await screen.findByText('Row deleted. Undo brings it back.')).toBeInTheDocument();
 
     expect(onDeleteRecord).toHaveBeenCalledWith('rec_1');
   });

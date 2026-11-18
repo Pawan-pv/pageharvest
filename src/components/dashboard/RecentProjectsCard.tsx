@@ -24,7 +24,7 @@ export const RecentProjectsCard: React.FC<RecentProjectsCardProps> = ({
     <div className="flex flex-col gap-2 text-left">
       <div className="flex items-center justify-between">
         <h2 className="text-xs font-semibold text-fg-muted uppercase tracking-wider">
-          Recent Extractions
+          My recent data
         </h2>
         {datasets.length > 0 && (
           <button
@@ -39,13 +39,13 @@ export const RecentProjectsCard: React.FC<RecentProjectsCardProps> = ({
 
       {isLoading ? (
         <Card variant="flat" className="p-3 text-center text-xs text-fg-subtle">
-          Loading saved datasets...
+          Loading your data…
         </Card>
       ) : recentItems.length === 0 ? (
         <EmptyState
           icon={<FileSpreadsheet className="w-5 h-5" />}
-          title="No recent extractions"
-          description="Choose how to start above. Your datasets will appear here."
+          title="Nothing saved yet"
+          description="Choose how to start above. What you collect is saved here."
           action={null}
           className="p-4"
         />

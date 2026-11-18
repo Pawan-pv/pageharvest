@@ -12,6 +12,8 @@ export interface MainDashboardProps {
   onRefreshTab: () => void;
   datasets: Dataset[];
   isDatasetsLoading?: boolean;
+  /** Advanced options is on (ADR-039). */
+  advanced?: boolean;
   onSelectElements: () => void;
   onAutoDetectLists: () => void;
   onExtractTable: () => void;
@@ -26,6 +28,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
   onRefreshTab,
   datasets,
   isDatasetsLoading = false,
+  advanced = false,
   onSelectElements,
   onAutoDetectLists,
   onExtractTable,
@@ -39,29 +42,36 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
       <WebsiteCard
         tab={tab}
         isLoading={isTabLoading}
+        advanced={advanced}
         onRefresh={onRefreshTab}
       />
 
       {/* 2. Quick Actions */}
       <QuickActions
         disabled={!tab.isInjectable}
+        needsAccess={tab.needsAccess === true}
+        advanced={advanced}
+        stateExplained
         onSelectElements={onSelectElements}
         onAutoDetectLists={onAutoDetectLists}
         onExtractTable={onExtractTable}
         onExtractLinks={onExtractLinks}
       />
 
-      {/* 3. Recent Projects */}
-      <RecentProjectsCard
-        datasets={datasets}
-        isLoading={isDatasetsLoading}
-        onViewDataset={onViewDataset}
-        onViewAllHistory={onViewAllHistory}
-      />
+      {/* 3. Recent data. In simple mode an empty box would only add noise before the first run. */}
+      {(advanced || datasets.length > 0) && (
+        <RecentProjectsCard
+          datasets={datasets}
+          isLoading={isDatasetsLoading}
+          onViewDataset={onViewDataset}
+          onViewAllHistory={onViewAllHistory}
+        />
+      )}
 
       <p className="flex items-center gap-1.5 text-2xs text-fg-subtle">
         <ShieldCheck aria-hidden="true" className="w-3.5 h-3.5 shrink-0" />
-        Everything PageHarvest collects stays on this computer. Nothing is sent anywhere.
+        PageHarvest reads only the page you ask it to: its text, links, image addresses and page address. Everything it
+        collects stays on this computer, and nothing is sent anywhere.
       </p>
     </div>
   );

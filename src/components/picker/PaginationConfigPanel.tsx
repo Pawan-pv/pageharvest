@@ -208,12 +208,12 @@ export const PaginationConfigPanel: React.FC<PaginationConfigPanelProps> = ({ co
               <Input
                 type="number"
                 label="Wait between pages (seconds)"
-                min={0.2}
+                min={1}
                 max={30}
                 step={0.5}
                 value={(config.delayMs ?? PAGINATION_DEFAULTS.delayMs) / 1000}
                 onChange={(e) => {
-                  const value = secondsToMs(e.target.value, 200, 30000);
+                  const value = secondsToMs(e.target.value, 1000, 30000);
                   if (value !== undefined) onChange({ delayMs: value });
                 }}
               />

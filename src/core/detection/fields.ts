@@ -582,6 +582,9 @@ function isPositional(selector: string): boolean {
 }
 
 function isSuggested(candidate: InternalFieldCandidate, coverage: number): boolean {
+  // A button's label ("Add to basket") is the same words on every row, not data about the
+  // item. It is offered, so it can be ticked, but a spreadsheet does not start with it.
+  if (candidate.type === 'button') return false;
   if (candidate.name === 'Category') return coverage >= LABEL_MIN_COVERAGE;
   return coverage >= MIN_SUGGESTED_COVERAGE;
 }

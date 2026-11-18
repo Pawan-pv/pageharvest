@@ -43,6 +43,13 @@ pie title PageHarvest Test Suite Distribution
 ### 2.3 End-to-End & Extension Lifecycle Smoke Tests (`tests/e2e/**`)
 - **Scope**: Extension packaging verification, manifest syntax validation, and Chrome extension entrypoint loading.
 
+### 2.4 Model-Based and Property-Based Tests (`*.property.test.ts`, `*.model.test.ts`, ADR-047)
+- **Library**: `fast-check`, with fixed seeds. A failure prints its seed and the shrunk input or command list; `PH_PROPERTY_SEED=<n>` replays it and `PH_PROPERTY_RUNS=<n>` runs more cases. Never add a randomized test without a fixed default seed.
+- **Lifecycle machine** (`tests/unit/state-machine.property.test.ts`): a reference written from the job contract as rules, checked on every state and event and on random event sequences: refused events change nothing, ended states absorb everything, counts never drop, and rebuilding the machine from the stored job between events (a worker restart) changes nothing.
+- **Coordinator** (`tests/integration/job-coordinator.model.test.ts`): random sequences of panel commands, page batches (in order, redelivered, skipped, stale, wrong tab), tab closes, browser restarts, user deletes and edits, and pairs of these racing, against the real coordinator and IndexedDB. After every command: the stored jobs, counts and rows equal the model; a checkpoint exists exactly while a job can continue; a history row exactly when it has ended; no job is stored INTERRUPTED; one active job per tab; every row belongs to an existing list whose count is right.
+- **Exporters** (`tests/unit/export-roundtrip.property.test.ts`): CSV is read back with an independent RFC 4180 reader; every row and value returns as stored, except the documented `' ` prefix on text a spreadsheet could run, and nothing read back can start a formula that references cells. JSON and NDJSON parse back to the stored values.
+- **Interleavings the random scheduler does not reach** are forced with barriers (a held promise inside a spied repository or transport call), never with sleeps: see `tests/integration/document-loaded-races.test.ts`.
+
 ---
 
 ## 3. Directory Layout & Fixture Organization

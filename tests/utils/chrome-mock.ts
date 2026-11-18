@@ -26,6 +26,10 @@ export class ChromeMock {
   private tabRemovedListeners: Set<(tabId: number) => void> = new Set();
   private localStorageData: Record<string, unknown> = {};
   public grantedPermissions: Set<string> = new Set(['activeTab', 'sidePanel', 'storage', 'scripting', 'downloads']);
+  // Optional host grants default to allowed (tests opt into revocation via
+  // request/remove). contains() returns true for every origin except revoked.
+  public grantedOrigins: Set<string> = new Set(['http://localhost:3000/*', 'http://127.0.0.1:3456/*', 'https://example.com/*', 'https://shop.test/*', 'http://shop.test/*']);
+  public revokedOrigins: Set<string> = new Set();
 
   public activeTab: chrome.tabs.Tab = {
     id: 101,
@@ -80,7 +84,8 @@ export class ChromeMock {
         responseCallback(undefined);
       }
     },
-    getURL: (path: string) => `chrome-extension://${this.runtime.id}/${path.replace(/^\//, '')}`
+    getURL: (path: string) => `chrome-extension://${this.runtime.id}/${path.replace(/^\//, '')}`,
+    getManifest: () => ({ manifest_version: 3, name: 'PageHarvest', version: '1.0.0' })
   };
 
   public tabs = {
@@ -167,6 +172,16 @@ export class ChromeMock {
     });
   }
 
+  /**
+   * Delivers a one-way message from a content script to every extension listener, as Chrome
+   * does: the background and an open side panel both receive it, whichever answers first.
+   */
+  public notifyFromContentScript(tabId: number, message: unknown): void {
+    for (const listener of [...this.runtimeListeners]) {
+      listener(message, { id: this.runtime.id, tab: { ...this.activeTab, id: tabId } }, () => undefined);
+    }
+  }
+
   /** Routes tab messages for one tab to a listener, as a content script there would. */
   public setTabListener(tabId: number, listener: MessageListener) {
     this.tabListeners.set(tabId, new Set([listener]));
@@ -228,32 +243,68 @@ export class ChromeMock {
     setOptions: vi.fn().mockResolvedValue(undefined)
   };
 
+  /** What chrome.downloads.search reports for each download id. Tests set an entry to change it. */
+  public downloadItems: Map<number, Partial<chrome.downloads.DownloadItem>> = new Map();
+
   public downloads = {
-    download: vi.fn().mockImplementation((_options: chrome.downloads.DownloadOptions) => {
-      return Promise.resolve(12345);
-    })
+    download: vi.fn((options: chrome.downloads.DownloadOptions) => {
+      const id = 12345;
+      // Chrome saves into the user's Downloads folder and finishes a small file at once.
+      if (!this.downloadItems.has(id)) {
+        this.downloadItems.set(id, {
+          id,
+          state: 'complete',
+          filename: `C:\\Users\\someone\\Downloads\\${options.filename ?? 'download'}`,
+        });
+      }
+      return Promise.resolve(id);
+    }),
+    search: vi.fn((query: chrome.downloads.DownloadQuery) => {
+      const items = [...this.downloadItems.values()].filter((item) => query.id === undefined || item.id === query.id);
+      return Promise.resolve(items as chrome.downloads.DownloadItem[]);
+    }),
+    show: vi.fn((_downloadId: number) => undefined)
   };
 
+  // Implementations are passed to vi.fn(impl), not set with mockImplementation, so that
+  // vi.restoreAllMocks() in a test file restores them instead of leaving undefined.
+  // Host grants default-allow (any origin not explicitly revoked via revokedOrigins),
+  // so fixture origins used by existing tests need no pre-listing.
   public permissions = {
-    contains: vi.fn().mockImplementation((details: chrome.permissions.Permissions) => {
+    contains: vi.fn((details: chrome.permissions.Permissions) => {
       const perms = details.permissions || [];
-      const hasAll = perms.every((p) => this.grantedPermissions.has(p));
-      return Promise.resolve(hasAll);
+      const origins = details.origins || [];
+      const hasPerms = perms.every((p) => this.grantedPermissions.has(p));
+      const hasOrigins = origins.every((o) => !this.revokedOrigins.has(o));
+      return Promise.resolve(hasPerms && hasOrigins);
     }),
-    request: vi.fn().mockImplementation((details: chrome.permissions.Permissions) => {
+    request: vi.fn((details: chrome.permissions.Permissions) => {
       const perms = details.permissions || [];
+      const origins = details.origins || [];
       perms.forEach((p) => this.grantedPermissions.add(p));
+      origins.forEach((o) => { this.grantedOrigins.add(o); this.revokedOrigins.delete(o); });
       return Promise.resolve(true);
     }),
-    remove: vi.fn().mockImplementation((details: chrome.permissions.Permissions) => {
+    remove: vi.fn((details: chrome.permissions.Permissions) => {
       const perms = details.permissions || [];
+      const origins = details.origins || [];
       perms.forEach((p) => this.grantedPermissions.delete(p));
+      origins.forEach((o) => { this.grantedOrigins.delete(o); this.revokedOrigins.add(o); });
       return Promise.resolve(true);
-    })
+    }),
+    onRemoved: {
+      listeners: new Set<(permissions: chrome.permissions.Permissions) => void>(),
+      addListener: function (this: { listeners: Set<(p: chrome.permissions.Permissions) => void> }, listener: (p: chrome.permissions.Permissions) => void) {
+        this.listeners.add(listener);
+      },
+      removeListener: function (this: { listeners: Set<(p: chrome.permissions.Permissions) => void> }, listener: (p: chrome.permissions.Permissions) => void) {
+        this.listeners.delete(listener);
+      },
+    },
   };
 
   public scripting = {
-    executeScript: vi.fn().mockResolvedValue([{ result: true }])
+    executeScript: vi.fn((_injection: chrome.scripting.ScriptInjection<unknown[], unknown>) => Promise.resolve([{ result: true as unknown }]))
   };
 
   public reset() {
@@ -268,10 +319,25 @@ export class ChromeMock {
     this.sidePanel.setPanelBehavior.mockClear();
     this.sidePanel.setOptions.mockClear();
     this.downloads.download.mockClear();
+    this.downloads.search.mockClear();
+    this.downloads.show.mockClear();
+    this.downloadItems.clear();
     this.permissions.contains.mockClear();
     this.permissions.request.mockClear();
     this.permissions.remove.mockClear();
     this.scripting.executeScript.mockClear();
+    this.grantedOrigins = new Set([
+      'http://localhost:3000/*',
+      'http://127.0.0.1:3456/*',
+      'https://example.com/*',
+      'https://shop.test/*',
+      'http://shop.test/*',
+    ]);
+    this.revokedOrigins.clear();
+  }
+
+  public triggerPermissionsRemoved(permissions: chrome.permissions.Permissions) {
+    for (const listener of this.permissions.onRemoved.listeners) listener(permissions);
   }
 }
 
