@@ -1161,6 +1161,12 @@ export class JobCoordinator {
   }
 
   public async interruptJob(jobId: string, reason: string, code?: ExtractionErrorCode): Promise<void> {
+    // The session is kept for retentionDays from now, when it was abandoned, not from when
+    // the job first started. If settings cannot be read, the expiry already stored stands.
+    const retentionMs = await this.settings
+      .getSettings()
+      .then((settings) => settings.retentionDays * DAY_MS)
+      .catch(() => undefined);
     const job = await this.db.transaction(
       'rw',
       [this.db.jobs, this.db.checkpoints, this.db.history],
@@ -1193,6 +1199,9 @@ export class JobCoordinator {
         machine.transition({ type: 'MARK_RECOVERABLE' });
         interrupted.status = machine.getState();
         await this.jobs.saveJob(interrupted);
+        if (retentionMs !== undefined) {
+          await this.jobs.saveCheckpoint({ ...checkpoint, expiresAt: now + retentionMs, updatedAt: now });
+        }
         return interrupted;
       }
     );
