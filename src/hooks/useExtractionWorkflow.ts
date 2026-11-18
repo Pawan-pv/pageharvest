@@ -70,6 +70,8 @@ function sameDocument(a: string, b: string): boolean {
 export const PICKER_LEFT_NOTICE =
   'Picking stopped because you switched to another tab. Start again when you are on the page you want.';
 export const LIST_GONE_NOTICE = 'The page changed, so the list you found is gone. Get the list again on this page.';
+/** The followed job was stopped somewhere else, such as the side panel of another window. */
+export const FOLLOWED_JOB_STOPPED_NOTICE = 'Collecting was stopped. The rows collected so far are saved in My data.';
 const LIST_ELSEWHERE_ERROR = 'This list is on another tab. Go back to that tab to start, or get the list again on this page.';
 
 export interface InspectedElement {
@@ -248,6 +250,11 @@ export function useExtractionWorkflow(tab: TabInfo) {
   // The job this panel is displaying. Commands and storage decide what it does; this
   // only decides which job's state is on screen.
   const followedJobIdRef = useRef<string | null>(null);
+  // The job this panel is stopping itself, so its own stop is not announced as news.
+  const endingJobIdRef = useRef<string | null>(null);
+  // A session whose resume this panel has asked for and not heard back about. A second click
+  // on Continue meanwhile is not sent: it would only come back refused, as a stray error.
+  const resumingJobIdsRef = useRef(new Set<string>());
   const pickerActiveRef = useRef(false);
   // Lets go of the port that keeps the page's picker alive (see platform/picker-lifetime).
   const releasePickerRef = useRef<() => void>(() => undefined);
@@ -332,6 +339,17 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setActiveJob(null);
       await loadDataset(job.datasetId);
       setView('results');
+      return;
+    }
+
+    // Ended without finishing, by something other than this panel (another window's panel).
+    // It will never run again, so the progress screen must not keep showing it as collecting.
+    if (job.status === 'CANCELLED' || job.status === 'EXPIRED') {
+      followedJobIdRef.current = null;
+      setActiveJob(null);
+      setStats(IDLE_STATS);
+      setView('dashboard');
+      if (endingJobIdRef.current !== jobId) setNotice(FOLLOWED_JOB_STOPPED_NOTICE);
     }
   }, [loadDataset, refreshRecoverableJobs, repositories]);
 
@@ -851,6 +869,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
   /** Cancels the job. Records already committed stay in the dataset. */
   const cancelExtraction = useCallback(async () => {
     const jobId = followedJobIdRef.current;
+    endingJobIdRef.current = jobId;
     try {
       if (jobId) {
         const job = await repositories.jobs.getJob(jobId);
@@ -869,11 +888,15 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setView('dashboard');
     } catch (err) {
       setOperationError({ message: errorText(err) });
+    } finally {
+      endingJobIdRef.current = null;
     }
   }, [repositories, setListSource]);
 
   const recoverJob = useCallback(
     async (jobId: string) => {
+      if (resumingJobIdsRef.current.has(jobId)) return;
+      resumingJobIdsRef.current.add(jobId);
       try {
         setOperationError(null);
         await messagingService.recoverJob(jobId);
@@ -885,6 +908,8 @@ export function useExtractionWorkflow(tab: TabInfo) {
       } catch (err) {
         setOperationError(operationErrorFrom(err));
         await refreshRecoverableJobs();
+      } finally {
+        resumingJobIdsRef.current.delete(jobId);
       }
     },
     [followJob, refreshRecoverableJobs, repositories]
