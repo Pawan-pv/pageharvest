@@ -43,10 +43,11 @@ import {
   HistoryRepository,
   JobRepository,
   ProjectRepository,
+  RecordRepository,
   SchemaRepository,
   SettingsRepository,
 } from '@/storage/repositories';
-import { ErrorCategory, ExtractionRunHistory, HarvestError, RecordEntity } from '@/types';
+import { ErrorCategory, ExtractionRunHistory, FieldDefinition, HarvestError, RecordEntity } from '@/types';
 import type { ExtractionErrorCode } from '@/shared/contracts/error';
 
 /**
@@ -68,6 +69,8 @@ export interface JobTransport {
   /** Opens an empty tab, so its ID is known before any page in it can report in. */
   openBlankTab(): Promise<number>;
   navigateTab(tabId: number, url: string): Promise<void>;
+  /** Closes a tab this coordinator opened when the resume did not complete. */
+  closeTab?(tabId: number): Promise<void>;
   /** 'complete', 'loading', or null when the tab no longer exists. */
   getTabLoadStatus(tabId: number): Promise<string | null>;
   /**
@@ -512,7 +515,7 @@ export class JobCoordinator {
       return { ok: false, error: 'This session has expired.' };
     }
 
-    const resumeUrl = this.resumeUrlFor(candidate, existing);
+    let resumeUrl = this.resumeUrlFor(candidate, existing);
     if (!isHarvestableUrl(resumeUrl) || !isSameOrigin(resumeUrl, existing.startUrl)) {
       await this.failJob(jobId, `The saved session points to an invalid page: ${resumeUrl}`, 'VALIDATION_FAILED');
       return { ok: false, error: 'The saved session points to an invalid page.' };
@@ -523,62 +526,120 @@ export class JobCoordinator {
       return { ok: false, error: SITE_PERMISSION_MESSAGE };
     }
 
-    let tabId: number;
-    try {
-      tabId = await this.transport.openBlankTab();
-    } catch (error: unknown) {
-      return { ok: false, error: `Could not open a tab to resume in: ${toMessage(error)}` };
-    }
-
-    const job = await this.db.transaction('rw', this.db.jobs, this.db.checkpoints, async () => {
+    // Re-check under a read transaction immediately before a tab exists. The write
+    // transaction below is still the final arbiter, but this keeps the common
+    // duplicate/already-discarded case from ever opening an empty tab.
+    const stillResumable = await this.db.transaction('r', this.db.jobs, this.db.checkpoints, async () => {
       const latest = await this.jobs.getJob(jobId);
-      // Re-checked here so that two resume requests cannot both succeed.
       if (!latest || latest.status !== 'RECOVERABLE') return null;
       const checkpoint = await this.jobs.getCheckpoint(jobId);
-      if (!checkpoint) return null;
-
-      const machine = ExtractionStateMachine.fromJob(latest);
-      machine.transition({ type: 'RECOVER' });
-
-      const now = this.now();
-      const updated: ExtractionJob = {
-        ...latest,
-        status: machine.getState(),
-        generation: generateToken('gen'),
-        tabId,
-        consecutiveEmptySteps: 0,
-        interruptedReason: undefined,
-        interruptedAt: undefined,
-        pausedAt: undefined,
-        updatedAt: now,
-      };
-      await this.jobs.saveJob(updated);
-      await this.jobs.saveCheckpoint({
-        ...checkpoint,
-        tabId,
-        expectedUrl: resumeUrl,
-        awaitingNavigation: true,
-        navigationStartedAt: now,
-        // Reloading a scroll feed returns to the top, so earlier scrolls are repeated.
-        catchUpScrolls: checkpoint.scrollsCompleted,
-        scrollsCompleted: 0,
-        updatedAt: now,
-      });
-      return updated;
+      if (!checkpoint || checkpoint.expiresAt <= this.now()) return null;
+      const checkedUrl = this.resumeUrlFor(latest, checkpoint);
+      if (!isHarvestableUrl(checkedUrl) || !isSameOrigin(checkedUrl, checkpoint.startUrl)) return null;
+      return { url: checkedUrl };
     });
-
-    if (!job) {
-      return { ok: false, error: 'This session has already been resumed or discarded.' };
+    if (!stillResumable) {
+      return { ok: false, error: 'This session can no longer be resumed.' };
+    }
+    resumeUrl = stillResumable.url;
+    if (!(await hasHostAccess(resumeUrl))) {
+      return { ok: false, error: SITE_PERMISSION_MESSAGE };
     }
 
-    await this.notify(job);
+    let tabId: number | undefined;
+    let resumedJob: ExtractionJob | null = null;
+    let handedOff = false;
     try {
+      tabId = await this.transport.openBlankTab();
+      const job = await this.db.transaction('rw', this.db.jobs, this.db.checkpoints, async () => {
+        const latest = await this.jobs.getJob(jobId);
+        // Re-checked here so that two resume requests cannot both succeed.
+        if (!latest || latest.status !== 'RECOVERABLE') return null;
+        const checkpoint = await this.jobs.getCheckpoint(jobId);
+        if (!checkpoint || checkpoint.expiresAt <= this.now()) return null;
+
+        const machine = ExtractionStateMachine.fromJob(latest);
+        machine.transition({ type: 'RECOVER' });
+
+        const now = this.now();
+        const updated: ExtractionJob = {
+          ...latest,
+          status: machine.getState(),
+          generation: generateToken('gen'),
+          tabId,
+          consecutiveEmptySteps: 0,
+          interruptedReason: undefined,
+          interruptedAt: undefined,
+          pausedAt: undefined,
+          updatedAt: now,
+        };
+        await this.jobs.saveJob(updated);
+        await this.jobs.saveCheckpoint({
+          ...checkpoint,
+          tabId,
+          expectedUrl: resumeUrl,
+          awaitingNavigation: true,
+          navigationStartedAt: now,
+          // Reloading a scroll feed returns to the top, so earlier scrolls are repeated.
+          catchUpScrolls: checkpoint.scrollsCompleted,
+          scrollsCompleted: 0,
+          updatedAt: now,
+        });
+        return updated;
+      });
+
+      if (!job) {
+        return { ok: false, error: 'This session has already been resumed or discarded.' };
+      }
+      resumedJob = job;
+
+      await this.notify(job);
       await this.transport.navigateTab(tabId, resumeUrl);
+      handedOff = true;
+      return { ok: true, identity: this.identityOf(job) };
     } catch (error: unknown) {
-      await this.interruptJob(jobId, `The page could not be reopened: ${toMessage(error)}`);
-      return { ok: false, error: 'The page could not be reopened.' };
+      if (resumedJob) {
+        await this.interruptJob(jobId, `The page could not be reopened: ${toMessage(error)}`).catch(() => undefined);
+        return { ok: false, error: 'The page could not be reopened.' };
+      }
+      return { ok: false, error: `Could not open a tab to resume in: ${toMessage(error)}` };
+    } finally {
+      if (tabId !== undefined && !handedOff) {
+        await this.transport.closeTab?.(tabId).catch(() => undefined);
+      }
     }
-    return { ok: true, identity: this.identityOf(job) };
+  }
+
+  // -------------------------------------------------------------------------
+  // Data commands from the side panel
+  // -------------------------------------------------------------------------
+
+  /** Deletes everything collected or saved, keeping preferences (see db.clearUserData). */
+  public async clearUserData(): Promise<void> {
+    await this.db.clearUserData();
+  }
+
+  /** Persists one inline grid edit. */
+  public async updateRecordCell(
+    recordId: string,
+    field: string,
+    value: string | number | null
+  ): Promise<void> {
+    await this.db.updateRecordCell(recordId, field, value);
+  }
+
+  /** Deletes one or more rows and keeps the dataset's saved count in step. */
+  public async deleteRecords(datasetId: string, recordIds: string[]): Promise<number> {
+    return new RecordRepository(this.db).deleteBatch(recordIds, datasetId);
+  }
+
+  /** Replaces a dataset's rows and columns after a cleaning, rename or bulk delete. */
+  public async applyDatasetEdit(
+    datasetId: string,
+    records: RecordEntity[],
+    fields: FieldDefinition[]
+  ): Promise<void> {
+    await new DatasetRepository(this.db).applyEdit(datasetId, records, fields);
   }
 
   // -------------------------------------------------------------------------

@@ -266,6 +266,26 @@ describe('Simple mode: the Done screen (T1, step 5; R4)', () => {
     vi.unstubAllGlobals();
   });
 
+  it('cancels the copied-message timer when the screen closes', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    const setTimer = vi.spyOn(globalThis, 'setTimeout');
+    const clearTimer = vi.spyOn(globalThis, 'clearTimeout');
+    const { unmount } = renderDone();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy the table' }));
+    const timer = await waitFor(() => {
+      const index = setTimer.mock.calls.findIndex((call) => call[1] === 2500);
+      expect(index).toBeGreaterThanOrEqual(0);
+      return setTimer.mock.results[index]?.value as ReturnType<typeof setTimeout>;
+    });
+
+    unmount();
+
+    expect(clearTimer).toHaveBeenCalledWith(timer);
+    vi.unstubAllGlobals();
+  });
+
   it('opens the full table, and starts another list', async () => {
     const handlers = renderDone();
     await userEvent.click(screen.getByRole('button', { name: 'See and change all rows' }));

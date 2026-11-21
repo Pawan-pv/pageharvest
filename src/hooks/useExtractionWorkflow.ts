@@ -26,7 +26,6 @@ import {
   JobRepository,
   ProjectRepository,
   RecipeRepository,
-  RecordRepository,
   SettingsRepository,
 } from '@/storage/repositories';
 import {
@@ -211,7 +210,6 @@ export function useExtractionWorkflow(tab: TabInfo) {
       jobs: new JobRepository(),
       projects: new ProjectRepository(),
       recipes: new RecipeRepository(),
-      records: new RecordRepository(),
       settings: new SettingsRepository(),
     }),
     []
@@ -959,35 +957,35 @@ export function useExtractionWorkflow(tab: TabInfo) {
 
   const updateRecordCell = useCallback(
     async (recordId: string, fieldName: string, value: string | number | null) => {
-      await repositories.records.updateCell(recordId, fieldName, value);
+      await messagingService.updateRecordCell(recordId, fieldName, value);
       setRecords((prev) =>
         prev.map((r) => (r._id === recordId ? { ...r, [fieldName]: value } : r))
       );
     },
-    [repositories]
+    []
   );
 
   const deleteRecord = useCallback(
     async (recordId: string) => {
       const datasetId = currentDataset?.id;
       if (!datasetId) return;
-      await repositories.records.deleteRecord(recordId, datasetId);
+      await messagingService.deleteRecords(datasetId, [recordId]);
       setRecords((prev) => prev.filter((r) => r._id !== recordId));
     },
-    [currentDataset?.id, repositories]
+    [currentDataset?.id]
   );
 
-  /** Persists a grid edit as one transaction. Rejects if nothing was saved. */
+  /** Persists a grid edit as one transaction through the background writer. */
   const applyDatasetEdit = useCallback(
     async (nextRecords: ExtractedRecord[], nextFields?: FieldDefinition[]) => {
       const datasetId = currentDataset?.id;
       if (!datasetId) return;
       const nextColumns = nextFields ?? fields;
-      await repositories.datasets.applyEdit(datasetId, nextRecords, nextColumns);
+      await messagingService.applyDatasetEdit(datasetId, nextRecords, nextColumns);
       setRecords(nextRecords);
       setFields(nextColumns);
     },
-    [currentDataset?.id, fields, repositories]
+    [currentDataset?.id, fields]
   );
 
   /** Saves the current configuration as a reusable recipe. Rejects if it was not saved. */

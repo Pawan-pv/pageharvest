@@ -122,6 +122,9 @@ export class ExtensionHarness {
         this.navigations.push({ tabId, url });
         this.onNavigate(tabId, url);
       },
+      closeTab: async (tabId) => {
+        this.closeTab(tabId);
+      },
       getTabLoadStatus: async (tabId) =>
         this.closedTabs.has(tabId) ? null : (this.tabLoadStatus.get(tabId) ?? 'complete'),
       injectContentScript: async (tabId) => {

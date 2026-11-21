@@ -39,6 +39,14 @@ export function createChromeJobTransport(
       await chrome.tabs.update(tabId, { url });
     },
 
+    closeTab: async (tabId) => {
+      try {
+        await chrome.tabs.remove(tabId);
+      } catch {
+        // The tab may already be gone; closing it is best effort.
+      }
+    },
+
     getTabUrl: async (tabId) => {
       try {
         const tab = await chrome.tabs.get(tabId);

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from '../../../entrypoints/sidepanel/App';
 import { db } from '@/storage/db';
+import { installBackground } from '../../utils/job-harness';
 
 const DATASET_ID = 'ds_grid';
 
@@ -32,6 +33,7 @@ async function openSavedDataset() {
 
 describe('Grid edits reach IndexedDB through the production App wiring', () => {
   beforeEach(async () => {
+    installBackground(db);
     await Promise.all([db.datasets.clear(), db.records.clear()]);
     await db.datasets.put({
       id: DATASET_ID,

@@ -2,6 +2,8 @@ import { CandidateKind } from '@/shared/contracts/message';
 import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 import {
   ExtensionMessage,
+  DataCommandResult,
+  DataCommandResultSchema,
   FieldPreviewResult,
   FieldPreviewResultSchema,
   JobCommandResult,
@@ -14,7 +16,7 @@ import { injectContentScript } from '@/platform/content-script';
 import { hasAllSitesAccess, requestSiteOrigin, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import { isHarvestableUrl } from '@/platform/tab-manager';
 import { JobIdentity } from '@/shared/contracts/job';
-import { ExtractionRecipe, FieldDefinition } from '@/types';
+import { ExtractedRecord, ExtractionRecipe, FieldDefinition } from '@/types';
 
 export { SITE_PERMISSION_MESSAGE };
 
@@ -391,6 +393,77 @@ class ExtensionMessagingService {
 
   public async discardJob(jobId: string): Promise<void> {
     await this.sendSimpleJobCommand('DISCARD_JOB', jobId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Data commands: the side panel never writes IndexedDB itself.
+  // -------------------------------------------------------------------------
+
+  public async clearUserData(): Promise<void> {
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'CLEAR_USER_DATA',
+      payload: {},
+    });
+  }
+
+  public async updateRecordCell(
+    recordId: string,
+    field: string,
+    value: string | number | null
+  ): Promise<void> {
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'UPDATE_RECORD_CELL',
+      payload: { recordId, field, value },
+    });
+  }
+
+  public async deleteRecords(datasetId: string, recordIds: string[]): Promise<number> {
+    const result = await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'DELETE_RECORDS',
+      payload: { datasetId, recordIds },
+    });
+    return result.deleted ?? recordIds.length;
+  }
+
+  public async applyDatasetEdit(
+    datasetId: string,
+    records: ExtractedRecord[],
+    fields: FieldDefinition[]
+  ): Promise<void> {
+    const normalizedFields = fields.map((f) => ({
+      ...f,
+      required: f.required ?? false,
+      transform: f.transform ?? 'trim',
+    }));
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'APPLY_DATASET_EDIT',
+      payload: { datasetId, records, fields: normalizedFields },
+    });
+  }
+
+  private async sendDataCommand(message: ExtensionMessage): Promise<DataCommandResult> {
+    const validated = extensionMessageSchema.parse(message);
+    const reply = await this.client.sendToBackground<unknown>(validated, {
+      timeoutMs: JOB_COMMAND_TIMEOUT_MS,
+      retries: 1,
+      retryDelayMs: 300,
+    });
+    const parsed = DataCommandResultSchema.safeParse(reply);
+    if (!parsed.success) {
+      throw new Error('The background worker did not confirm the change.');
+    }
+    if (!parsed.data.ok) {
+      throw new Error(parsed.data.error ?? 'The change could not be saved.');
+    }
+    return parsed.data;
   }
 
   /** Asks the background to re-check running jobs against their tabs. */

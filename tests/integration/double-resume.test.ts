@@ -13,6 +13,7 @@ describe('Continue pressed twice', () => {
   let coordinator: JobCoordinator;
   let opened: number[];
   let navigated: number[];
+  let closed: number[];
 
   const transport: JobTransport = {
     sendToTab: async () => ({ accepted: true }),
@@ -25,6 +26,9 @@ describe('Continue pressed twice', () => {
     navigateTab: async (tabId) => {
       navigated.push(tabId);
     },
+    closeTab: async (tabId) => {
+      closed.push(tabId);
+    },
     getTabLoadStatus: async () => 'complete',
     injectContentScript: async () => ({ injected: false, url: BASE_URL }),
   };
@@ -32,6 +36,7 @@ describe('Continue pressed twice', () => {
   beforeEach(() => {
     opened = [];
     navigated = [];
+    closed = [];
     db = uniqueDb();
     coordinator = new JobCoordinator({
       db,
@@ -86,5 +91,40 @@ describe('Continue pressed twice', () => {
     expect((await coordinator.recoverJob(jobId)).ok).toBe(false);
     transport.openBlankTab = open;
     expect((await coordinator.recoverJob(jobId)).ok).toBe(true);
+  });
+
+  it('closes the tab it opened when navigation fails', async () => {
+    const jobId = await stoppedEarly();
+    const navigate = transport.navigateTab;
+    transport.navigateTab = async () => {
+      throw new Error('No such tab');
+    };
+
+    const result = await coordinator.recoverJob(jobId);
+
+    expect(result.ok).toBe(false);
+    expect(opened).toHaveLength(1);
+    expect(closed).toEqual(opened);
+    expect((await db.jobs.get(jobId))?.status).toBe('RECOVERABLE');
+    transport.navigateTab = navigate;
+  });
+
+  it('closes the losing tab when two workers race to resume the same session', async () => {
+    const jobId = await stoppedEarly();
+    // Two service-worker instances have separate in-memory locks but share IndexedDB.
+    const other = new JobCoordinator({
+      db,
+      transport,
+      checkPermissions: async () => ({ allGranted: true, missing: [] }),
+      reporter: { report: (category, error) => ({ id: 'e', category, severity: 'ERROR', message: String(error), timestamp: 0 }) },
+    });
+
+    const results = await Promise.all([coordinator.recoverJob(jobId), other.recoverJob(jobId)]);
+
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(opened).toHaveLength(2);
+    expect(closed).toHaveLength(1);
+    expect(navigated).toEqual(opened.filter((id) => !closed.includes(id)));
+    expect((await db.jobs.get(jobId))?.status).toBe('RUNNING');
   });
 });

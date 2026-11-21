@@ -63,6 +63,34 @@ export function registerJobHandlers(router: MessageRouter, coordinator: JobCoord
     return { ok: true };
   });
 
+  // Data writes go through the background too (AGENTS.md: one writer). The router has
+  // already validated each payload against its Zod schema before this handler runs.
+  const dataCommand = async (work: () => Promise<{ deleted?: number } | void>) => {
+    try {
+      const result = await work();
+      return { ok: true, ...(result && 'deleted' in result ? { deleted: result.deleted } : {}) };
+    } catch (error: unknown) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  };
+
+  fromPanel('CLEAR_USER_DATA', () => dataCommand(() => coordinator.clearUserData()));
+  fromPanel('UPDATE_RECORD_CELL', (message) =>
+    dataCommand(() =>
+      coordinator.updateRecordCell(message.payload.recordId, message.payload.field, message.payload.value)
+    )
+  );
+  fromPanel('DELETE_RECORDS', (message) =>
+    dataCommand(async () => ({
+      deleted: await coordinator.deleteRecords(message.payload.datasetId, message.payload.recordIds),
+    }))
+  );
+  fromPanel('APPLY_DATASET_EDIT', (message) =>
+    dataCommand(() =>
+      coordinator.applyDatasetEdit(message.payload.datasetId, message.payload.records, message.payload.fields)
+    )
+  );
+
   fromPage('RECORD_BATCH', (message, sender) => coordinator.commitBatch(message.payload, sender));
   fromPage('JOB_CHECKPOINT', (message, sender) => coordinator.commitCheckpoint(message.payload, sender));
   fromPage('JOB_FINISHED', (message, sender) => coordinator.completeJob(message.payload, sender));

@@ -262,6 +262,40 @@ export const reconcileJobsMessageSchema = baseMessageSchema.extend({
 });
 
 // ---------------------------------------------------------------------------
+// Data commands: side panel -> background. The background is the only writer.
+// ---------------------------------------------------------------------------
+export const clearUserDataMessageSchema = baseMessageSchema.extend({
+  type: z.literal('CLEAR_USER_DATA'),
+  payload: z.object({}).optional(),
+});
+
+export const updateRecordCellMessageSchema = baseMessageSchema.extend({
+  type: z.literal('UPDATE_RECORD_CELL'),
+  payload: z.object({
+    recordId: z.string().min(1),
+    field: z.string().min(1),
+    value: z.union([z.string(), z.number(), z.null()]),
+  }),
+});
+
+export const deleteRecordsMessageSchema = baseMessageSchema.extend({
+  type: z.literal('DELETE_RECORDS'),
+  payload: z.object({
+    datasetId: z.string().min(1),
+    recordIds: z.array(z.string().min(1)).min(1).max(10_000),
+  }),
+});
+
+export const applyDatasetEditMessageSchema = baseMessageSchema.extend({
+  type: z.literal('APPLY_DATASET_EDIT'),
+  payload: z.object({
+    datasetId: z.string().min(1),
+    records: z.array(ExtractionRecordSchema).max(50_000),
+    fields: z.array(ExtractionFieldSchema).max(500),
+  }),
+});
+
+// ---------------------------------------------------------------------------
 // Job execution: background -> content script
 // ---------------------------------------------------------------------------
 export const JobResumeStateSchema = z.object({
@@ -439,6 +473,10 @@ export const BrowserMessageSchema = z.discriminatedUnion('type', [
   recoverJobMessageSchema,
   discardJobMessageSchema,
   reconcileJobsMessageSchema,
+  clearUserDataMessageSchema,
+  updateRecordCellMessageSchema,
+  deleteRecordsMessageSchema,
+  applyDatasetEditMessageSchema,
   extractRecordsMessageSchema,
   controlJobMessageSchema,
   queryJobRunMessageSchema,
@@ -494,6 +532,15 @@ export const JobCommandResultSchema = z.object({
 });
 
 export type JobCommandResult = z.infer<typeof JobCommandResultSchema>;
+
+/** Reply to every data command. A failure never reports success. */
+export const DataCommandResultSchema = z.object({
+  ok: z.boolean(),
+  error: z.string().optional(),
+  deleted: z.number().int().min(0).optional(),
+});
+
+export type DataCommandResult = z.infer<typeof DataCommandResultSchema>;
 
 export const JobRunStatusSchema = z.object({
   active: z.boolean(),

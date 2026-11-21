@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Check, CheckCircle2, Copy, Download, FileSpreadsheet, Plus, Table2 } from 'lucide-react';
 import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
@@ -69,6 +69,14 @@ export const SimpleDone: React.FC<SimpleDoneProps> = ({
   const [startedWithoutId, setStartedWithoutId] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+    },
+    []
+  );
 
   const columns =
     fields.length > 0
@@ -105,7 +113,11 @@ export const SimpleDone: React.FC<SimpleDoneProps> = ({
       });
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => {
+        copiedTimer.current = null;
+        setCopied(false);
+      }, 2500);
     } catch (error: unknown) {
       setProblem(`The table was not copied: ${error instanceof Error ? error.message : String(error)}`);
     }

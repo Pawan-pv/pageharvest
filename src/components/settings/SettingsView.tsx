@@ -9,6 +9,7 @@ import { Select } from '@/components/common/Select';
 import { UserSettingsSchema } from '@/shared/contracts/settings';
 import { db } from '@/storage/db';
 import { SettingsRepository } from '@/storage/repositories/settings-repository';
+import { messagingService } from '@/services/messaging';
 import { CsvDelimiter, DEFAULT_USER_SETTINGS, ExportFormat, UserSettings } from '@/types/settings';
 import { PRIVACY_POLICY_URL } from '@/components/guide/links';
 import { useAdvancedMode } from './useAdvancedMode';
@@ -108,7 +109,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBackToDashboard })
     setIsClearing(true);
     setSettingsError(null);
     try {
-      await db.clearUserData();
+      await messagingService.clearUserData();
       setDatasetCount(0);
       setRecordCount(0);
       setIsClearModalOpen(false);
