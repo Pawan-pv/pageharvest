@@ -65,13 +65,11 @@ const StartOption: React.FC<StartOptionProps> = ({ title, description, icon, pri
 
 const SecondaryOption: React.FC<{
   label: string;
-  ariaLabel?: string;
   icon: React.ReactNode;
   disabled: boolean;
   onClick: () => void;
 }> = ({
   label,
-  ariaLabel,
   icon,
   disabled,
   onClick,
@@ -80,7 +78,6 @@ const SecondaryOption: React.FC<{
     type="button"
     onClick={onClick}
     disabled={disabled}
-    aria-label={ariaLabel}
     className="flex items-center gap-2 min-h-8 px-3 py-2 rounded-control border border-line bg-surface text-xs font-medium text-fg-muted hover:text-fg hover:border-line-strong disabled:opacity-50 disabled:cursor-not-allowed"
   >
     <span aria-hidden="true">{icon}</span>
@@ -180,14 +177,12 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         <div className="flex items-center gap-2">
           <SecondaryOption
             label="Table"
-            ariaLabel={advanced ? 'Extract a table' : 'Get a table'}
             icon={<Table className="w-3.5 h-3.5" />}
             disabled={disabled}
             onClick={onExtractTable}
           />
           <SecondaryOption
             label="Links"
-            ariaLabel={advanced ? 'Extract all links' : 'Get all the links'}
             icon={<Link2 className="w-3.5 h-3.5" />}
             disabled={disabled}
             onClick={onExtractLinks}

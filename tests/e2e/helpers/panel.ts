@@ -27,22 +27,25 @@ export async function enableAdvancedOptions(worker: Worker): Promise<void> {
 
 export type StartTool = 'auto' | 'pick' | 'table' | 'links';
 
-const START_BUTTON: Record<StartTool, string> = {
+const START_BUTTON: Record<StartTool, string | RegExp> = {
   auto: 'Find data automatically',
   pick: 'Pick items myself',
-  table: 'Extract a table',
-  links: 'Extract all links',
+  table: /^(Table|Extract a table)$/,
+  links: /^(Links|Extract all links)$/,
 };
 
-/** The start option's button. Table and Links sit under "More ways to start". */
+/** The start option's button. Table and Links sit under "Quick presets". */
 export async function startButton(panel: Page, tool: StartTool) {
   if (tool === 'table' || tool === 'links') {
-    const more = panel.getByText('More ways to start');
-    await more.waitFor({ timeout: 10000 });
-    const details = panel.locator('details', { has: more });
-    if (!(await details.evaluate((element) => (element as HTMLDetailsElement).open))) await more.click();
+    const more = panel.getByText(/Quick presets|More ways to start/);
+    if (await more.count()) {
+      const details = panel.locator('details', { has: more });
+      if (await details.count()) {
+        if (!(await details.evaluate((element) => (element as HTMLDetailsElement).open))) await more.click();
+      }
+    }
   }
-  return panel.getByRole('button', { name: START_BUTTON[tool], exact: true });
+  return panel.getByRole('button', { name: START_BUTTON[tool] });
 }
 
 export async function startWith(panel: Page, tool: StartTool): Promise<void> {
