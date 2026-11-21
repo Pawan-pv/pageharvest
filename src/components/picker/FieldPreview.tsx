@@ -157,7 +157,11 @@ export const FieldPreview: React.FC<FieldPreviewProps> = ({ columns, samples, on
                 ? liveRows.rows.slice(0, PREVIEW_ROWS).map((row, index) => (
                     <tr key={index} className="border-t border-line-subtle">
                       {columns.map((column) => (
-                        <td key={column.id} className="px-2 py-1.5 text-fg-muted max-w-[10rem] truncate">
+                        <td
+                          key={column.id}
+                          className="px-2 py-1.5 text-fg-muted max-w-[14rem] truncate"
+                          title={String(row[column.name] ?? '')}
+                        >
                           {formatCell(row[column.name])}
                         </td>
                       ))}

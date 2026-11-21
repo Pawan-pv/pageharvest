@@ -44,7 +44,10 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-semibold text-fg tracking-tight truncate max-w-[200px]">
+              <span
+                className="text-xs font-semibold text-fg tracking-tight truncate max-w-[280px]"
+                title={hostname}
+              >
                 {hostname}
               </span>
               {tab.isInjectable ? (

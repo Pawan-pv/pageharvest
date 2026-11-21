@@ -176,6 +176,24 @@ export const DetectedListPreview: React.FC<DetectedListPreviewProps> = ({
         </Banner>
       )}
 
+      {nothingCredible && (
+        <div className="flex flex-col gap-2 p-3 rounded-card bg-warning-soft border border-warning-line">
+          <p className="text-xs text-warning-fg leading-relaxed">
+            Auto-detection rejected this list because it looks like site navigation or menus, not data records.
+          </p>
+          <div>
+            <Button
+              variant="primary"
+              size="sm"
+              iconLeft={<MousePointer aria-hidden="true" className="w-3.5 h-3.5" />}
+              onClick={onPickAgain}
+            >
+              Pick Element Manually
+            </Button>
+          </div>
+        </div>
+      )}
+
       {candidates.length > 1 ? (
         <fieldset className="min-w-0 flex flex-col gap-2">
           {/* min-w-0: a fieldset is otherwise as wide as its longest sample row, past the panel edge. */}

@@ -63,8 +63,15 @@ const StartOption: React.FC<StartOptionProps> = ({ title, description, icon, pri
   );
 };
 
-const SecondaryOption: React.FC<{ label: string; icon: React.ReactNode; disabled: boolean; onClick: () => void }> = ({
+const SecondaryOption: React.FC<{
+  label: string;
+  ariaLabel?: string;
+  icon: React.ReactNode;
+  disabled: boolean;
+  onClick: () => void;
+}> = ({
   label,
+  ariaLabel,
   icon,
   disabled,
   onClick,
@@ -73,6 +80,7 @@ const SecondaryOption: React.FC<{ label: string; icon: React.ReactNode; disabled
     type="button"
     onClick={onClick}
     disabled={disabled}
+    aria-label={ariaLabel}
     className="flex items-center gap-2 min-h-8 px-3 py-2 rounded-control border border-line bg-surface text-xs font-medium text-fg-muted hover:text-fg hover:border-line-strong disabled:opacity-50 disabled:cursor-not-allowed"
   >
     <span aria-hidden="true">{icon}</span>
@@ -139,7 +147,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
           className="w-full min-h-12 flex items-center justify-center gap-2 px-4 py-3 rounded-card bg-brand text-on-strong text-base font-semibold border border-brand shadow-sm hover:bg-brand-hover active:bg-brand-active disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Sparkles aria-hidden="true" className="w-5 h-5 shrink-0" />
-          Get the list on this page
+          Find Data on This Page
         </button>
         {!onlyTheButton && (
         <>
@@ -165,25 +173,27 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
     )}
 
     {!onlyTheButton && (
-    <details className="group">
-      <summary className="cursor-pointer select-none text-xs font-medium text-fg-muted hover:text-fg py-2">
-        More ways to start
-      </summary>
-      <div className="flex flex-wrap gap-2 pt-1">
-        <SecondaryOption
-          label={advanced ? 'Extract a table' : 'Get a table'}
-          icon={<Table className="w-3.5 h-3.5" />}
-          disabled={disabled}
-          onClick={onExtractTable}
-        />
-        <SecondaryOption
-          label={advanced ? 'Extract all links' : 'Get all the links'}
-          icon={<Link2 className="w-3.5 h-3.5" />}
-          disabled={disabled}
-          onClick={onExtractLinks}
-        />
+      <div className="pt-2">
+        <div className="text-2xs font-semibold uppercase tracking-wider text-fg-subtle mb-1.5">
+          Quick presets
+        </div>
+        <div className="flex items-center gap-2">
+          <SecondaryOption
+            label="Table"
+            ariaLabel={advanced ? 'Extract a table' : 'Get a table'}
+            icon={<Table className="w-3.5 h-3.5" />}
+            disabled={disabled}
+            onClick={onExtractTable}
+          />
+          <SecondaryOption
+            label="Links"
+            ariaLabel={advanced ? 'Extract all links' : 'Get all the links'}
+            icon={<Link2 className="w-3.5 h-3.5" />}
+            disabled={disabled}
+            onClick={onExtractLinks}
+          />
+        </div>
       </div>
-    </details>
     )}
   </section>
   );

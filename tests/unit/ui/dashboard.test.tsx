@@ -101,11 +101,11 @@ describe('UI: Main Dashboard & Website Detection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Find data automatically' }));
     expect(onAutoDetectLists).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText('More ways to start'));
-    fireEvent.click(screen.getByRole('button', { name: 'Extract a table' }));
+    expect(screen.getByText('Quick presets')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Table|Extract a table/ }));
     expect(onExtractTable).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Extract all links' }));
+    fireEvent.click(screen.getByRole('button', { name: /Links|Extract all links/ }));
     expect(onExtractLinks).toHaveBeenCalledTimes(1);
   });
 
@@ -200,8 +200,8 @@ describe('UI: Main Dashboard & Website Detection', () => {
     // The card explains the page; the start section does not repeat it.
     expect(screen.getAllByText(/Switch to a tab with a website/)).toHaveLength(1);
     expect(screen.queryByText(/Open a normal website tab to start/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get the list on this page' })).toBeDisabled();
-    expect(screen.queryByText('More ways to start')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeDisabled();
+    expect(screen.queryByText(/Quick presets|More ways to start/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pick one item myself' })).not.toBeInTheDocument();
   });
 

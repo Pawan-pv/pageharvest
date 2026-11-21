@@ -123,7 +123,7 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     render(<App />);
 
     // Click My data
-    fireEvent.click(screen.getByRole('button', { name: 'My data' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'My data' }));
     await waitFor(() => expect(screen.getByText('Saved Extractions')).toBeInTheDocument());
 
     // Click Settings

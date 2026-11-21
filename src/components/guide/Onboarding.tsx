@@ -16,8 +16,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     icon: <Wheat className="w-5 h-5" />,
   },
   {
-    title: 'Get the list on the page',
-    body: 'Open a website that has a list on it and press "Get the list on this page". PageHarvest shows you what it found. If it is the wrong thing, click one item on the page yourself and it finds the others.',
+    title: 'Find data on the page',
+    body: 'Open a website that has a list on it and press "Find Data on This Page". PageHarvest shows you what it found. If it is the wrong thing, click one item on the page yourself and it finds the others.',
     icon: <Sparkles className="w-5 h-5" />,
   },
   {

@@ -83,7 +83,10 @@ const ColumnRow: React.FC<{
           }}
           className="w-full min-h-8 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-sm font-semibold text-fg hover:border-line-strong focus:border-focus focus:bg-surface focus:outline-none focus:ring-1 focus:ring-focus disabled:text-fg-subtle disabled:hover:border-transparent"
         />
-        <p className="px-1.5 text-body text-fg-muted truncate">
+        <p
+          className="px-1.5 text-body text-fg-muted truncate"
+          title={ticked ? (example ? `For example: ${example}` : 'No example on this page') : 'Left out'}
+        >
           {ticked ? (example ? `For example: ${example}` : 'No example on this page') : 'Left out'}
         </p>
       </div>

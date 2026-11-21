@@ -51,7 +51,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
         kind: 'steps',
         items: [
           'Open the website with the list you want, then open PageHarvest from the toolbar.',
-          'Press "Get the list on this page". PageHarvest says how many items it found and shows the first rows.',
+          'Press "Find Data on This Page". PageHarvest says how many items it found and shows the first rows.',
           'Press "Yes, this is my list", then untick the columns you do not need.',
           'Say whether the list continues on more pages, then press "Start collecting".',
           'Press "Download for Excel". The file goes to your Downloads folder.',
@@ -91,9 +91,9 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     summary: 'It looks for items that repeat, and shows you what it found before anything is saved.',
     keywords: ['automatic', 'detect', 'find', 'list', 'similar', 'items', 'table', 'links', 'confidence', 'candidates', 'best match'],
     blocks: [
-      { kind: 'text', text: '"Get the list on this page" looks for groups of items that repeat, such as cards in a grid or rows in a list, and shows the one that most looks like data, with its first rows. Nothing is saved until you press "Start collecting".' },
+      { kind: 'text', text: '"Find Data on This Page" looks for groups of items that repeat, such as cards in a grid or rows in a list, and shows the one that most looks like data, with its first rows. Nothing is saved until you press "Start collecting".' },
       { kind: 'text', text: 'If it shows a menu or adverts instead of your data, press "Not the right list?" to see every list on the page, or pick one item yourself. A list that looks like a menu is never chosen for you.' },
-      { kind: 'text', text: 'Under "More ways to start", "Get a table" reads a table on the page, and "Get all the links" collects its links.' },
+      { kind: 'text', text: 'Under "Quick presets", "Get a table" reads a table on the page, and "Get all the links" collects its links.' },
       { kind: 'text', text: 'With Advanced options on, the button is "Find data automatically", and every list is shown best match first with a confidence label. Confidence says how sure PageHarvest is that a list is data rather than a menu. It is a guide, not a guarantee: check the sample rows.' },
     ],
   },

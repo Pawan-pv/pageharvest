@@ -242,8 +242,7 @@ describe('App shell', () => {
 
   it('shows the Table flow with its own first step and a scanning state, not the picker', async () => {
     render(<App />);
-    await userEvent.click(await screen.findByText('More ways to start'));
-    await userEvent.click(screen.getByRole('button', { name: /Extract a table/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Table|Extract a table/ }));
 
     const steps = await screen.findByRole('navigation', { name: 'Steps' });
     expect(steps).toHaveTextContent('Step 1 of 5: Find a table');

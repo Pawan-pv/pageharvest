@@ -123,10 +123,10 @@ async function main() {
     };
 
     // Enabled means the panel has seen the site and can read it.
-    await panel.locator('button:not([disabled])', { hasText: 'Get the list on this page' }).waitFor({ timeout: 30000 });
+    await panel.locator('button:not([disabled])', { hasText: /Find Data on This Page|Get the list on this page/i }).waitFor({ timeout: 30000 });
     await capture('start');
 
-    await panel.getByRole('button', { name: 'Get the list on this page' }).click();
+    await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
     await panel.getByRole('heading', { name: /^We found \d+ items on this page$/ }).waitFor({ timeout: 30000 });
     await panel.getByRole('table', { name: 'The first rows' }).waitFor({ timeout: 15000 });
     await capture('found-the-list');

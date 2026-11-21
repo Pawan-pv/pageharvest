@@ -100,7 +100,7 @@ test.describe('Simple mode', () => {
 
   test('a new user is in simple mode: one button, and no word from the code', async () => {
     const { target, panel } = await open(`${FIXTURES}/twenty-cards.html`);
-    await expect(panel.getByRole('button', { name: 'Get the list on this page' })).toBeEnabled({ timeout: 15000 });
+    await expect(panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeEnabled({ timeout: 15000 });
     await expect(panel.getByRole('button', { name: 'Find data automatically' })).toHaveCount(0);
     await expect(panel.getByText('Ready')).toBeVisible();
     // Nothing is saved yet, so there is no empty "recent data" box, and no version badge.
@@ -114,7 +114,7 @@ test.describe('Simple mode', () => {
   test('collects a list and saves an Excel file that holds every row (T1)', async () => {
     const { target, panel } = await open(`${FIXTURES}/twenty-cards.html`);
 
-    await panel.getByRole('button', { name: 'Get the list on this page' }).click();
+    await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
     await expect(panel.getByRole('heading', { name: 'We found 20 items on this page' })).toBeVisible({ timeout: 20000 });
     await expect(panel.getByRole('table', { name: 'The first rows' })).toContainText('Item 01 - Alpha Pro Headset');
 
@@ -177,7 +177,7 @@ test.describe('Simple mode', () => {
   test('offers more pages when the page has a Next link, and collects every page', async () => {
     const { target, panel } = await open(`${FIXTURES}/next-page-pagination.html`);
 
-    await panel.getByRole('button', { name: 'Get the list on this page' }).click();
+    await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
     await expect(panel.getByRole('heading', { name: 'We found 3 items on this page' })).toBeVisible({ timeout: 20000 });
     await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
 
@@ -242,7 +242,7 @@ test.describe('Simple mode', () => {
     await expect(panel.getByText("Can't read this page")).toBeVisible({ timeout: 15000 });
     await expect(panel.getByText(/Switch to a tab with a website/)).toBeVisible();
     await expect(panel.getByText('Access needed')).toHaveCount(0);
-    await expect(panel.getByRole('button', { name: 'Get the list on this page' })).toBeDisabled();
+    await expect(panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeDisabled();
     await target.close();
     await panel.close();
   });

@@ -243,7 +243,9 @@ async function collectEvidence({ browser, port, evidence, artifactDirectory, not
   );
   // A fresh profile opens in simple mode (ADR-039), as a new user's does: the list is found
   // and shown, the user says it is theirs, and collecting starts from the columns screen.
-  await clickPanelButton(panel, 'Get the list on this page');
+  await clickPanelButton(panel, 'Find Data on This Page').catch(() =>
+    clickPanelButton(panel, 'Get the list on this page')
+  );
   await clickPanelButton(panel, 'Yes, this is my list');
   await clickPanelButton(panel, 'Start collecting');
   try {

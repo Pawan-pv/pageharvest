@@ -44,7 +44,7 @@ async function activate(tabId: number, url: string, title: string) {
 }
 
 async function findTheListOnTabA(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole('button', { name: 'Get the list on this page' }));
+  await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
   expect(await screen.findByRole('heading', { name: 'We found 20 items on this page' })).toBeInTheDocument();
   await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
   expect(await screen.findByRole('heading', { name: 'Check your columns' })).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('A found list belongs to the tab and page it came from', () => {
 
     await activate(TAB_B, URL_B, 'Jobs');
     await user.click(await screen.findByRole('button', { name: 'Start again on this page' }));
-    expect(await screen.findByRole('button', { name: 'Get the list on this page' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeInTheDocument();
     expect(screen.queryByText('This list is on another tab')).not.toBeInTheDocument();
     expect(await db.jobs.count()).toBe(0);
   });
@@ -122,7 +122,7 @@ describe('A found list belongs to the tab and page it came from', () => {
       chromeMock.triggerTabUpdated(TAB_A, { url: moved }, chromeMock.activeTab);
     });
     expect(await screen.findByText(/The page changed, so the list you found is gone/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get the list on this page' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start collecting' })).not.toBeInTheDocument();
   });
 
@@ -139,7 +139,7 @@ describe('A found list belongs to the tab and page it came from', () => {
       chromeMock.triggerTabRemoved(TAB_A);
     });
     expect(await screen.findByText(/The page changed, so the list you found is gone/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get the list on this page' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeInTheDocument();
   });
 
   it('ignores what a page in another tab reports', async () => {
@@ -245,6 +245,6 @@ describe('The picker stops when the panel leaves it', () => {
     await waitFor(() => expect(pageA.received).toContain('STOP_PICKER'));
     expect(pageB.received).toEqual([]);
     expect(port.disconnect).toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Get the list on this page' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeInTheDocument();
   });
 });

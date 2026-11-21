@@ -69,7 +69,7 @@ test.describe('A site that answers 429', () => {
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
     await target.bringToFront();
 
-    await panel.getByRole('button', { name: 'Get the list on this page' }).click();
+    await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
     await expect(panel.getByRole('heading', { name: 'We found 3 items on this page' })).toBeVisible({ timeout: 20000 });
     await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
     await expect(panel.getByRole('radio', { name: 'Yes, get more pages' })).toBeChecked();

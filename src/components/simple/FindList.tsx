@@ -95,6 +95,24 @@ export const SimpleListChooser: React.FC<SimpleListChooserProps> = ({ detectedLi
             </p>
           </div>
 
+          {nothingClear && (
+            <div className="flex flex-col gap-2 p-3 rounded-card bg-warning-soft border border-warning-line">
+              <p className="text-xs text-warning-fg leading-relaxed">
+                Auto-detection rejected these items because they look like site navigation or menus, not data records.
+              </p>
+              <div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  iconLeft={<MousePointer aria-hidden="true" className="w-3.5 h-3.5" />}
+                  onClick={onPickMyself}
+                >
+                  Pick Element Manually
+                </Button>
+              </div>
+            </div>
+          )}
+
           <ul className="flex flex-col gap-2">
             {candidates.map((candidate, index) => (
               <li key={candidate.containerSelector}>

@@ -84,7 +84,7 @@ test.describe('A found list stays with its tab', () => {
 
     // Find the list on tab A.
     await tabA.bringToFront();
-    await panel.getByRole('button', { name: 'Get the list on this page' }).click();
+    await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
     await expect(panel.getByRole('heading', { name: 'We found 20 items on this page' })).toBeVisible({ timeout: 20000 });
     await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
     await expect(panel.getByRole('heading', { name: 'Check your columns' })).toBeVisible();
@@ -124,14 +124,14 @@ test.describe('A found list stays with its tab', () => {
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
     await tabA.bringToFront();
 
-    await panel.getByRole('button', { name: 'Get the list on this page' }).click();
+    await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
     await expect(panel.getByRole('heading', { name: 'We found 20 items on this page' })).toBeVisible({ timeout: 20000 });
     await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
     await expect(panel.getByRole('heading', { name: 'Check your columns' })).toBeVisible();
 
     await tabA.goto(`${FIXTURES}/job-listings.html`);
     await expect(panel.getByText('The page changed, so the list you found is gone')).toBeVisible({ timeout: 10000 });
-    await expect(panel.getByRole('button', { name: 'Get the list on this page' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeVisible();
     await expect(panel.getByRole('button', { name: 'Start collecting' })).toHaveCount(0);
 
     await tabA.close();

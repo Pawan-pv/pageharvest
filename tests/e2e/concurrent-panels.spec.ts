@@ -97,7 +97,7 @@ test.describe('Two panels on one job', () => {
     const watching = await openPanel();
     await target.bringToFront();
 
-    await watching.getByRole('button', { name: 'Get the list on this page' }).click();
+    await watching.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
     await expect(watching.getByRole('heading', { name: 'We found 3 items on this page' })).toBeVisible({ timeout: 20000 });
     await watching.getByRole('button', { name: 'Yes, this is my list' }).click();
     await watching.getByRole('button', { name: 'Start collecting' }).click();

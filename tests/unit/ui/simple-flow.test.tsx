@@ -64,7 +64,7 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     };
 
     // 1. One button on the start screen.
-    await click('Get the list on this page');
+    await click(/Find Data on This Page|Get the list on this page/i);
     expect(await screen.findByRole('heading', { name: 'We found 20 items on this page' })).toBeInTheDocument();
 
     // 2. Is this it?
@@ -111,7 +111,7 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     installFakePage(booksHtml(20, NEXT_LINK));
     render(<App />);
 
-    await user.click(await screen.findByRole('button', { name: 'Get the list on this page' }));
+    await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
     await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
 
     const question = await screen.findByRole('group', { name: 'This list continues on more pages. Get them too?' });
@@ -138,7 +138,7 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     installFakePage(booksHtml(20, NEXT_LINK));
     render(<App />);
 
-    await user.click(await screen.findByRole('button', { name: 'Get the list on this page' }));
+    await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
     await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
     await user.click(await screen.findByRole('radio', { name: 'No, just this page' }));
     await user.click(screen.getByRole('button', { name: 'Start collecting' }));
@@ -154,7 +154,7 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     installFakePage(booksHtml(20));
     render(<App />);
 
-    await user.click(await screen.findByRole('button', { name: 'Get the list on this page' }));
+    await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
     await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
 
     const title = await screen.findByRole('textbox', { name: 'Name of the column Title' });
@@ -179,7 +179,7 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     installFakePage(booksHtml(20));
     render(<App />);
 
-    await user.click(await screen.findByRole('button', { name: 'Get the list on this page' }));
+    await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
     await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
     await screen.findByRole('heading', { name: 'Check your columns' });
     await user.click(screen.getByRole('button', { name: 'Back' }));
@@ -201,7 +201,7 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     installFakePage(booksHtml(20));
     render(<App />);
 
-    await user.click(await screen.findByRole('button', { name: 'Get the list on this page' }));
+    await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
     await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
     await user.click(await screen.findByRole('button', { name: 'Start collecting' }));
     await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 });

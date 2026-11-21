@@ -87,6 +87,15 @@ const ErrorBanner = lazy(() =>
 
 type NavSection = 'harvest' | 'datasets' | 'settings' | 'help';
 
+const ViewSkeleton: React.FC<{ label?: string }> = ({ label = 'Loading…' }) => (
+  <div className="p-4 space-y-3 animate-pulse" role="status" aria-label={label}>
+    <div className="h-4 bg-surface-muted rounded-md w-2/3" />
+    <div className="h-9 bg-surface-muted rounded-md w-full" />
+    <div className="h-20 bg-surface-muted rounded-md w-full" />
+    <span className="sr-only">{label}</span>
+  </div>
+);
+
 export const App: React.FC = () => {
   const { tab, isLoading: isTabLoading, refreshTab } = useActiveTab();
   const {
@@ -269,14 +278,14 @@ export const App: React.FC = () => {
   };
 
   const navButtonClass = (section: NavSection) =>
-    `px-2 max-[359px]:px-1.5 py-1 rounded-md font-medium transition-colors ${
+    `px-2 max-[359px]:px-1.5 py-1 rounded-md font-medium whitespace-nowrap transition-colors ${
       activeSection === section ? 'bg-surface text-brand-emphasis shadow-xs' : 'text-fg-muted hover:text-fg'
     }`;
 
   if (consent.hasConsent === false) {
     return (
       <div className="flex flex-col h-screen w-full bg-surface text-fg font-sans antialiased overflow-hidden">
-        <Suspense fallback={<div className="p-4 text-xs text-fg-subtle">Loading…</div>}>
+        <Suspense fallback={<ViewSkeleton label="Loading…" />}>
           <ConsentGate onAccept={consent.accept} />
         </Suspense>
       </div>
@@ -292,12 +301,12 @@ export const App: React.FC = () => {
       {/* Top Header */}
       {/* The side panel opens at about 360px and can be narrowed to 320px, so at the narrowest
           the wordmark gives way (it is still read out), never the nav. The version is in Help. */}
-      <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-xs border-b border-line px-3 py-2.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+      <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-xs border-b border-line px-3 py-2 flex items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0 min-w-0">
           <div className="w-6 h-6 shrink-0 rounded-md bg-brand text-on-strong flex items-center justify-center shadow-xs">
             <Wheat aria-hidden="true" className="w-3.5 h-3.5" />
           </div>
-          <h1 className="text-sm font-bold tracking-tight text-fg truncate max-[339px]:sr-only">PageHarvest</h1>
+          <h1 className="text-sm font-bold tracking-tight text-fg whitespace-nowrap truncate max-[319px]:sr-only">PageHarvest</h1>
         </div>
 
         {/* Navigation pill switcher */}
@@ -383,7 +392,7 @@ export const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto flex flex-col">
         {isHelpOpen ? (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading the guide…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading the guide…" />}>
             <HelpView onClose={() => setIsHelpOpen(false)} onRestartTour={onboarding.open} />
           </Suspense>
         ) : (
@@ -413,7 +422,7 @@ export const App: React.FC = () => {
 
         {/* A list found on a tab that is not in front: go back to it, or start again here. */}
         {workflow.listElsewhere && workflow.listSource && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading…" />}>
             <ListOnAnotherTab
               source={workflow.listSource}
               onGoBack={() => void workflow.goBackToListTab()}
@@ -427,12 +436,12 @@ export const App: React.FC = () => {
           <ScanningState kind={activeFlow} onCancel={workflow.resetToDashboard} />
         )}
         {workflow.view === 'inspecting' && !workflow.listElsewhere && (!activeFlow || activeFlow === 'pick') && !advanced && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading…" />}>
             <SimplePicking inspectedElement={workflow.inspectedElement} onCancel={workflow.cancelVisualPicker} />
           </Suspense>
         )}
         {workflow.view === 'inspecting' && !workflow.listElsewhere && (!activeFlow || activeFlow === 'pick') && advanced && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading picker…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading picker…" />}>
             <ElementSelectionBanner
               inspectedElement={workflow.inspectedElement}
               onConfirm={() => {
@@ -452,7 +461,7 @@ export const App: React.FC = () => {
           <ScanningState kind={activeFlow ?? 'auto'} onCancel={workflow.resetToDashboard} />
         )}
         {workflow.view === 'review_list' && !workflow.listElsewhere && workflow.detectedList && !advanced && !acceptsListForUser && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading lists…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading lists…" />}>
             <SimpleListChooser
               detectedList={workflow.detectedList}
               onUse={handleUseCandidate}
@@ -462,7 +471,7 @@ export const App: React.FC = () => {
           </Suspense>
         )}
         {workflow.view === 'review_list' && !workflow.listElsewhere && workflow.detectedList && advanced && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading lists…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading lists…" />}>
             <DetectedListPreview
               detectedList={workflow.detectedList}
               onSelectCandidate={workflow.selectListCandidate}
@@ -478,7 +487,7 @@ export const App: React.FC = () => {
 
         {/* 4. Field Selection & Pagination Config */}
         {workflow.view === 'config_fields' && !workflow.listElsewhere && workflow.detectedList && showsSimpleCheck && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your list…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading your list…" />}>
             <SimpleListCheck
               detectedList={workflow.detectedList}
               columns={workflow.fields.filter((field) => workflow.selectedFieldIds.has(field.id))}
@@ -493,7 +502,7 @@ export const App: React.FC = () => {
           </Suspense>
         )}
         {workflow.view === 'config_fields' && !workflow.listElsewhere && workflow.detectedList && showsSimpleColumns && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading columns…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading columns…" />}>
             <SimpleColumns
               detectedList={workflow.detectedList}
               fields={workflow.fields}
@@ -508,7 +517,7 @@ export const App: React.FC = () => {
           </Suspense>
         )}
         {workflow.view === 'config_fields' && !workflow.listElsewhere && workflow.detectedList && showsDetailedColumns && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading columns…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading columns…" />}>
             <FieldSelectionPanel
               detectedList={workflow.detectedList}
               fields={workflow.fields}
@@ -537,7 +546,7 @@ export const App: React.FC = () => {
 
         {/* 5. Extraction Progress */}
         {workflow.view === 'extracting' && !advanced && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading progress…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading progress…" />}>
             <SimpleProgress
               stats={workflow.stats}
               onPause={workflow.pauseExtraction}
@@ -548,7 +557,7 @@ export const App: React.FC = () => {
           </Suspense>
         )}
         {workflow.view === 'extracting' && advanced && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading progress…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading progress…" />}>
             <ExtractionProgressView
               stats={workflow.stats}
               recordWarningThreshold={workflow.recordWarningThreshold}
@@ -562,7 +571,7 @@ export const App: React.FC = () => {
 
         {/* 6. Results Data Table */}
         {workflow.view === 'results' && !advanced && !showAllRows && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your rows…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading your rows…" />}>
             <SimpleDone
               dataset={workflow.currentDataset}
               records={workflow.records}
@@ -575,7 +584,7 @@ export const App: React.FC = () => {
           </Suspense>
         )}
         {workflow.view === 'results' && (advanced || showAllRows) && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your rows…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading your rows…" />}>
             <DataTable
               simple={!advanced}
               onBack={() => setShowAllRows(false)}
@@ -594,7 +603,7 @@ export const App: React.FC = () => {
 
         {/* 7. Saved Data Library */}
         {workflow.view === 'history' && !advanced && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your data…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading your data…" />}>
             <SimpleMyData
               datasets={datasets}
               isLoading={isDatasetsLoading}
@@ -606,7 +615,7 @@ export const App: React.FC = () => {
           </Suspense>
         )}
         {workflow.view === 'history' && advanced && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading your data…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading your data…" />}>
             <LibraryView
               datasets={datasets}
               isLoading={isDatasetsLoading}
@@ -634,7 +643,7 @@ export const App: React.FC = () => {
 
         {/* 8. Settings */}
         {workflow.view === 'settings' && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading settings…</div>}>
+          <Suspense fallback={<ViewSkeleton label="Loading settings…" />}>
             <SettingsView
               onBackToDashboard={() => {
                 setActiveTabNav('harvest');

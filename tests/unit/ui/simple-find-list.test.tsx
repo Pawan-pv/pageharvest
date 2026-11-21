@@ -222,7 +222,7 @@ describe('App in simple mode: from the start button to the list (T1)', () => {
   it('goes straight to "We found 20 items" with real columns and rows, in one click', async () => {
     installFakePage(booksHtml(20));
     render(<App />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Get the list on this page' }));
+    await userEvent.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
 
     expect(await screen.findByRole('heading', { name: 'We found 20 items on this page' })).toBeInTheDocument();
     const table = await screen.findByRole('table', { name: 'The first rows' });
@@ -238,7 +238,7 @@ describe('App in simple mode: from the start button to the list (T1)', () => {
   it('lets the user choose another list, then comes back to the check', async () => {
     installFakePage(`${booksHtml(20)}${MENU_ONLY_HTML}`);
     render(<App />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Get the list on this page' }));
+    await userEvent.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
     await screen.findByRole('heading', { name: /^We found \d+ items? on this page$/ });
 
     await userEvent.click(screen.getByRole('button', { name: 'Not the right list?' }));
@@ -250,7 +250,7 @@ describe('App in simple mode: from the start button to the list (T1)', () => {
   it('does not accept a menu on its own: it asks instead', async () => {
     installFakePage(MENU_ONLY_HTML);
     render(<App />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Get the list on this page' }));
+    await userEvent.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
     await waitFor(
       () =>
         expect(

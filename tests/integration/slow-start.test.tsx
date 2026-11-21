@@ -24,7 +24,7 @@ function installBackgroundThatReachesThePage() {
 }
 
 async function reachStart(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole('button', { name: 'Get the list on this page' }));
+  await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
   await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
   expect(await screen.findByRole('heading', { name: 'Check your columns' })).toBeInTheDocument();
   await waitFor(() => expect(screen.getAllByRole('checkbox', { name: /^Keep the column / }).length).toBeGreaterThanOrEqual(2));
