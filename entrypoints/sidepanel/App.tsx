@@ -5,6 +5,7 @@ import { useDatasets } from '@/hooks/useDatasets';
 import { useExtractionWorkflow, type DetectedList } from '@/hooks/useExtractionWorkflow';
 import type { ListCandidate } from '@/shared/contracts/message';
 import { useOnboarding } from '@/components/guide/useOnboarding';
+import { useConsent } from '@/components/consent/useConsent';
 import { useAdvancedMode } from '@/components/settings/useAdvancedMode';
 import { MainDashboard } from '@/components/dashboard/MainDashboard';
 import { Stepper } from '@/components/common/Stepper';
@@ -44,6 +45,9 @@ const HelpView = lazy(() =>
 );
 const Onboarding = lazy(() =>
   import('@/components/guide/Onboarding').then((module) => ({ default: module.Onboarding }))
+);
+const ConsentGate = lazy(() =>
+  import('@/components/consent/ConsentGate').then((module) => ({ default: module.ConsentGate }))
 );
 const SettingsView = lazy(() =>
   import('@/components/settings/SettingsView').then((module) => ({ default: module.SettingsView }))
@@ -179,6 +183,7 @@ export const App: React.FC = () => {
   const showsDetailedColumns = !simpleColumnsFlow;
 
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const consent = useConsent();
   const onboarding = useOnboarding();
 
   const activeSection: NavSection = isHelpOpen
@@ -267,6 +272,20 @@ export const App: React.FC = () => {
     `px-2 max-[359px]:px-1.5 py-1 rounded-md font-medium transition-colors ${
       activeSection === section ? 'bg-surface text-brand-emphasis shadow-xs' : 'text-fg-muted hover:text-fg'
     }`;
+
+  if (consent.hasConsent === false) {
+    return (
+      <div className="flex flex-col h-screen w-full bg-surface text-fg font-sans antialiased overflow-hidden">
+        <Suspense fallback={<div className="p-4 text-xs text-fg-subtle">Loading…</div>}>
+          <ConsentGate onAccept={consent.accept} />
+        </Suspense>
+      </div>
+    );
+  }
+
+  if (consent.hasConsent === null) {
+    return <div className="flex h-screen w-full bg-surface" />;
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-canvas text-fg">

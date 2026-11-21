@@ -185,8 +185,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       {
         kind: 'list',
         items: [
-          'Excel: opens in Excel, Numbers, LibreOffice and Google Sheets, with numbers kept as numbers.',
-          'CSV: a plain text file that every spreadsheet can open.',
+          'Excel: standard .xlsx format, compatible with standard spreadsheet applications, with numbers kept as numbers.',
+          'CSV: standard comma-separated text file (.csv) compatible with standard spreadsheet applications.',
           'Copy the table: paste it straight into a spreadsheet.',
           'JSON and NDJSON (Advanced options): for developers and other tools.',
         ],

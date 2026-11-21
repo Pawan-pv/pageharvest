@@ -32,6 +32,8 @@ describe('Third-party licence notices', () => {
     expect(names).toContain('@tanstack/table-core');
     // Its base stylesheet is part of the panel's CSS.
     expect(names).toContain('tailwindcss');
+    // Runtime preload helpers.
+    expect(names).toContain('vite');
   });
 
   it('gives each package a version, a licence name and the licence text itself', () => {

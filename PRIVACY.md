@@ -74,4 +74,4 @@ If this policy changes, the new version will be published at this address with a
 
 ## Contact
 
-Questions about this policy: open an issue at <https://github.com/Pawan-pv/pageharvest/issues>.
+Questions or support: email `<YOUR_SUPPORT_EMAIL>` or open an issue at <https://github.com/Pawan-pv/pageharvest/issues>.

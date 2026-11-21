@@ -3,6 +3,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, afterEach, vi } from 'vitest';
 import { configure } from '@testing-library/react';
 import { GUIDE_STORAGE_KEY } from '@/components/guide/preferences';
+import { CONSENT_STORAGE_KEY } from '@/components/consent/consent';
 import { createChromeMock, ChromeMock } from './utils/chrome-mock';
 import { usePanelMode } from './utils/panel-mode';
 
@@ -25,8 +26,11 @@ globalThis.chrome = mockChrome as unknown as typeof chrome;
 
 beforeEach(async () => {
   mockChrome.reset();
-  // The first-run tour would open over every App test. Tests of the tour clear this flag.
-  await mockChrome.storage.local.set({ [GUIDE_STORAGE_KEY]: { version: 1, onboardingDone: true } });
+  // The first-run tour and consent gate would open over every App test. Tests of the gate/tour clear these flags.
+  await mockChrome.storage.local.set({
+    [GUIDE_STORAGE_KEY]: { version: 1, onboardingDone: true },
+    [CONSENT_STORAGE_KEY]: { accepted: true, version: '1.0', acceptedAt: new Date().toISOString() },
+  });
   // The suites written before simple mode drive the detailed controls, so they run with
   // Advanced options on and prove nothing was lost (ADR-039). Simple-mode tests switch it off.
   await usePanelMode('advanced');

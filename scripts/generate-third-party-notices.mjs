@@ -18,7 +18,7 @@ export const NOTICES_PATH = join(ROOT, 'public', 'THIRD_PARTY_NOTICES.txt');
  * part of the panel's CSS, and WXT's entrypoint helpers are bundled into each script. Their
  * own dependencies are build tools and are not shipped, so they are not followed.
  */
-const SHIPPED_BUILD_PACKAGES = ['tailwindcss', 'wxt'];
+const SHIPPED_BUILD_PACKAGES = ['tailwindcss', 'vite', 'wxt'];
 
 const LICENCE_FILE = /^(licen[cs]e|copying)(\.(md|txt|markdown))?$/i;
 const NOTICE_FILE = /^notice(\.(md|txt))?$/i;

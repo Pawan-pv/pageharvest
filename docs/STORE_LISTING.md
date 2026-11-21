@@ -79,6 +79,10 @@ One warning at install (ADR-040): "Read and change all your data on all websites
 
 The package contains `THIRD_PARTY_NOTICES.txt`, the licence text of every bundled package (MIT, ISC and Apache-2.0, which all require it). `pnpm build` and `pnpm zip` regenerate it, a unit test fails when it is out of date, and Help links to it.
 
+## Support contact
+
+Primary support email: `<YOUR_SUPPORT_EMAIL>`
+
 ## Before you submit
 
 - [ ] Full release gate passed on the commit being packaged (GitHub Actions `release-gate.yml`). The `main` ruleset requires no status checks, so a failing gate does not block a merge: read the result before merging.
@@ -89,5 +93,5 @@ The package contains `THIRD_PARTY_NOTICES.txt`, the licence text of every bundle
 - [x] Screenshots show a real public practice page, generated from the build being submitted.
 - [ ] `PRIVACY.md` merged to `main`, and its URL opens.
 - [ ] The Excel file opens in Excel, Google Sheets and LibreOffice (open one download in each by hand).
-- [ ] `TERMS_OF_USE.md` and `ACCEPTABLE_USE.md` are drafts: fill in the bracketed items, have them reviewed, then link them from the listing and from `PRIVACY.md`.
-- [ ] A support email is set in the developer dashboard.
+- [ ] `docs/drafts/TERMS_OF_USE.md` and `docs/drafts/ACCEPTABLE_USE.md` are drafts: fill in the bracketed items, have them reviewed, then link them from the listing and from `PRIVACY.md`.
+- [x] A support email is configured: `<YOUR_SUPPORT_EMAIL>` (Developer Dashboard & PRIVACY.md).

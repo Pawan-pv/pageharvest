@@ -153,7 +153,7 @@ describe('Manifest permissions', () => {
     expect(listing).toMatch(/^- \*\*Web history\*\*: .*addresses of the pages the job visited/m);
   });
 
-  it.each(['TERMS_OF_USE.md', 'ACCEPTABLE_USE.md'])('marks %s as a draft for legal review, not in force', (file) => {
+  it.each(['docs/drafts/TERMS_OF_USE.md', 'docs/drafts/ACCEPTABLE_USE.md'])('marks %s as a draft for legal review, not in force', (file) => {
     const text = readFileSync(resolve(ROOT, file), 'utf8');
     expect(text).toMatch(/\*\*Draft for legal review\. Not in force\.\*\*/);
   });
