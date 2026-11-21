@@ -82,10 +82,10 @@ graph LR
 ```
 
 1. **Closed Shadow DOM**:
-   The visual picker mounts an isolated host element (`div#pageharvest-inspector-host`) directly onto `document.documentElement`. All highlight rectangles, tooltips, and badges are injected into a closed shadow root:
+   The visual picker mounts an isolated host element (`div#pageharvest-picker-overlay-host`) directly onto `document.documentElement`. All highlight rectangles, tooltips, and badges are injected into a closed shadow root:
    ```typescript
    const host = document.createElement('div');
-   host.id = 'pageharvest-inspector-host';
+   host.id = 'pageharvest-picker-overlay-host';
    const shadow = host.attachShadow({ mode: 'closed' });
    // Injected overlay CSS does not touch page styles
    ```
@@ -216,16 +216,19 @@ All data is in `PageHarvestDB` in the extension's origin, reached through the re
 stateDiagram-v2
     [*] --> CREATED
     CREATED --> RUNNING: START_EXTRACTION
+    CREATED --> CANCELLED: CANCEL
+    CREATED --> FAILED: FAIL
     RUNNING --> PAUSED: PAUSE
     PAUSED --> RUNNING: RESUME
     RUNNING --> INTERRUPTED: INTERRUPT
     PAUSED --> INTERRUPTED: INTERRUPT
-    INTERRUPTED --> RECOVERABLE: checkpoint valid
-    INTERRUPTED --> FAILED: no checkpoint
-    RECOVERABLE --> RUNNING: RECOVER
-    RECOVERABLE --> CANCELLED: discard
-    RECOVERABLE --> EXPIRED: past retention
-    RUNNING --> COMPLETED: FINISH
+    INTERRUPTED --> RECOVERABLE: checkpoint valid (MARK_RECOVERABLE)
+    INTERRUPTED --> FAILED: no checkpoint / FAIL
+    INTERRUPTED --> CANCELLED: CANCEL
+    RECOVERABLE --> RUNNING: RECOVER (resume from checkpoint)
+    RECOVERABLE --> CANCELLED: DISCARD / CANCEL
+    RECOVERABLE --> EXPIRED: EXPIRE (past retention)
+    RUNNING --> COMPLETED: FINISH (completed or circuit breaker)
     PAUSED --> COMPLETED: FINISH
     RUNNING --> CANCELLED: CANCEL
     PAUSED --> CANCELLED: CANCEL

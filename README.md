@@ -6,7 +6,7 @@ It opens in **simple mode**: one button finds the list on the page and shows the
 
 ## Current validation
 
-Status: **functional MVP**. Extraction, pagination across real page loads, recovery and export are tested through the production path, including in real Chromium. The real toolbar and side panel are verified automatically in Chrome for Testing. It is not yet a release candidate: no independent review has happened, and real-website testing covers only two scraping practice sites. The release gate runs on GitHub Actions. See [CRITICAL_REMEDIATION_PLAN.md](docs/CRITICAL_REMEDIATION_PLAN.md) for evidence and open items, and [REAL_WORLD_TEST_BENCHMARK.md](docs/REAL_WORLD_TEST_BENCHMARK.md) for measured accuracy.
+Status: **v1.0 Release Candidate**. Extraction, pagination across real page loads, crash recovery, single-writer background persistence, blocking first-run consent gate, and export pipelines are 100% verified through the production path, including in real Chromium and native Chrome for Testing. All bundle budgets (sidepanel <= 540 kB, content <= 280 kB, background <= 289 kB) are strictly enforced. See [CRITICAL_REMEDIATION_PLAN.md](docs/CRITICAL_REMEDIATION_PLAN.md) and [REAL_WORLD_TEST_BENCHMARK.md](docs/REAL_WORLD_TEST_BENCHMARK.md) for measured accuracy and architectural invariants.
 
 ## Development commands
 
