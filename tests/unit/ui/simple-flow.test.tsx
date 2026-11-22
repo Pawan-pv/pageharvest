@@ -102,8 +102,9 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
 
     expect(clicks).toBe(4);
 
-    // Nowhere on the way did the panel use a word from the code.
-    expect(view.container.textContent).not.toMatch(/selector|schema|recipe|dataset|pagination|IndexedDB|confidence/i);
+    // Nowhere on the way did the panel use a word from the code. "Recipes" is a real
+    // navigation destination in the dock, so the check covers the technical nouns.
+    expect(view.container.textContent).not.toMatch(/\bselectors?\b|\bschemas?\b|\bdatasets?\b|\bpagination\b|IndexedDB|confidence/i);
   }, 40000);
 
   it('offers more pages, already chosen, when the page has a Next link, and the job follows it', async () => {
@@ -206,15 +207,15 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     await user.click(await screen.findByRole('button', { name: 'Start collecting' }));
     await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 });
 
-    await user.click(screen.getByRole('button', { name: 'My data' }));
+    await user.click(screen.getByRole('button', { name: 'Data' }));
     expect(await screen.findByRole('heading', { name: 'My data' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Recipes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Library sections' })).not.toBeInTheDocument();
 
     await user.click(await screen.findByRole('button', { name: /^Open / }));
     expect(await screen.findByText(/^20 rows from 127\.0\.0\.1, collected on /)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /^Done/ })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'My data' }));
+    await user.click(screen.getByRole('button', { name: 'Data' }));
     await user.click(await screen.findByRole('button', { name: /^Delete / }));
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
     expect(await screen.findByText('Nothing saved yet')).toBeInTheDocument();

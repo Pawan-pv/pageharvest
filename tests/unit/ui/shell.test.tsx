@@ -227,15 +227,15 @@ describe('App shell', () => {
   it('marks the current section in the main navigation', async () => {
     render(<App />);
     const nav = await screen.findByRole('navigation', { name: 'Main' });
-    expect(within(nav).getByRole('button', { name: 'Get data' })).toHaveAttribute('aria-current', 'page');
-    await userEvent.click(within(nav).getByRole('button', { name: 'My data' }));
-    expect(within(nav).getByRole('button', { name: 'My data' })).toHaveAttribute('aria-current', 'page');
-    expect(within(nav).getByRole('button', { name: 'Get data' })).not.toHaveAttribute('aria-current');
+    expect(within(nav).getByRole('button', { name: 'Tools' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(within(nav).getByRole('button', { name: 'Data' }));
+    expect(within(nav).getByRole('button', { name: 'Data' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('button', { name: 'Tools' })).not.toHaveAttribute('aria-current');
   });
 
   it('shows no steps on the dashboard', async () => {
     render(<App />);
-    await screen.findByText('Get data from this page');
+    await screen.findByText('List Extractor');
     await screen.findByText('PageHarvest');
     await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Steps' })).not.toBeInTheDocument());
   });

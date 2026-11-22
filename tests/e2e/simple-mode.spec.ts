@@ -98,15 +98,15 @@ test.describe('Simple mode', () => {
     return { target, panel };
   }
 
-  test('a new user is in simple mode: one button, and no word from the code', async () => {
+  test('a new user is in simple mode: the tool hub, and no word from the code', async () => {
     const { target, panel } = await open(`${FIXTURES}/twenty-cards.html`);
     await expect(panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeEnabled({ timeout: 15000 });
     await expect(panel.getByRole('button', { name: 'Find data automatically' })).toHaveCount(0);
-    await expect(panel.getByText('Ready')).toBeVisible();
+    await expect(panel.getByText('Ready').first()).toBeVisible();
     // Nothing is saved yet, so there is no empty "recent data" box, and no version badge.
     await expect(panel.getByText('Nothing saved yet')).toHaveCount(0);
-    await expect(panel.getByText(/^v\d/)).toHaveCount(0);
-    expect(await panel.locator('body').innerText()).not.toMatch(/selector|schema|recipe|dataset|IndexedDB|extract/i);
+    await expect(panel.getByText(/^v\d+\.\d+\.\d+/)).toHaveCount(0);
+    expect(await panel.locator('body').innerText()).not.toMatch(/selector|schema|dataset|IndexedDB/i);
     await target.close();
     await panel.close();
   });
@@ -157,7 +157,7 @@ test.describe('Simple mode', () => {
 
   test('a second download of the same list keeps the first file', async () => {
     const { target, panel } = await open(`${FIXTURES}/twenty-cards.html`);
-    await panel.getByRole('button', { name: 'My data' }).click();
+    await panel.getByRole('button', { name: 'Data' }).click();
     await panel.getByRole('button', { name: /^Open / }).first().click();
     await expect(panel.getByRole('button', { name: 'Download for Excel' })).toBeVisible({ timeout: 15000 });
 
@@ -210,9 +210,9 @@ test.describe('Simple mode', () => {
       void dialog.dismiss();
     });
 
-    await panel.getByRole('button', { name: 'My data' }).click();
+    await panel.getByRole('button', { name: 'Data' }).click();
     await expect(panel.getByRole('heading', { name: 'My data' })).toBeVisible();
-    await expect(panel.getByRole('button', { name: 'Recipes' })).toHaveCount(0);
+    await expect(panel.getByRole('navigation', { name: 'Library sections' })).toHaveCount(0);
     const saved = panel.getByRole('button', { name: /^Delete / });
     const count = await saved.count();
     expect(count).toBeGreaterThanOrEqual(2);

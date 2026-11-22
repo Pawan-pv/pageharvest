@@ -28,23 +28,14 @@ export async function enableAdvancedOptions(worker: Worker): Promise<void> {
 export type StartTool = 'auto' | 'pick' | 'table' | 'links';
 
 const START_BUTTON: Record<StartTool, string | RegExp> = {
-  auto: 'Find data automatically',
-  pick: 'Pick items myself',
-  table: /^(Table|Extract a table)$/,
-  links: /^(Links|Extract all links)$/,
+  auto: 'Find Data on This Page',
+  pick: 'Pick element on page',
+  table: 'Extract a table',
+  links: 'Extract all links',
 };
 
-/** The start option's button. Table and Links sit under "Quick presets". */
+/** The tool card for a start option. All four sit in the Tool Hub, always visible. */
 export async function startButton(panel: Page, tool: StartTool) {
-  if (tool === 'table' || tool === 'links') {
-    const more = panel.getByText(/Quick presets|More ways to start/);
-    if (await more.count()) {
-      const details = panel.locator('details', { has: more });
-      if (await details.count()) {
-        if (!(await details.evaluate((element) => (element as HTMLDetailsElement).open))) await more.click();
-      }
-    }
-  }
   return panel.getByRole('button', { name: START_BUTTON[tool] });
 }
 

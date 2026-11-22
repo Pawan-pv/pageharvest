@@ -20,7 +20,7 @@ import {
 } from '@/storage/repositories';
 import { ExtractionRecipe, ExtractionRunHistory } from '@/types';
 
-type LibraryTab = 'datasets' | 'projects' | 'recipes' | 'schemas' | 'history';
+export type LibraryTab = 'datasets' | 'projects' | 'recipes' | 'schemas' | 'history';
 
 const TABS: { id: LibraryTab; label: string }[] = [
   { id: 'datasets', label: 'Saved Data' },
@@ -243,7 +243,7 @@ const ProjectsPanel: React.FC<{ onNewExtraction: () => void }> = ({ onNewExtract
 // Recipes
 // ---------------------------------------------------------------------------
 
-const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void; onNewExtraction: () => void }> = ({
+export const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) => void; onNewExtraction: () => void }> = ({
   onRunRecipe,
   onNewExtraction,
 }) => {
@@ -593,10 +593,12 @@ const RunHistoryPanel: React.FC<{ onNewExtraction: () => void }> = ({ onNewExtra
 export interface LibraryViewProps extends ExtractionHistoryViewProps {
   onRunRecipe: (recipe: ExtractionRecipe) => void;
   onUseSchema: (schema: ExtractionSchema) => void;
+  /** Opens the library on a section, so the panel's Data and Recipes destinations land there. */
+  initialTab?: LibraryTab;
 }
 
-export const LibraryView: React.FC<LibraryViewProps> = ({ onRunRecipe, onUseSchema, ...datasetProps }) => {
-  const [tab, setTab] = useState<LibraryTab>('datasets');
+export const LibraryView: React.FC<LibraryViewProps> = ({ onRunRecipe, onUseSchema, initialTab = 'datasets', ...datasetProps }) => {
+  const [tab, setTab] = useState<LibraryTab>(initialTab);
 
   return (
     <div className="flex flex-col h-full">

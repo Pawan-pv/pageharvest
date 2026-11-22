@@ -57,7 +57,8 @@ describe('Simple mode: My data (T4)', () => {
     const { container } = renderMyData([dataset('d1', 'Books - 11/12/2026', 20)]);
     expect(screen.getByRole('heading', { name: 'My data' })).toBeInTheDocument();
     expect(screen.getByText('Books - 11/12/2026')).toBeInTheDocument();
-    expect(screen.getByText(/^20 rows from books\.toscrape\.com, /)).toBeInTheDocument();
+    expect(screen.getByText(/^books\.toscrape\.com · /)).toBeInTheDocument();
+    expect(screen.getByText('20 rows')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/IndexedDB|dataset|extraction|recipe|schema|project|run history/i);
   });
 

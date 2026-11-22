@@ -123,7 +123,7 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     await panel.keyboard.press('Escape');
   });
 
-  test('Help, Settings and My data fit', async () => {
+  test('Help, Settings and Data fit', async () => {
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
 
@@ -136,8 +136,8 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     await expect(panel.getByRole('button', { name: 'Save Preferences' })).toBeVisible({ timeout: 10000 });
     await expectFits(panel, 'Settings');
 
-    await panel.getByRole('button', { name: 'My data', exact: true }).click();
-    await expect(panel.getByRole('button', { name: 'My data', exact: true })).toHaveAttribute('aria-current', 'page');
-    await expectFits(panel, 'My data');
+    await panel.getByRole('button', { name: 'Data', exact: true }).click();
+    await expect(panel.getByRole('button', { name: 'Data', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expectFits(panel, 'Data');
   });
 });

@@ -145,7 +145,7 @@ test.describe('A found list stays with its tab', () => {
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
     await tabA.bringToFront();
 
-    await panel.getByRole('button', { name: 'Pick one item myself' }).click();
+    await panel.getByRole('button', { name: 'Pick element on page' }).click();
     await expect(panel.getByRole('heading', { name: 'Click one item on the page' })).toBeVisible({ timeout: 15000 });
     const firstLink = tabA.locator('a[href]').first();
     await firstLink.hover();

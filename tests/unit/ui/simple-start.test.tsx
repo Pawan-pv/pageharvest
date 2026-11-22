@@ -2,79 +2,72 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../../entrypoints/sidepanel/App';
-import { QuickActions } from '@/components/dashboard/QuickActions';
+import { ToolHub } from '@/components/dashboard/ToolHub';
 import { db } from '@/storage/db';
 import { installBackground } from '../../utils/job-harness';
 import { usePanelMode } from '../../utils/panel-mode';
 
-function renderActions(props: Partial<React.ComponentProps<typeof QuickActions>> = {}) {
+function renderTools(props: Partial<React.ComponentProps<typeof ToolHub>> = {}) {
   const handlers = {
-    onSelectElements: vi.fn(),
     onAutoDetectLists: vi.fn(),
     onExtractTable: vi.fn(),
     onExtractLinks: vi.fn(),
+    onViewAllHistory: vi.fn(),
   };
-  render(<QuickActions {...handlers} {...props} />);
+  render(<ToolHub datasetsCount={0} {...handlers} {...props} />);
   return handlers;
 }
 
 describe('Start screen in simple mode (T1, step 1)', () => {
   it('has one obvious primary action, and it looks for the list', async () => {
-    const handlers = renderActions();
+    const handlers = renderTools();
     const primary = screen.getByRole('button', { name: 'Find Data on This Page' });
     await userEvent.click(primary);
     expect(handlers.onAutoDetectLists).toHaveBeenCalledTimes(1);
 
-    // Nothing else on the screen competes with it as a large choice.
+    // The old competing start choices are gone: one list action leads the hub.
     expect(screen.queryByRole('button', { name: 'Find data automatically' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pick items myself' })).not.toBeInTheDocument();
   });
 
-  it('offers picking by hand as the way out when the list is not found', async () => {
-    const handlers = renderActions();
-    expect(screen.getByText('Not finding it?')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Pick one item myself' }));
-    expect(handlers.onSelectElements).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps tables and links under Quick presets, in plain words', async () => {
-    const handlers = renderActions();
-    expect(screen.getByText('Quick presets')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Table' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Links' }));
+  it('keeps tables and links as equally visible tools, in plain words', async () => {
+    const handlers = renderTools();
+    await userEvent.click(screen.getByRole('button', { name: 'Extract a table' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Extract all links' }));
     expect(handlers.onExtractTable).toHaveBeenCalledTimes(1);
     expect(handlers.onExtractLinks).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(/Extract/)).not.toBeInTheDocument();
+
+    expect(screen.getByText('Table Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Links Extractor')).toBeInTheDocument();
+    expect(screen.queryByText('Quick presets')).not.toBeInTheDocument();
   });
 
-  it('disables every way to start on a page that cannot be read, and says what to do', () => {
-    renderActions({ disabled: true });
+  it('disables every way to start on a page that cannot be read', () => {
+    renderTools({ disabled: true });
     expect(screen.getByRole('button', { name: 'Find Data on This Page' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Pick one item myself' })).toBeDisabled();
-    expect(screen.getByText(/Open a normal website tab to start/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Extract a table' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Extract all links' })).toBeDisabled();
   });
 
-  it('gives every way to start a target at least 32px tall', () => {
-    renderActions();
-    for (const name of ['Find Data on This Page', 'Pick one item myself']) {
-      expect(screen.getByRole('button', { name }).className).toMatch(/min-h-(8|9|1\d)\b/);
+  it('gives every live tool a full-width target with room around it', () => {
+    renderTools();
+    for (const name of ['Find Data on This Page', 'Extract a table', 'Extract all links']) {
+      const className = screen.getByRole('button', { name }).className;
+      expect(className).toMatch(/\bw-full\b/);
+      expect(className).toMatch(/\bp-3\.5\b/);
     }
   });
 });
 
 describe('Start screen with Advanced options on', () => {
-  it('keeps both large choices and the presets, so nothing is lost', async () => {
-    const handlers = renderActions({ advanced: true });
-    await userEvent.click(screen.getByRole('button', { name: 'Find data automatically' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Pick items myself' }));
-    expect(screen.getByText('Quick presets')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Table' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Links' }));
+  it('offers the same tool hub, so nothing is lost or duplicated', async () => {
+    const handlers = renderTools();
+    await userEvent.click(screen.getByRole('button', { name: 'Find Data on This Page' }));
     expect(handlers.onAutoDetectLists).toHaveBeenCalledTimes(1);
-    expect(handlers.onSelectElements).toHaveBeenCalledTimes(1);
-    expect(handlers.onExtractTable).toHaveBeenCalledTimes(1);
-    expect(handlers.onExtractLinks).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('button', { name: 'Find Data on This Page' })).not.toBeInTheDocument();
+
+    // The v2.0 preview suite is visible to everyone, always disabled.
+    expect(screen.getByRole('button', { name: 'Page Extractor' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Find data automatically' })).not.toBeInTheDocument();
   });
 });
 
@@ -91,10 +84,11 @@ describe('App: the start screen follows the Advanced options switch', () => {
     expect(await screen.findByRole('navigation', { name: 'Steps' })).toBeInTheDocument();
   });
 
-  it('shows the detailed start options when Advanced options is on', async () => {
+  it('shows the same tool hub when Advanced options is on', async () => {
     await usePanelMode('advanced');
     render(<App />);
-    expect(await screen.findByRole('button', { name: 'Find data automatically' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Find Data on This Page' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Find Data on This Page' })).toBeInTheDocument();
+    expect(screen.getByText('List Extractor')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Find data automatically' })).not.toBeInTheDocument();
   });
 });

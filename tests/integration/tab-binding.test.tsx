@@ -222,7 +222,7 @@ describe('The picker stops when the panel leaves it', () => {
     const user = userEvent.setup();
     const pageA = installFakePage(booksHtml(20), TAB_A, { url: URL_A });
     const view = render(<App />);
-    await user.click(await screen.findByRole('button', { name: 'Pick one item myself' }));
+    await user.click(await screen.findByRole('button', { name: 'Pick element on page' }));
     expect(await screen.findByRole('heading', { name: 'Click one item on the page' })).toBeInTheDocument();
     expect(connect).toHaveBeenCalledWith(TAB_A, { name: 'pageharvest-picker' });
     expect(pageA.received).toContain('START_PICKER');
@@ -236,7 +236,7 @@ describe('The picker stops when the panel leaves it', () => {
     const pageA = installFakePage(booksHtml(20), TAB_A, { url: URL_A });
     const pageB = installFakePage(JOBS_HTML, TAB_B, { url: URL_B, listen: false });
     render(<App />);
-    await user.click(await screen.findByRole('button', { name: 'Pick one item myself' }));
+    await user.click(await screen.findByRole('button', { name: 'Pick element on page' }));
     await screen.findByRole('heading', { name: 'Click one item on the page' });
 
     await activate(TAB_B, URL_B, 'Jobs');

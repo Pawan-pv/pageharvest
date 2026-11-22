@@ -208,7 +208,7 @@ test.describe('the picker', () => {
   test('the count shown is the count extracted, with the menu and recommendations left out', async () => {
     const { panel, target } = await open('accuracy-picker.html');
 
-    await panel.getByRole('button', { name: 'Pick items myself', exact: true }).click();
+    await panel.getByRole('button', { name: 'Pick element on page', exact: true }).click();
     await expect(panel.getByText('Visual Element Picker Active')).toBeVisible();
     await target.locator('main li').first().hover();
     await target.locator('main li').first().click();
@@ -554,7 +554,7 @@ test.describe('working with results', () => {
 
 test.describe('the library', () => {
   const openLibrary = async (panel: Page, section: string) => {
-    await panel.getByRole('button', { name: 'My data' }).click();
+    await panel.getByRole('button', { name: 'Data' }).click();
     await panel.getByRole('navigation', { name: 'Library sections' }).getByRole('button', { name: section }).click();
   };
 

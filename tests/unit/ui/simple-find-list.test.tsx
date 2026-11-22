@@ -266,7 +266,7 @@ describe('App in simple mode: from the start button to the list (T1)', () => {
     await usePanelMode('advanced');
     installFakePage(booksHtml(20));
     render(<App />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Find data automatically' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Find Data on This Page' }));
     expect(await screen.findByRole('heading', { name: 'Is this the data you want?' })).toBeInTheDocument();
     expect(screen.getAllByText(/confidence/i).length).toBeGreaterThan(0);
     expect(screen.getByRole('navigation', { name: 'Steps' })).toHaveTextContent('of 5');

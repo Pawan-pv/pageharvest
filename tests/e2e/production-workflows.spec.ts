@@ -135,8 +135,8 @@ async function clearData(panel: Page): Promise<void> {
 }
 
 async function configure(panel: Page): Promise<void> {
-  await expect(panel.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
-  await panel.getByRole('button', { name: 'Find data automatically', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
+  await panel.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
   await panel.getByRole('button', { name: 'Use this list', exact: true }).click({ timeout: 10000 });
   await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
   await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeEnabled({ timeout: 10000 });
@@ -533,7 +533,7 @@ test.describe('PageHarvest production workflows', () => {
 
       expect(await readTable(panel, 'checkpoints')).toHaveLength(0);
       await panel.reload();
-      await panel.getByRole('button', { name: 'My data' }).waitFor();
+      await panel.getByRole('button', { name: 'Data' }).waitFor();
       await expect(panel.getByText('Extraction interrupted')).toHaveCount(0);
     } finally {
       await session.context.close();
@@ -584,7 +584,7 @@ test.describe('PageHarvest production workflows', () => {
     await expect(panel.getByLabel(/Include UTF-8 BOM/)).not.toBeChecked();
 
     // The saved defaults reach a new extraction.
-    await panel.getByRole('button', { name: 'Get data' }).click();
+    await panel.getByRole('button', { name: 'Tools' }).click();
     await openTarget(context, `${FIXTURES}/simple-grid.html`);
     await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
@@ -616,8 +616,8 @@ test.describe('PageHarvest production workflows', () => {
     panel = await openPanel(context, extensionId);
     await target.bringToFront();
 
-    await panel.getByRole('button', { name: 'My data' }).click();
-    await panel.getByRole('button', { name: 'Recipes' }).click();
+    await panel.getByRole('button', { name: 'Data' }).click();
+    await panel.getByRole('navigation', { name: 'Library sections' }).getByRole('button', { name: 'Recipes' }).click();
     await panel.getByRole('button', { name: 'Run recipe Grid recipe' }).click();
     await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
 
@@ -651,8 +651,8 @@ test.describe('PageHarvest production workflows', () => {
 
     // Failure: a container selector that is not valid CSS.
     target = await openTarget(context, `${FIXTURES}/simple-grid.html`);
-    await panel.getByRole('button', { name: 'My data' }).click();
-    await panel.getByRole('button', { name: 'Recipes' }).click();
+    await panel.getByRole('button', { name: 'Data' }).click();
+    await panel.getByRole('navigation', { name: 'Library sections' }).getByRole('button', { name: 'Recipes' }).click();
     await panel.getByRole('button', { name: 'Edit recipe History recipe' }).click();
     await panel.getByLabel('Container Selector').fill('###not-valid');
     await panel.getByRole('button', { name: 'Save Changes' }).click();
@@ -667,7 +667,7 @@ test.describe('PageHarvest production workflows', () => {
 
     // Cancellation
     target = await openTarget(context, `${FIXTURES}/long-scroll.html`);
-    await expect(panel.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
+    await expect(panel.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
     await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
     await start(panel);
@@ -678,8 +678,8 @@ test.describe('PageHarvest production workflows', () => {
 
     await panel.close();
     panel = await openPanel(context, extensionId);
-    await panel.getByRole('button', { name: 'My data' }).click();
-    await panel.getByRole('button', { name: 'Run History' }).click();
+    await panel.getByRole('button', { name: 'Data' }).click();
+    await panel.getByRole('navigation', { name: 'Library sections' }).getByRole('button', { name: 'Run History' }).click();
 
     await expect(panel.getByText('COMPLETED')).toBeVisible();
     await expect(panel.getByText('FAILED')).toBeVisible();
@@ -799,8 +799,8 @@ test.describe('PageHarvest production workflows', () => {
   test('I: the downloaded CSV keeps numbers intact and neutralizes formulas', async () => {
     const panel = await openPanel(context, extensionId);
     await openTarget(context, `${FIXTURES}/csv-values.html`);
-    await expect(panel.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
-    await panel.getByRole('button', { name: 'Find data automatically', exact: true }).click();
+    await expect(panel.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
+    await panel.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
     await panel.getByRole('button', { name: 'Use this list', exact: true }).click({ timeout: 10000 });
     await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
     // Both columns are found automatically: the items have no heading to recognize.
@@ -989,7 +989,7 @@ test.describe('PageHarvest production workflows', () => {
     await panel.close();
     await target.bringToFront();
     panel = await openPanel(context, extensionId);
-    await panel.getByRole('button', { name: 'My data' }).click();
+    await panel.getByRole('button', { name: 'Data' }).click();
     await panel.getByText(/20 Product Listing/).last().click();
     await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });
 
@@ -1014,7 +1014,7 @@ test.describe('PageHarvest production workflows', () => {
     const panel = await openPanel(context, extensionId);
     const target = await openTarget(context, `${FIXTURES}/simple-grid.html`);
 
-    await panel.getByRole('button', { name: 'Pick items myself', exact: true }).click();
+    await panel.getByRole('button', { name: 'Pick element on page', exact: true }).click();
     await expect(panel.getByText('Visual Element Picker Active')).toBeVisible();
     await target.locator('.product-card').first().hover();
     const host = target.locator('#pageharvest-picker-overlay-host');
@@ -1047,20 +1047,20 @@ test.describe('PageHarvest production workflows', () => {
     await target.mouse.click((x1 + x3) / 2, (y1 + y3) / 2);
 
     await expect(host).toHaveCount(0);
-    await expect(panel.getByText('Get data from this page')).toBeVisible();
+    await expect(panel.getByText('List Extractor')).toBeVisible();
   });
 
   test('Escape closes the picker and removes every trace of it', async () => {
     const panel = await openPanel(context, extensionId);
     const target = await openTarget(context, `${FIXTURES}/simple-grid.html`);
 
-    await panel.getByRole('button', { name: 'Pick items myself', exact: true }).click();
+    await panel.getByRole('button', { name: 'Pick element on page', exact: true }).click();
     await target.locator('.product-card').first().hover();
     await expect(target.locator('#pageharvest-picker-overlay-host')).toBeAttached();
 
     await target.keyboard.press('Escape');
 
     await expect(target.locator('#pageharvest-picker-overlay-host')).toHaveCount(0);
-    await expect(panel.getByText('Get data from this page')).toBeVisible();
+    await expect(panel.getByText('List Extractor')).toBeVisible();
   });
 });

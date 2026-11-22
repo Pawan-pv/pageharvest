@@ -265,7 +265,7 @@ describe('App: first run and Help', () => {
 
     cleanup();
     render(<App />);
-    await screen.findByText('Get data from this page');
+    await screen.findByText('List Extractor');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     await userEvent.click(await screen.findByRole('button', { name: 'Help' }));
@@ -279,7 +279,7 @@ describe('App: first run and Help', () => {
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: 'Help' }));
     await screen.findByRole('heading', { name: 'Help and guide' });
-    await userEvent.click(screen.getByRole('button', { name: 'Get data' }));
-    expect(await screen.findByText('Get data from this page')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Tools' }));
+    expect(await screen.findByText('List Extractor')).toBeInTheDocument();
   });
 });

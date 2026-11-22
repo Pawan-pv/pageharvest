@@ -26,7 +26,7 @@ async function deleteColumn(index: number, thenShows: RegExp | string = /^Delete
 
 async function openSavedDataset() {
   render(<App />);
-  fireEvent.click(await screen.findByRole('button', { name: 'My data' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Data' }));
   fireEvent.click(await screen.findByText('Grid Dataset'));
   await screen.findByText('3 records');
 }

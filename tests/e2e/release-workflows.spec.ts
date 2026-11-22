@@ -157,8 +157,8 @@ test.describe('PageHarvest release workflows', () => {
     await targetPage.bringToFront();
 
     await expect(sidePanelPage.getByText('127.0.0.1')).toBeVisible();
-    await expect(sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
-    await sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true }).click();
+    await expect(sidePanelPage.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
+    await sidePanelPage.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
     await expect(sidePanelPage.getByText('20 similar items found').first()).toBeVisible();
     await sidePanelPage.getByRole('button', { name: 'Use this list', exact: true }).click();
     await expect(sidePanelPage.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
@@ -173,11 +173,11 @@ test.describe('PageHarvest release workflows', () => {
     expect(records).toHaveLength(20);
     expect(records.some((record) => Object.values(record).some((value) => value === 'Item 01 - Alpha Pro Headset'))).toBe(true);
 
-    await sidePanelPage.getByRole('button', { name: 'My data' }).click();
+    await sidePanelPage.getByRole('button', { name: 'Data' }).click();
     await expect(sidePanelPage.getByText('Saved Extractions')).toBeVisible();
     await expect(sidePanelPage.getByText('20 rows')).toBeVisible();
     await sidePanelPage.reload();
-    await sidePanelPage.getByRole('button', { name: 'My data' }).click();
+    await sidePanelPage.getByRole('button', { name: 'Data' }).click();
     await expect(sidePanelPage.getByText('20 rows')).toBeVisible();
     await sidePanelPage.getByText(/20 Product Listing - PageHarvest Fixture/).last().click();
     await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible();
@@ -215,7 +215,7 @@ test.describe('PageHarvest release workflows', () => {
     await targetPage.waitForLoadState('domcontentloaded');
     await targetPage.bringToFront();
 
-    await sidePanelPage.getByRole('button', { name: 'Pick items myself', exact: true }).click();
+    await sidePanelPage.getByRole('button', { name: 'Pick element on page', exact: true }).click();
     await expect(sidePanelPage.getByText('Visual Element Picker Active')).toBeVisible();
     await targetPage.locator('.product-card').first().hover();
     await expect(targetPage.locator('#pageharvest-picker-overlay-host')).toBeAttached();
@@ -276,8 +276,8 @@ test.describe('PageHarvest release workflows', () => {
     await targetPage.waitForLoadState('domcontentloaded');
     await targetPage.bringToFront();
 
-    await expect(sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
-    await sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true }).click();
+    await expect(sidePanelPage.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
+    await sidePanelPage.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
     await sidePanelPage.getByRole('button', { name: 'Use this list', exact: true }).click();
     await expect(sidePanelPage.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
     await choosePagination(sidePanelPage, 'infinite_scroll');

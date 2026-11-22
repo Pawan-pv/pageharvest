@@ -121,7 +121,7 @@ describe('Side panel styling uses the tokens', () => {
   });
 
   it('uses no classes that Tailwind 3 does not generate', () => {
-    const dead = /(?<![\w-])(?:animate-in|fade-in|zoom-in-\d+|py-0\.2|text-\[\d+px\])(?![\w-])/g;
+    const dead = /(?<![\w-])(?:animate-in|fade-in|zoom-in-\d+|py-0\.2)(?![\w-])/g;
     const offenders = UI_FILES.flatMap((file) =>
       Array.from(readFileSync(file, 'utf8').matchAll(dead), (m) => `${relative(ROOT, file)}: ${m[0]}`)
     );

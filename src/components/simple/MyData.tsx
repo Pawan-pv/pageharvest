@@ -9,6 +9,7 @@ import { Input } from '@/components/common/Input';
 import { SavedFileNotice } from '@/components/common/SavedFileNotice';
 import { downloadRows } from '@/components/grid/download-rows';
 import type { Dataset, ExtractedRecord } from '@/types';
+import { relativeTime } from '@/utils/relative-time';
 import { rowCount } from './Done';
 
 export interface SimpleMyDataProps {
@@ -159,12 +160,16 @@ export const SimpleMyData: React.FC<SimpleMyDataProps> = ({
             return (
               <li key={dataset.id}>
                 <Card className="flex flex-col gap-2 p-3">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-fg break-words line-clamp-2">{dataset.name}</h3>
-                    <p className="text-body text-fg-muted mt-0.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold text-fg break-words line-clamp-2">{dataset.name}</h3>
+                      <p className="mt-0.5 truncate text-body text-fg-muted">
+                        {site || 'This page'} · {relativeTime(dataset.createdAt)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-line/80 bg-surface-muted px-2 py-0.5 text-right text-2xs font-semibold tabular-nums text-fg-muted">
                       {rowCount(dataset.recordsCount)}
-                      {site ? ` from ${site}` : ''}, {new Date(dataset.createdAt).toLocaleDateString()}
-                    </p>
+                    </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button size="sm" aria-label={`Open ${dataset.name}`} onClick={() => onViewDataset(dataset)}>

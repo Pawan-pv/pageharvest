@@ -78,7 +78,7 @@ describe('Side Panel UI Shell (App.tsx)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Ready|Can't read this page/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Ready|Can't read this page/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -86,8 +86,8 @@ describe('Side Panel UI Shell (App.tsx)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Pick items myself/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Find data automatically/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Pick element on page' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Find Data on This Page' })).toBeInTheDocument();
     });
   });
 });

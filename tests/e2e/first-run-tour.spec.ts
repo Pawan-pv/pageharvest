@@ -56,7 +56,7 @@ test.describe('First-run tour', () => {
     await expect(panel.getByRole('dialog', { name: 'Your data stays on your computer' })).toBeVisible();
     await panel.getByRole('button', { name: 'Get started' }).click();
     await expect(panel.getByRole('dialog')).toHaveCount(0);
-    await expect(panel.getByText('Get data from this page')).toBeVisible();
+    await expect(panel.getByText('List Extractor')).toBeVisible();
 
     await expect
       .poll(async () =>
@@ -69,7 +69,7 @@ test.describe('First-run tour', () => {
   test('does not show the tour again, and Help reopens it', async () => {
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
-    await expect(panel.getByText('Get data from this page')).toBeVisible({ timeout: 10000 });
+    await expect(panel.getByText('List Extractor')).toBeVisible({ timeout: 10000 });
     // Give the stored preference time to be read before checking the tour stayed closed.
     await panel.waitForTimeout(500);
     await expect(panel.getByRole('dialog')).toHaveCount(0);

@@ -109,7 +109,7 @@ test.describe('Two panels on one job', () => {
 
     // The other window's panel: My data lists the list being collected, with Delete.
     const other = await openPanel();
-    await other.getByRole('button', { name: 'My data' }).click();
+    await other.getByRole('button', { name: 'Data' }).click();
     await expect(other.getByRole('heading', { name: 'My data' })).toBeVisible();
     const datasetsBefore = (await readTable(other, 'datasets')).length;
     await other.getByRole('button', { name: /^Delete / }).first().click();
@@ -126,7 +126,7 @@ test.describe('Two panels on one job', () => {
     expect((await newestJob(watching)).status).toBe('COMPLETED');
 
     await other.reload();
-    await other.getByRole('button', { name: 'My data' }).click();
+    await other.getByRole('button', { name: 'Data' }).click();
     await other.getByRole('button', { name: /^Delete / }).first().click();
     await other.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
     await expect.poll(async () => (await readTable(other, 'datasets')).length).toBe(datasetsBefore - 1);
@@ -144,7 +144,7 @@ test.describe('Two panels on one job', () => {
     await target.bringToFront();
 
     // Advanced options: the detailed flow, which has "Cancel job".
-    await watching.getByRole('button', { name: 'Find data automatically', exact: true }).click();
+    await watching.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
     await watching.getByRole('button', { name: 'Use this list', exact: true }).click();
     await watching.getByText('Choose your columns').waitFor({ timeout: 20000 });
     const next = watching.getByRole('button', { name: 'Next: Pagination' });

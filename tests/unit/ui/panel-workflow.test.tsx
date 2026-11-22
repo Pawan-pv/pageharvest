@@ -27,8 +27,10 @@ async function saveRecipe(overrides = {}) {
 }
 
 async function openLibraryTab(name: string) {
-  fireEvent.click(await screen.findByRole('button', { name: 'My data' }));
-  fireEvent.click(await screen.findByRole('button', { name }));
+  const mainNav = await screen.findByRole('navigation', { name: 'Main' });
+  fireEvent.click(within(mainNav).getByRole('button', { name: 'Data' }));
+  const libraryNav = await screen.findByRole('navigation', { name: 'Library sections' });
+  fireEvent.click(within(libraryNav).getByRole('button', { name }));
 }
 
 describe('Side panel as a view of stored state', () => {
@@ -115,21 +117,21 @@ describe('Side panel as a view of stored state', () => {
       return result;
     });
     render(<App />);
-    await screen.findByText('Get data from this page');
+    await screen.findByText('List Extractor');
     await waitFor(() => expect(screen.queryByText('Loading your data…')).not.toBeInTheDocument());
     await waitFor(() => expect(reconciled).toBe(true));
     await waitFor(() => expect(activeScanned).toBe(true));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
-    const datasetsButton = await screen.findByRole('button', { name: 'My data' });
+    const datasetsButton = await screen.findByRole('button', { name: 'Data' });
     await act(async () => {
       fireEvent.click(datasetsButton);
       await new Promise((resolve) => setTimeout(resolve, 1000));
     });
     await screen.findByText('Saved Extractions');
     await waitFor(() => expect(screen.queryByText('Loading extraction history...')).not.toBeInTheDocument());
-    const datasetRow = await screen.findByText(/Simple Product Grid/);
+    const datasetRow = await screen.findByRole('heading', { name: /Simple Product Grid/ });
     await act(async () => {
       fireEvent.click(datasetRow);
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -166,7 +168,7 @@ describe('Side panel as a view of stored state', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel job' }));
 
-    expect(await screen.findByText('Get data from this page')).toBeInTheDocument();
+    expect(await screen.findByText('List Extractor')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Loading your data…')).not.toBeInTheDocument());
     expect((await db.jobs.get(await jobId()))?.status).toBe('CANCELLED');
     expect(await db.history.count()).toBe(1);
@@ -210,7 +212,7 @@ describe('Side panel as a view of stored state', () => {
     render(<App />);
 
     await waitFor(async () => expect(await db.settings.count()).toBe(1));
-    await screen.findByText('Get data from this page');
+    await screen.findByText('List Extractor');
     await openLibraryTab('Recipes');
     fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
 

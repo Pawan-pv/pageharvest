@@ -85,8 +85,8 @@ describe('Consent Gate (B2)', () => {
       expect(screen.getByText(/Respect site terms & applicable laws/i)).toBeInTheDocument();
 
       // Verify the main app cannot be bypassed (no main navigation or dashboard actions)
-      expect(screen.queryByRole('button', { name: 'Get data' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'My data' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Tools' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Data' })).not.toBeInTheDocument();
     });
 
     it('unblocks the app upon clicking "I understand, continue" and persists consent', async () => {
@@ -97,7 +97,7 @@ describe('Consent Gate (B2)', () => {
 
       // App should transition to main interface
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Get data' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Tools' })).toBeInTheDocument();
       });
 
       // Verify persistence in chrome.storage.local
@@ -122,7 +122,7 @@ describe('Consent Gate (B2)', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Get data' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Tools' })).toBeInTheDocument();
       });
       expect(screen.queryByRole('button', { name: 'I understand, continue' })).not.toBeInTheDocument();
     });

@@ -5,7 +5,6 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { DataTable } from '@/components/grid/DataTable';
 import { ExtractionHistoryView } from '@/components/history/ExtractionHistoryView';
 import { LibraryView } from '@/components/library/LibraryView';
-import { RecentProjectsCard } from '@/components/dashboard/RecentProjectsCard';
 import { db } from '@/storage/db';
 import type { Dataset } from '@/types';
 
@@ -66,12 +65,6 @@ describe('Empty screens tell the user what to do', () => {
     expect(screen.getByRole('heading', { name: 'No datasets match "zzz"' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Clear search' }));
     expect(screen.getByText('Books')).toBeInTheDocument();
-  });
-
-  it('recent extractions on the start screen point at the options above', () => {
-    render(<RecentProjectsCard datasets={[]} onViewDataset={vi.fn()} onViewAllHistory={vi.fn()} />);
-    expect(screen.getByRole('heading', { name: 'Nothing saved yet' })).toBeInTheDocument();
-    expect(screen.getByText(/Choose how to start above/)).toBeInTheDocument();
   });
 
   describe('library sections', () => {

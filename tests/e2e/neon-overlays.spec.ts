@@ -319,8 +319,8 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
   }
 
   async function configure(panel: Page): Promise<void> {
-    await expect(panel.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
-    await panel.getByRole('button', { name: 'Find data automatically', exact: true }).click();
+    await expect(panel.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
+    await panel.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
     await panel.getByRole('button', { name: 'Use this list', exact: true }).click({ timeout: 10000 });
     await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
     await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeEnabled({ timeout: 10000 });
@@ -329,7 +329,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
   test('Neon Hover Picker: hover and click paint the neon box, corners, badge and pattern', async () => {
     const { panel, target, session, pageErrors } = await open(`${FIXTURES}/simple-grid.html`);
 
-    await panel.getByRole('button', { name: 'Pick items myself', exact: true }).click();
+    await panel.getByRole('button', { name: 'Pick element on page', exact: true }).click();
     await expect(panel.getByText('Visual Element Picker Active')).toBeVisible();
 
     const price = target.locator('.product-price').first();
