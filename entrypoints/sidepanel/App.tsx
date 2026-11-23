@@ -339,7 +339,7 @@ export const App: React.FC = () => {
   };
 
   const navPillClass = (section: NavSection) =>
-    `flex min-h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-semibold transition-colors ${
+    `flex min-h-8 items-center gap-1 rounded-xl px-2 text-xs font-semibold transition-colors ${
       activeSection === section
         ? 'bg-surface-muted text-fg shadow-xs'
         : 'text-fg-subtle hover:bg-surface hover:text-fg'

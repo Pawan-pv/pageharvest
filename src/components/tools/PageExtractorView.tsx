@@ -160,6 +160,13 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
     setError(null);
     setPreviewRows([]);
     setCreatedDatasetId(null);
+    setProgress({
+      status: 'running',
+      processedUrls: 0,
+      totalUrls: parsedUrls.length,
+      rowsExtracted: 0,
+      failedUrls: 0,
+    });
     setIsRunning(true);
     setIsPaused(false);
 
@@ -580,6 +587,11 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
                 }}
               />
             </div>
+            {isRunning && (
+              <p className="text-3xs text-fg-muted italic">
+                Keep this panel or workbench tab open while running
+              </p>
+            )}
           </div>
         )}
 

@@ -4,20 +4,14 @@
  *
  *   pnpm build && node scripts/generate-screenshots.mjs
  *
- * It loads `.output/chrome-mv3` into Chromium, opens a public practice site made for this
- * purpose (books.toscrape.com), and walks the simple flow a new user gets: find the list,
- * check the columns, collect, download. Nothing is seeded or mocked: every row in a
- * screenshot was collected from the page beside it during this run.
+ * It loads `.output/chrome-mv3` into Chromium, opens the local Indie Gear store showcase
+ * fixture (tests/fixtures/pages/store-showcase.html), and captures the OLED sidepanel
+ * and Full-Tab Workbench (table.html).
  *
- * Playwright cannot capture Chrome's side panel, so the panel is opened as a tab of the same
- * width, and each screenshot is the page and the panel captured at the same moment and set
- * side by side, the way Chrome docks them.
- *
- * The store accepts only exact sizes: 1280x800 for a screenshot and 440x280 for the small
- * promo tile. The device scale factor is fixed at 1, so a display set to 125% cannot change
- * them, and every file's size is read back and checked before the script reports success.
+ * All screenshots are validated at exact store dimensions: 1280x800, deviceScaleFactor 1.
  */
 import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +20,7 @@ import { chromium } from '@playwright/test';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outputDir = join(root, 'store-assets');
 const extensionPath = join(root, '.output', 'chrome-mv3');
-const SITE = 'https://books.toscrape.com/';
+const SITE = 'http://127.0.0.1:3456/store-showcase.html';
 const WIDTH = 1280;
 const HEIGHT = 800;
 const PANEL_WIDTH = 380;
@@ -45,21 +39,24 @@ async function expectSize(file, width, height) {
   }
 }
 
-/** The small promo tile: the icon, the name and what the extension does, in its own colours. */
+/** The small promo tile: the icon, the name and what the extension does, in OLED styling. */
 async function promoTile(frame) {
   const icon = (await readFile(join(root, 'public', 'icon', '128.png'))).toString('base64');
   await frame.setViewportSize(PROMO);
   await frame.setContent(
     `<body style="margin:0;width:${PROMO.width}px;height:${PROMO.height}px;display:flex;flex-direction:column;
-                  align-items:center;justify-content:center;gap:10px;background:linear-gradient(160deg,#064e3b,#047857);
-                  font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#fff">
-       <div style="display:flex;align-items:center;gap:12px">
-         <img src="data:image/png;base64,${icon}" width="56" height="56" alt="">
-         <span style="font-size:38px;font-weight:700;letter-spacing:-0.5px">PageHarvest</span>
+                  align-items:center;justify-content:center;gap:12px;background:#000000;
+                  font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#ffffff">
+       <div style="display:flex;align-items:center;gap:14px">
+         <img src="data:image/png;base64,${icon}" width="56" height="56" alt="" style="filter:drop-shadow(0 0 16px rgba(16,185,129,0.4))">
+         <div style="display:flex;flex-direction:column">
+           <span style="font-size:32px;font-weight:800;letter-spacing:-0.5px;color:#f8fafc">PageHarvest</span>
+           <span style="font-size:12px;font-weight:600;color:#10b981;letter-spacing:1px;text-transform:uppercase">10-Tool Web Extractor</span>
+         </div>
        </div>
-       <div style="font-size:17px;opacity:.95">Lists on web pages, into a spreadsheet</div>
-       <div style="margin-top:6px;padding:6px 14px;border-radius:999px;background:#ecfdf5;color:#064e3b;
-                   font-size:13px;font-weight:600">Stays on your computer</div>
+       <div style="font-size:14px;color:#94a3b8;font-weight:500">100% Local-First • Zero Cloud Servers • Local IndexedDB</div>
+       <div style="margin-top:4px;padding:5px 14px;border-radius:999px;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.12);color:#34d399;
+                   font-size:12px;font-weight:600">Private • Fast • Spreadsheets</div>
      </body>`
   );
   const file = join(outputDir, 'promo-440x280.png');
@@ -68,12 +65,42 @@ async function promoTile(frame) {
   console.log(`Saved ${file}`);
 }
 
+async function ensureFixtureServer() {
+  try {
+    const res = await fetch('http://127.0.0.1:3456/store-showcase.html');
+    if (res.ok) return null;
+  } catch {
+    // Need to start server
+  }
+
+  const serverProc = spawn('node', ['tests/fixtures/serve.cjs'], {
+    cwd: root,
+    stdio: 'ignore',
+  });
+
+  // Wait for server to respond
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 200));
+    try {
+      const res = await fetch('http://127.0.0.1:3456/store-showcase.html');
+      if (res.ok) {
+        return serverProc;
+      }
+    } catch {
+      // Keep waiting
+    }
+  }
+  return serverProc;
+}
+
 async function main() {
   await mkdir(outputDir, { recursive: true });
-  // Screenshots from an earlier run would be mistaken for this build's.
+  // Clean earlier screenshots
   for (const name of await readdir(outputDir)) {
     if (/^screenshot-.*\.png$/.test(name)) await rm(join(outputDir, name));
   }
+
+  const serverProc = await ensureFixtureServer();
   const profile = await mkdtemp(join(os.tmpdir(), 'pageharvest-screenshots-'));
   const context = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
@@ -86,23 +113,29 @@ async function main() {
   try {
     const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker', { timeout: 20000 }));
     const extensionId = worker.url().split('/')[2];
-    // The welcome tour would cover the first screenshot.
-    await worker.evaluate(() => chrome.storage.local.set({ 'pageharvest.guide': { version: 1, onboardingDone: true } }));
 
-    // The page the two captures are set side by side on. It is opened first, because the
-    // panel works on whichever tab is in front, and that must stay the site.
+    // Seed guide & consent so ToolHub is shown cleanly
+    await worker.evaluate(() => {
+      chrome.storage.local.set({
+        'pageharvest.guide': { version: 1, onboardingDone: true },
+        'pageharvest.consent': { accepted: true, version: '1.0', acceptedAt: new Date().toISOString() },
+      });
+    });
+
     const frame = await context.newPage();
     await frame.setViewportSize({ width: WIDTH, height: HEIGHT });
+
     const page = await context.newPage();
+    await page.setViewportSize({ width: WIDTH - PANEL_WIDTH, height: HEIGHT });
     await page.goto(SITE, { waitUntil: 'load' });
+
     const panel = await context.newPage();
     await panel.setViewportSize({ width: PANEL_WIDTH, height: HEIGHT });
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
     await page.bringToFront();
 
     let count = 0;
-    /** The page and the panel as they are now, side by side, saved as one 1280x800 image. */
-    const capture = async (name) => {
+    const captureDuo = async (name) => {
       count += 1;
       const [site, side] = await Promise.all([
         page.screenshot({ type: 'png' }),
@@ -110,9 +143,9 @@ async function main() {
       ]);
       const image = (buffer) => `data:image/png;base64,${buffer.toString('base64')}`;
       await frame.setContent(
-        `<body style="margin:0;display:flex;width:${WIDTH}px;height:${HEIGHT}px;background:#fff">
+        `<body style="margin:0;display:flex;width:${WIDTH}px;height:${HEIGHT}px;background:#000">
            <img src="${image(site)}" style="width:${WIDTH - PANEL_WIDTH}px;height:${HEIGHT}px">
-           <img src="${image(side)}" style="width:${PANEL_WIDTH}px;height:${HEIGHT}px;box-shadow:-1px 0 0 #cbd5e1">
+           <img src="${image(side)}" style="width:${PANEL_WIDTH}px;height:${HEIGHT}px;box-shadow:-2px 0 10px rgba(0,0,0,0.5)">
          </body>`
       );
       const file = join(outputDir, `screenshot-${count}-${name}.png`);
@@ -122,38 +155,52 @@ async function main() {
       console.log(`Saved ${file}`);
     };
 
-    // Enabled means the panel has seen the site and can read it.
-    await panel.locator('button:not([disabled])', { hasText: /Find Data on This Page|Get the list on this page/i }).waitFor({ timeout: 30000 });
-    await capture('start');
+    // 1. OLED ToolHub: 10 live tools & active page context
+    const listBtn = panel.getByRole('button', { name: /List Extractor|Find Data on This Page/i });
+    await listBtn.waitFor({ state: 'visible', timeout: 30000 });
+    await captureDuo('oled-toolhub');
 
-    await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
+    // 2. Found the list preview
+    await listBtn.click();
     await panel.getByRole('heading', { name: /^We found \d+ items on this page$/ }).waitFor({ timeout: 30000 });
     await panel.getByRole('table', { name: 'The first rows' }).waitFor({ timeout: 15000 });
-    await capture('found-the-list');
+    await captureDuo('found-the-list');
 
+    // 3. Field selection & column check
     await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
-    await panel.getByRole('heading', { name: 'Check your columns' }).waitFor();
+    await panel.getByRole('heading', { name: 'Check your columns' }).waitFor({ timeout: 15000 });
     await panel.getByRole('checkbox', { name: /^Keep the column / }).first().waitFor({ timeout: 15000 });
-    // Two pages are enough for a picture, and gentle on the practice site.
-    const pages = panel.getByRole('spinbutton', { name: 'Stop after this many pages:' });
-    if (await pages.count()) await pages.fill('2');
-    await capture('check-the-columns');
+    await captureDuo('check-the-columns');
 
+    // 4. Extraction complete with actions
     await panel.getByRole('button', { name: 'Start collecting' }).click();
-    await panel.getByRole('heading', { name: /^Done\. .+ collected$/ }).waitFor({ timeout: 120000 });
-    // The download itself is not pictured: an automated browser saves files under a made-up
-    // name, which is not the name a person's Chrome would show.
-    await panel.getByRole('button', { name: 'Download for Excel' }).waitFor();
-    await capture('done');
+    await panel.getByRole('heading', { name: /^Done\. .+ collected$/ }).waitFor({ timeout: 60000 });
+    await panel.getByRole('button', { name: 'Download for Excel' }).waitFor({ timeout: 15000 });
+    await captureDuo('extraction-complete');
 
-    await panel.getByRole('button', { name: 'See and change all rows' }).click();
-    await panel.getByRole('textbox', { name: 'Search these rows' }).waitFor();
-    await capture('all-rows');
+    // 5. Full-Tab Workbench (table.html) at 1280x800
+    count += 1;
+    const tablePage = await context.newPage();
+    await tablePage.setViewportSize({ width: WIDTH, height: HEIGHT });
+    await tablePage.goto(`chrome-extension://${extensionId}/table.html`);
+    await tablePage.locator('#root').waitFor({ timeout: 15000 });
+    await tablePage.getByRole('heading', { name: 'PageHarvest workbench' }).waitFor({ timeout: 15000 });
+    await tablePage.waitForTimeout(1000); // Allow TanStack table render to settle
 
+    const tableFile = join(outputDir, `screenshot-${count}-fulltab-workbench.png`);
+    await tablePage.screenshot({ path: tableFile, type: 'png' });
+    await expectSize(tableFile, WIDTH, HEIGHT);
+    console.log(`Saved ${tableFile}`);
+    await tablePage.close();
+
+    // Promo tile
     await promoTile(frame);
   } finally {
     await context.close();
     await rm(profile, { recursive: true, force: true }).catch(() => undefined);
+    if (serverProc) {
+      serverProc.kill();
+    }
   }
 }
 

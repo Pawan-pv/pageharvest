@@ -36,7 +36,7 @@ export function createChromeJobTransport(
     },
 
     navigateTab: async (tabId, url) => {
-      await chrome.tabs.update(tabId, { url });
+      await chrome.tabs.update(tabId, { url, active: true });
     },
 
     closeTab: async (tabId) => {

@@ -2,11 +2,25 @@
 
 Effective date: 2026-11-15
 
-PageHarvest is a Chrome extension that copies data you choose from web pages into a table, and lets you save that table as a file. This policy describes what the extension handles and where it goes.
+PageHarvest is a local-first Chrome extension featuring a comprehensive 10-tool extraction suite that turns web content you select into structured datasets and spreadsheets. This policy describes what the extension handles and where it goes.
 
 ## The short version
 
-Everything PageHarvest reads or saves stays on your computer. The extension makes no network requests of its own. It has no account, no analytics, no telemetry, no advertising and no remote server. Its developer receives nothing: not your data, not the sites you visit, and not how you use the extension.
+Everything PageHarvest reads or saves stays 100% on your computer. The extension operates completely client-side with no remote servers, no user accounts, no tracking, no analytics, and no advertising. All extracted records, schemas, and settings are stored locally in your browser's IndexedDB. Its developer receives nothing: not your data, not the sites you visit, and not how you use the extension.
+
+## The 10-tool extraction suite
+
+All 10 extraction tools run locally in your browser:
+1. **List Extractor**: Auto-detects repeated items, card grids, and search results on the active page.
+2. **Table Extractor**: Captures structured HTML tables into spreadsheets.
+3. **Links Extractor**: Collects hyperlinks, anchors, and internal/external references.
+4. **Page Extractor**: Bulk-extracts structured metadata (OG, Twitter cards) and JSON-LD schemas across multiple URLs.
+5. **Sitemap Explorer**: Parses XML sitemaps to discover and filter site URLs.
+6. **Shopify Extractor**: Extracts public store catalogs and product variants with Shopify CSV parity.
+7. **Email Extractor**: Finds publicly displayed contact emails across target web pages.
+8. **Social Link Extractor**: Identifies verified brand profiles and social links.
+9. **Page Text Extractor**: Extracts clean, readable text and article content without clutter.
+10. **Bulk Image Downloader**: Discovers and downloads page images with filters and custom filename templates.
 
 ## What PageHarvest reads
 
@@ -52,7 +66,7 @@ PageHarvest's use of the information it reads complies with the Chrome Web Store
 | `scripting` | To add PageHarvest's own script, which is part of the extension, to the page you start it on. It adds no code from anywhere else |
 | `sidePanel` | To show PageHarvest in Chrome's side panel |
 | `storage` | To remember two choices: whether Advanced options is on, and whether you have finished the first-run tour |
-| `downloads` | To save the files you download, and to show a saved file in its folder when you ask |
+| `downloads` | To save user-initiated spreadsheet exports (Excel, CSV, JSON, NDJSON) and bulk image assets from the Image Downloader |
 
 ## Websites you use it on
 
@@ -74,4 +88,4 @@ If this policy changes, the new version will be published at this address with a
 
 ## Contact
 
-Questions or support: email `<YOUR_SUPPORT_EMAIL>` or open an issue at <https://github.com/Pawan-pv/pageharvest/issues>.
+Questions or support: email `support@pageharvest.dev` or open an issue at <https://github.com/Pawan-pv/pageharvest/issues>.

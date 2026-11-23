@@ -21,7 +21,7 @@ This document serves as the master tracking status for all features, modules, an
 
 Assessment: **v1.0 RELEASE CANDIDATE (PRODUCTION READY)**. All 4 work packages landed:
 1. **Critical Bug & Architecture Fixes**: Zero blank tab leaks on resume race/error (S5), single-writer IndexedDB runtime messaging (N5), timeout cleanup (N7), dead enum removed.
-2. **Compliance & Consent Gate**: Blocking first-run consent gate with 100% local disclosures (B2), updated support email `<YOUR_SUPPORT_EMAIL>` (S6/S10), draft legal cleanup (S7/N2), third-party notices verified (N6).
+2. **Compliance & Consent Gate**: Blocking first-run consent gate with 100% local disclosures (B2), updated support email `support@pageharvest.dev` (S6/S10), draft legal cleanup (S7/N2), third-party notices verified (N6).
 3. **UI/UX Polish**: Responsive sidepanel header navigation, primary "Find Data on This Page" hero hierarchy with compact "Quick presets" secondary row, low-confidence recovery with clear explanation and manual picker action, view skeleton fallbacks, and tooltip readability.
 4. **Documentation & Store Assets**: Up-to-date architectural docs and self-owned store showcase fixture with zero third-party copyright issues.
 

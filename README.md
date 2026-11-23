@@ -1,8 +1,29 @@
 # PageHarvest
 
-PageHarvest is a local-first Manifest V3 Chrome extension that turns a list on a web page into a spreadsheet, without sending page data to a remote service.
+PageHarvest is a 100% local-first Manifest V3 Chrome extension providing a complete 10-tool data extraction and web harvesting suite. It extracts web content directly in your browser without external servers, user accounts, tracking, or telemetry. All extracted data is stored privately in local IndexedDB.
 
-It opens in **simple mode**: one button finds the list on the page and shows the first rows, the user unticks the columns they do not need and says whether the list continues on more pages, and one more button saves an Excel file. **Advanced options**, a switch in Settings, shows the detailed controls instead: column types and selectors, four ways of paging with limits and waits, saved setups, a grid with cleaning tools, and CSV, JSON and NDJSON exports.
+## The 10-Tool Extraction Suite
+
+PageHarvest includes 10 purpose-built tools accessible via the OLED ToolHub and the Full-Tab Workbench (`table.html`):
+
+1. **List Extractor**: AI/heuristic auto-detection of repetitive card grids, product lists, and search results on the active page.
+2. **Table Extractor**: Captures structured HTML tables into spreadsheets with header detection.
+3. **Links Extractor**: Collects all internal and external URLs, anchors, and protocols.
+4. **Page Extractor**: Batch-extracts OpenGraph metadata, meta tags, and JSON-LD schemas across multiple URLs.
+5. **Sitemap Explorer**: Recursively parses XML sitemaps to explore, filter, and extract site URLs.
+6. **Shopify Extractor**: Extracts public store catalogs and variants with native Shopify CSV format parity.
+7. **Email Extractor**: Collects publicly visible contact emails with pattern verification.
+8. **Social Link Extractor**: Discovers verified social media profiles (Twitter/X, LinkedIn, GitHub, YouTube, etc.).
+9. **Page Text Extractor**: Extracts clean, readable article and post content without clutter.
+10. **Bulk Image Downloader**: Discovers all images, previews sizes, and downloads selected assets with custom naming templates.
+
+## Architecture & Privacy Guarantees
+
+- **Zero Remote Servers & Zero Telemetry**: The extension runs strictly in-browser. No analytics, tracking, or telemetry.
+- **Local IndexedDB**: All datasets, jobs, and checkpoints are persisted locally on your device via Dexie.
+- **Single-Writer Background Pipeline**: Extracted batches commit cleanly to IndexedDB before acknowledgment, preventing data corruption across tab restarts.
+- **Full-Tab Workbench**: Inspect, edit, clean (Smart Clean, dedup, regex), and export datasets with full keyboard shortcuts and Image Gallery view.
+- **User-Initiated Downloads**: Spreadsheet exports (Excel XLSX, CSV, JSON, NDJSON) and bulk image downloads are saved directly to your local Downloads folder using Chrome's `downloads` API.
 
 ## Current validation
 

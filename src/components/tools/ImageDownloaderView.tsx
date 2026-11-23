@@ -675,6 +675,11 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
                   }}
                 />
               </div>
+              {isDownloading && (
+                <p className="text-3xs text-fg-muted italic">
+                  Keep this panel or workbench tab open while running
+                </p>
+              )}
             </div>
           )}
 

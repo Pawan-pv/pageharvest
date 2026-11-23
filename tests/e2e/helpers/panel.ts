@@ -7,12 +7,35 @@
 import type { Page, Worker } from '@playwright/test';
 import { GUIDE_STORAGE_KEY } from '../../../src/components/guide/preferences';
 import { ADVANCED_STORAGE_KEY } from '../../../src/components/settings/advanced-preference';
+import { CONSENT_STORAGE_KEY } from '../../../src/components/consent/consent';
+
+/** Marks user consent as granted in chrome.storage.local (B2 ConsentGate). Call before opening the panel. */
+export async function markConsentGiven(worker: Worker): Promise<void> {
+  await worker.evaluate(async (key) => {
+    await chrome.storage.local.set({
+      [key]: { accepted: true, version: '1.0', acceptedAt: new Date().toISOString() },
+    });
+  }, CONSENT_STORAGE_KEY);
+}
+
+/** If the ConsentGate dialog is currently presented on the given page, click accept. */
+export async function acceptConsentIfPresent(page: Page): Promise<void> {
+  try {
+    const btn = page.getByRole('button', { name: 'I understand, continue' });
+    if (await btn.isVisible({ timeout: 1500 })) {
+      await btn.click();
+    }
+  } catch {
+    // Already dismissed or not present
+  }
+}
 
 /** Marks the first-run tour as seen, so it does not cover the panel. Call before opening it. */
 export async function markTourSeen(worker: Worker): Promise<void> {
   await worker.evaluate(async (key) => {
     await chrome.storage.local.set({ [key]: { version: 1, onboardingDone: true } });
   }, GUIDE_STORAGE_KEY);
+  await markConsentGiven(worker);
 }
 
 /**

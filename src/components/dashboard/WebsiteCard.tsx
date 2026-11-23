@@ -35,6 +35,12 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
       setIsShopify(false);
       return;
     }
+    // Only probe non-local web origins to avoid triggering background network traffic on local fixture pages or loopback
+    const isLoopback = tab.url.includes('127.0.0.1') || tab.url.includes('localhost');
+    if (isLoopback) {
+      setIsShopify(false);
+      return;
+    }
     void detectShopifyStore(tab.url).then((detected) => {
       if (live) setIsShopify(detected);
     });

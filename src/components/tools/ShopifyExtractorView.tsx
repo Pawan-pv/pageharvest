@@ -339,6 +339,12 @@ export const ShopifyExtractorView: React.FC<ShopifyExtractorViewProps> = ({
               </div>
             </div>
 
+            {isRunning && (
+              <p className="text-3xs text-fg-muted italic">
+                Keep this panel or workbench tab open while running
+              </p>
+            )}
+
             {progress?.status === 'rate_limited' && (
               <div className="rounded-xl border border-warning-line bg-warning-soft p-2 text-2xs text-warning-fg">
                 Rate limited by store. Waiting {Math.round((progress.rateLimitWaitMs ?? 2000) / 1000)}s before retry…

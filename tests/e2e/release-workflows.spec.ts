@@ -173,11 +173,11 @@ test.describe('PageHarvest release workflows', () => {
     expect(records).toHaveLength(20);
     expect(records.some((record) => Object.values(record).some((value) => value === 'Item 01 - Alpha Pro Headset'))).toBe(true);
 
-    await sidePanelPage.getByRole('button', { name: 'Data' }).click();
+    await sidePanelPage.getByRole('button', { name: 'Data', exact: true }).click();
     await expect(sidePanelPage.getByText('Saved Extractions')).toBeVisible();
     await expect(sidePanelPage.getByText('20 rows')).toBeVisible();
     await sidePanelPage.reload();
-    await sidePanelPage.getByRole('button', { name: 'Data' }).click();
+    await sidePanelPage.getByRole('button', { name: 'Data', exact: true }).click();
     await expect(sidePanelPage.getByText('20 rows')).toBeVisible();
     await sidePanelPage.getByText(/20 Product Listing - PageHarvest Fixture/).last().click();
     await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible();

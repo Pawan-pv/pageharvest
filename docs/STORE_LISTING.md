@@ -21,17 +21,24 @@ What to enter in the Chrome Web Store developer dashboard, and what to check bef
 
 **Detailed description:**
 
-> PageHarvest turns a list on a web page, such as products, search results, listings or a table, into a spreadsheet.
+> PageHarvest is a 100% local-first web extraction suite featuring 10 purpose-built tools:
 >
-> - Press one button and PageHarvest finds the list on the page and shows you the first rows before anything is saved. If it picks the wrong thing, click one item yourself and it finds the others like it.
-> - Untick the columns you do not need and rename the rest.
-> - If the list continues on more pages, PageHarvest can follow the Next button or scroll for more, up to the number of pages you choose.
-> - Close the panel at any time: it keeps working, and rows are saved as they arrive.
-> - Download an Excel or CSV file, or copy the table.
+> 1. **List Extractor**: AI/heuristic auto-detection of repetitive card grids, product lists, and search results on the active page.
+> 2. **Table Extractor**: Captures structured HTML tables into spreadsheets with automatic header detection.
+> 3. **Links Extractor**: Collects all internal and external URLs, anchors, and protocols.
+> 4. **Page Extractor**: Batch-extracts OpenGraph metadata, meta tags, and JSON-LD schemas across multiple URLs.
+> 5. **Sitemap Explorer**: Recursively parses XML sitemaps to explore, filter, and extract site URLs.
+> 6. **Shopify Extractor**: Extracts public store catalogs and variants with native Shopify CSV format parity.
+> 7. **Email Extractor**: Collects publicly visible contact emails with pattern verification.
+> 8. **Social Link Extractor**: Discovers verified social media profiles (Twitter/X, LinkedIn, GitHub, YouTube, etc.).
+> 9. **Page Text Extractor**: Extracts clean, readable article and post content without clutter.
+> 10. **Bulk Image Downloader**: Discovers all images, previews sizes, and downloads selected assets with custom naming templates.
 >
-> Advanced options, a switch in Settings, adds the detailed controls: column types (text, link, image, number, attribute, pattern), page-number addresses, waiting times and limits, saved setups you can run again, a grid with find and replace, filters and duplicate removal, and JSON and NDJSON files.
->
-> Everything stays on your computer. PageHarvest has no account, no analytics and no server, and makes no network requests of its own. It does not bypass logins, paywalls or CAPTCHAs. You are responsible for following the terms of the websites you collect from.
+> - **Full-Tab Workbench**: Inspect, edit, clean (Smart Clean, dedup, regex), and export datasets with full keyboard shortcuts and Image Gallery view.
+> - **Zero Remote Servers & Zero Telemetry**: Operates strictly in your browser. No signups, no accounts, no analytics, no external servers.
+> - **Local IndexedDB**: All datasets, schemas, and checkpoints stay private on your device.
+> - **User-Initiated Downloads**: Export to Excel (XLSX), CSV, JSON, and NDJSON directly to your local Downloads folder.
+> - **Ethical & Compliant**: Does not bypass logins, paywalls, or CAPTCHAs. You are responsible for respecting website terms and applicable laws.
 
 **Screenshots:** 1280x800 or 640x400, one to five. `pnpm build && node scripts/generate-screenshots.mjs` writes them to `store-assets/` from the built extension running on a public practice site (`books.toscrape.com`, a book shop made for scraping practice). They show the real panel and real collected rows; nothing in them is mocked up. Do not use screenshots that show another company's name or products as if PageHarvest were connected to them.
 
@@ -81,7 +88,7 @@ The package contains `THIRD_PARTY_NOTICES.txt`, the licence text of every bundle
 
 ## Support contact
 
-Primary support email: `<YOUR_SUPPORT_EMAIL>`
+Primary support email: `support@pageharvest.dev`
 
 ## Before you submit
 
@@ -94,4 +101,4 @@ Primary support email: `<YOUR_SUPPORT_EMAIL>`
 - [ ] `PRIVACY.md` merged to `main`, and its URL opens.
 - [ ] The Excel file opens in Excel, Google Sheets and LibreOffice (open one download in each by hand).
 - [ ] `docs/drafts/TERMS_OF_USE.md` and `docs/drafts/ACCEPTABLE_USE.md` are drafts: fill in the bracketed items, have them reviewed, then link them from the listing and from `PRIVACY.md`.
-- [x] A support email is configured: `<YOUR_SUPPORT_EMAIL>` (Developer Dashboard & PRIVACY.md).
+- [x] A support email is configured: `support@pageharvest.dev` (Developer Dashboard & PRIVACY.md).

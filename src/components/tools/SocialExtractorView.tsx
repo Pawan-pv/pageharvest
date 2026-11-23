@@ -449,6 +449,11 @@ export const SocialExtractorView: React.FC<SocialExtractorViewProps> = ({ onBack
                 }}
               />
             </div>
+            {isRunning && (
+              <p className="text-3xs text-fg-muted italic">
+                Keep this panel or workbench tab open while running
+              </p>
+            )}
 
             <div className="grid grid-cols-3 gap-2 pt-1 text-center">
               <div className="rounded-xl border border-line bg-surface p-1.5">

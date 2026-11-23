@@ -157,7 +157,7 @@ test.describe('Simple mode', () => {
 
   test('a second download of the same list keeps the first file', async () => {
     const { target, panel } = await open(`${FIXTURES}/twenty-cards.html`);
-    await panel.getByRole('button', { name: 'Data' }).click();
+    await panel.getByRole('button', { name: 'Data', exact: true }).click();
     await panel.getByRole('button', { name: /^Open / }).first().click();
     await expect(panel.getByRole('button', { name: 'Download for Excel' })).toBeVisible({ timeout: 15000 });
 
@@ -210,7 +210,7 @@ test.describe('Simple mode', () => {
       void dialog.dismiss();
     });
 
-    await panel.getByRole('button', { name: 'Data' }).click();
+    await panel.getByRole('button', { name: 'Data', exact: true }).click();
     await expect(panel.getByRole('heading', { name: 'My data' })).toBeVisible();
     await expect(panel.getByRole('navigation', { name: 'Library sections' })).toHaveCount(0);
     const saved = panel.getByRole('button', { name: /^Delete / });

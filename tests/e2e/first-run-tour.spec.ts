@@ -44,6 +44,11 @@ test.describe('First-run tour', () => {
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
 
+    // On a fresh profile, the B2 ConsentGate presents first. Accept it to reveal the main application & tour.
+    const consentBtn = panel.getByRole('button', { name: 'I understand, continue' });
+    await expect(consentBtn).toBeVisible({ timeout: 10000 });
+    await consentBtn.click();
+
     const tour = panel.getByRole('dialog', { name: 'Welcome to PageHarvest' });
     await expect(tour).toBeVisible({ timeout: 10000 });
     await expect(tour).toContainText('Step 1 of 5');
