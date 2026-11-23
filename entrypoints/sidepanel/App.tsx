@@ -68,7 +68,10 @@ const ConsentGate = lazy(() =>
 const SettingsView = lazy(() =>
   import('@/components/settings/SettingsView').then((module) => ({ default: module.SettingsView }))
 );
-// Simple mode's first step: picking, choosing a list, and "We found N items" (ADR-039).
+const SimpleMyData = lazy(() =>
+  import('@/components/simple/MyData').then((module) => ({ default: module.SimpleMyData }))
+);
+// Simple mode components (ADR-039)
 const SimplePicking = lazy(() =>
   import('@/components/simple/FindList').then((module) => ({ default: module.SimplePicking }))
 );
@@ -78,16 +81,28 @@ const SimpleListChooser = lazy(() =>
 const SimpleListCheck = lazy(() =>
   import('@/components/simple/FindList').then((module) => ({ default: module.SimpleListCheck }))
 );
-// The rest of simple mode: columns and more pages, progress, the Done screen and My data.
 const SimpleColumns = lazy(() =>
   import('@/components/simple/Columns').then((module) => ({ default: module.SimpleColumns }))
 );
 const SimpleProgress = lazy(() =>
   import('@/components/simple/Progress').then((module) => ({ default: module.SimpleProgress }))
 );
-const SimpleDone = lazy(() => import('@/components/simple/Done').then((module) => ({ default: module.SimpleDone })));
-const SimpleMyData = lazy(() =>
-  import('@/components/simple/MyData').then((module) => ({ default: module.SimpleMyData }))
+const SimpleDone = lazy(() =>
+  import('@/components/simple/Done').then((module) => ({ default: module.SimpleDone }))
+);
+
+// 5-State List Extractor (Emerald Pulse UX)
+const ListSetupView = lazy(() =>
+  import('@/components/list-extractor/ListSetupView').then((module) => ({ default: module.ListSetupView }))
+);
+const PickerFocusView = lazy(() =>
+  import('@/components/list-extractor/PickerFocusView').then((module) => ({ default: module.PickerFocusView }))
+);
+const ListRunningView = lazy(() =>
+  import('@/components/list-extractor/ListRunningView').then((module) => ({ default: module.ListRunningView }))
+);
+const ListCompleteView = lazy(() =>
+  import('@/components/list-extractor/ListCompleteView').then((module) => ({ default: module.ListCompleteView }))
 );
 // Shown only when the user switches tabs with a list found, so it is not in the opening chunk.
 const ListOnAnotherTab = lazy(() =>
@@ -156,8 +171,19 @@ export const App: React.FC = () => {
   // outside a flow (a saved dataset, a resumed job, the dashboard) shows no stepper.
   const [flow, setFlow] = useState<FlowKind | null>(null);
   const [activeToolView, setActiveToolView] = useState<
-    'page' | 'sitemap' | 'shopify' | 'email' | 'social' | 'page_text' | 'images' | null
+    'list' | 'page' | 'sitemap' | 'shopify' | 'email' | 'social' | 'page_text' | 'images' | null
   >(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent<{ tool?: typeof activeToolView }>;
+      if (custom.detail?.tool !== undefined) {
+        setActiveToolView(custom.detail.tool);
+      }
+    };
+    window.addEventListener('pageharvest:open-tool', handler);
+    return () => window.removeEventListener('pageharvest:open-tool', handler);
+  }, []);
   const activeFlow = workflow.view === 'dashboard' ? null : flow;
   // Review fields and Pagination share one panel view; this says which half is showing.
   const [configStep, setConfigStep] = useState<ConfigStep>('fields');
@@ -211,6 +237,12 @@ export const App: React.FC = () => {
     updatePagination(simpleStartingPagination(detectedList.moreItems));
     void confirmListCandidate(detectedList);
   }, [acceptsListForUser, detectedList, confirmListCandidate, updatePagination]);
+
+  useEffect(() => {
+    if (activeToolView === 'list' && detectedList && workflow.fields.length === 0) {
+      void confirmListCandidate(detectedList);
+    }
+  }, [activeToolView, detectedList, workflow.fields.length, confirmListCandidate]);
 
   const handleUseCandidate = (candidate: ListCandidate) => {
     const chosen: DetectedList = {
@@ -288,7 +320,6 @@ export const App: React.FC = () => {
     setActiveTabNav('tools');
     setActiveToolView(null);
     setShowAllRows(false);
-    setOpenedSavedData(false);
     workflow.resetToDashboard();
     void refreshDatasets();
   };
@@ -321,7 +352,6 @@ export const App: React.FC = () => {
     setActiveTabNav('tools');
     setFlow(null);
     setShowAllRows(false);
-    setOpenedSavedData(false);
     const job = workflow.recoverableJobs.find((candidate) => candidate.id === jobId);
     if (job) {
       await requestSiteOrigin(job.targetUrl);
@@ -583,6 +613,69 @@ export const App: React.FC = () => {
                 }}
               />
             </Suspense>
+          ) : activeToolView === 'list' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading List Extractor…" />}>
+              {workflow.view === 'inspecting' ? (
+                <PickerFocusView
+                  inspectedElement={workflow.inspectedElement}
+                  onCancel={() => {
+                    workflow.cancelVisualPicker();
+                    setActiveToolView('list');
+                  }}
+                />
+              ) : workflow.view === 'extracting' ? (
+                <ListRunningView
+                  stats={workflow.stats}
+                  records={workflow.records}
+                  dataset={workflow.currentDataset}
+                  onPause={workflow.pauseExtraction}
+                  onResume={workflow.resumeExtraction}
+                  onStop={workflow.stopExtraction}
+                />
+              ) : workflow.view === 'results' ? (
+                <ListCompleteView
+                  dataset={workflow.currentDataset}
+                  records={workflow.records}
+                  fields={workflow.fields}
+                  runSummary={workflow.runSummary}
+                  onDone={() => {
+                    handleNewExtraction();
+                    setActiveToolView(null);
+                  }}
+                  onSaveRecipe={() =>
+                    workflow.saveCurrentAsRecipe(workflow.currentDataset?.name || 'My List Recipe')
+                  }
+                />
+              ) : (
+                <ListSetupView
+                  detectedList={workflow.detectedList}
+                  fields={workflow.fields}
+                  selectedFieldIds={workflow.selectedFieldIds}
+                  pagination={workflow.pagination}
+                  onPickList={() => {
+                    setFlow('pick');
+                    workflow.startVisualPicker();
+                  }}
+                  onAutoDetect={() => {
+                    setFlow('auto');
+                    workflow.autoDetectLists();
+                  }}
+                  onRepick={() => {
+                    setFlow('pick');
+                    workflow.startVisualPicker();
+                  }}
+                  onToggleField={workflow.toggleFieldSelection}
+                  onRenameField={(id, name) => workflow.updateField(id, { name })}
+                  onPickNextButton={() => {
+                    setFlow('pick');
+                    workflow.startVisualPicker();
+                  }}
+                  onPaginationChange={workflow.updatePagination}
+                  onStartExtraction={workflow.startExtraction}
+                  isDetecting={isTabLoading}
+                />
+              )}
+            </Suspense>
           ) : (
             <>
               {/* 1. Main Dashboard */}
@@ -595,6 +688,7 @@ export const App: React.FC = () => {
                 <MainDashboard
                   datasets={datasets}
                   disabled={!tab.isInjectable}
+                  onOpenListExtractor={() => setActiveToolView('list')}
                   onAutoDetectLists={() => startFlow('auto', workflow.autoDetectLists)}
                   onExtractTable={() => startFlow('table', () => workflow.startPresetDetection('table'))}
                   onExtractLinks={() => startFlow('links', () => workflow.startPresetDetection('links'))}
@@ -625,8 +719,11 @@ export const App: React.FC = () => {
                 <ScanningState kind={activeFlow} onCancel={workflow.resetToDashboard} />
               )}
               {workflow.view === 'inspecting' && !workflow.listElsewhere && (!activeFlow || activeFlow === 'pick') && !advanced && (
-                <Suspense fallback={<ViewSkeleton label="Loading…" />}>
-                  <SimplePicking inspectedElement={workflow.inspectedElement} onCancel={workflow.cancelVisualPicker} />
+                <Suspense fallback={<ViewSkeleton label="Loading picker…" />}>
+                  <SimplePicking
+                    inspectedElement={workflow.inspectedElement}
+                    onCancel={workflow.cancelVisualPicker}
+                  />
                 </Suspense>
               )}
               {workflow.view === 'inspecting' && !workflow.listElsewhere && (!activeFlow || activeFlow === 'pick') && advanced && (

@@ -7,6 +7,7 @@ export interface MainDashboardProps {
   datasets: Dataset[];
   /** The active page cannot be read, so every tool that needs it is switched off. */
   disabled?: boolean;
+  onOpenListExtractor?: () => void;
   onAutoDetectLists: () => void;
   onExtractTable: () => void;
   onExtractLinks: () => void;
@@ -27,6 +28,7 @@ export interface MainDashboardProps {
 export const MainDashboard: React.FC<MainDashboardProps> = ({
   datasets,
   disabled = false,
+  onOpenListExtractor,
   onAutoDetectLists,
   onExtractTable,
   onExtractLinks,
@@ -44,6 +46,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
       <ToolHub
         datasetsCount={datasets.length}
         disabled={disabled}
+        onOpenListExtractor={onOpenListExtractor}
         onAutoDetectLists={onAutoDetectLists}
         onExtractTable={onExtractTable}
         onExtractLinks={onExtractLinks}

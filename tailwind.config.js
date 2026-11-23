@@ -181,7 +181,12 @@ export default {
   darkMode: 'media',
   theme: {
     extend: {
-      colors: tailwindColors(Object.keys(designTokens.colors.light)),
+      colors: {
+        ...tailwindColors(Object.keys(designTokens.colors.light)),
+        'emerald-pulse': '#00E599',
+        'mint-teal': '#14B8A6',
+        obsidian: '#080B10',
+      },
       borderRadius: designTokens.radius,
       spacing: designTokens.spacing,
       fontSize: designTokens.fontSize,
@@ -214,10 +219,40 @@ export default {
           from: { opacity: '0', transform: 'scale(0.96)' },
           to: { opacity: '1', transform: 'scale(1)' },
         },
+        'ph-ring-spin': {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' },
+        },
+        'ph-aura-breathe': {
+          '0%, 100%': { opacity: '0.35', transform: 'scale(1)' },
+          '50%': { opacity: '0.7', transform: 'scale(1.05)' },
+        },
+        'ph-radar-ping': {
+          '0%': { transform: 'scale(0.85)', opacity: '0.85' },
+          '70%, 100%': { transform: 'scale(2.2)', opacity: '0' },
+        },
+        'ph-pop-in': {
+          '0%': { opacity: '0', transform: 'scale(0.92)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'ph-check-draw': {
+          '0%': { strokeDashoffset: '100' },
+          '100%': { strokeDashoffset: '0' },
+        },
+        'ph-shimmer': {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 150ms ease-out',
         'scale-in': 'scale-in 150ms ease-out',
+        'ph-ring-spin': 'ph-ring-spin 1.8s linear infinite',
+        'ph-aura-breathe': 'ph-aura-breathe 3s ease-in-out infinite',
+        'ph-radar-ping': 'ph-radar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite',
+        'ph-pop-in': 'ph-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'ph-check-draw': 'ph-check-draw 450ms ease-out forwards',
+        'ph-shimmer': 'ph-shimmer 2s linear infinite',
       },
     },
   },

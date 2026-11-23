@@ -45,6 +45,38 @@ body {
   background: rgb(var(--ph-line-strong));
 }
 
+/* Emerald Pulse pure-CSS motion primitives */
+.ph-ring-spin {
+  animation: ph-ring-spin 1.8s linear infinite;
+  transform-origin: center;
+}
+
+.ph-aura-breathe {
+  animation: ph-aura-breathe 3s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.ph-radar-ping {
+  animation: ph-radar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  transform-origin: center;
+}
+
+.ph-pop-in {
+  animation: ph-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.ph-check-draw {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: ph-check-draw 450ms ease-out forwards;
+}
+
+.ph-shimmer {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.02) 100%);
+  background-size: 200% 100%;
+  animation: ph-shimmer 2s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -53,5 +85,14 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .ph-ring-spin,
+  .ph-aura-breathe,
+  .ph-radar-ping,
+  .ph-pop-in,
+  .ph-check-draw,
+  .ph-shimmer {
+    animation: none !important;
   }
 }

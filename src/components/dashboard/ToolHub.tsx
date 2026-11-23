@@ -194,6 +194,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
 export interface ToolHubProps {
   datasetsCount: number;
   disabled?: boolean;
+  onOpenListExtractor?: () => void;
   onAutoDetectLists: () => void;
   onExtractTable: () => void;
   onExtractLinks: () => void;
@@ -214,6 +215,7 @@ export interface ToolHubProps {
 export const ToolHub: React.FC<ToolHubProps> = ({
   datasetsCount,
   disabled = false,
+  onOpenListExtractor: _onOpenListExtractor,
   onAutoDetectLists,
   onExtractTable,
   onExtractLinks,

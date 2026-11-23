@@ -1,4 +1,4 @@
-/* global chrome */
+/* global chrome, window, CustomEvent */
 /**
  * Makes the Chrome Web Store screenshots from the built extension doing real work.
  *
@@ -119,6 +119,7 @@ async function main() {
       chrome.storage.local.set({
         'pageharvest.guide': { version: 1, onboardingDone: true },
         'pageharvest.consent': { accepted: true, version: '1.0', acceptedAt: new Date().toISOString() },
+        'pageharvest.advanced': { version: 1, advanced: true },
       });
     });
 
@@ -160,22 +161,34 @@ async function main() {
     await listBtn.waitFor({ state: 'visible', timeout: 30000 });
     await captureDuo('oled-toolhub');
 
-    // 2. Found the list preview
+    // 2. State A: Two-Step Setup (ListSetupView) with detected items & unlocked pagination
     await listBtn.click();
-    await panel.getByRole('heading', { name: /^We found \d+ items on this page$/ }).waitFor({ timeout: 30000 });
-    await panel.getByRole('table', { name: 'The first rows' }).waitFor({ timeout: 15000 });
-    await captureDuo('found-the-list');
+    await panel.evaluate(() => {
+      window.dispatchEvent(new CustomEvent('pageharvest:open-tool', { detail: { tool: 'list' } }));
+    });
+    const autoDetectBtn = panel.getByRole('button', { name: /Auto-detect on this page/i });
+    await autoDetectBtn.waitFor({ state: 'visible', timeout: 15000 });
+    await autoDetectBtn.click();
+    await panel.getByText(/✓ Found \d+ items/i).waitFor({ timeout: 30000 });
+    await panel.getByText('② Load More Items').waitFor({ timeout: 15000 });
+    await captureDuo('emerald-pulse-setup');
 
-    // 3. Field selection & column check
-    await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
-    await panel.getByRole('heading', { name: 'Check your columns' }).waitFor({ timeout: 15000 });
-    await panel.getByRole('checkbox', { name: /^Keep the column / }).first().waitFor({ timeout: 15000 });
-    await captureDuo('check-the-columns');
+    // 3. State B: Focus Picker Mode Takeover (PickerFocusView)
+    const repickBtn = panel.getByRole('button', { name: /Re-pick/i });
+    await repickBtn.click();
+    await panel.getByText('Select a List Item').waitFor({ timeout: 15000 });
+    await panel.getByText(/Hover/i).first().waitFor({ timeout: 15000 });
+    await captureDuo('focus-picker-mode');
 
-    // 4. Extraction complete with actions
-    await panel.getByRole('button', { name: 'Start collecting' }).click();
-    await panel.getByRole('heading', { name: /^Done\. .+ collected$/ }).waitFor({ timeout: 60000 });
-    await panel.getByRole('button', { name: 'Download for Excel' }).waitFor({ timeout: 15000 });
+    // Exit picker mode back to setup
+    await panel.keyboard.press('Escape');
+    await panel.getByRole('button', { name: 'Start Extraction' }).waitFor({ timeout: 15000 });
+    await panel.getByText(/✓ Found \d+ items · [1-9]\d* columns/i).waitFor({ timeout: 15000 });
+
+    // 4. State D: Extraction Complete Stage (ListCompleteView) with checkmark & visual mosaic
+    await panel.getByRole('button', { name: 'Start Extraction' }).click();
+    await panel.getByText('Extraction complete').waitFor({ timeout: 60000 });
+    await panel.getByRole('button', { name: /View data & export/i }).waitFor({ timeout: 15000 });
     await captureDuo('extraction-complete');
 
     // 5. Full-Tab Workbench (table.html) at 1280x800
