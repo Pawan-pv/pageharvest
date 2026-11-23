@@ -22,6 +22,18 @@ const PageExtractorView = React.lazy(() =>
 const ShopifyExtractorView = React.lazy(() =>
   import('@/components/tools/ShopifyExtractorView').then((m) => ({ default: m.ShopifyExtractorView }))
 );
+const EmailExtractorView = React.lazy(() =>
+  import('@/components/tools/EmailExtractorView').then((m) => ({ default: m.EmailExtractorView }))
+);
+const SocialExtractorView = React.lazy(() =>
+  import('@/components/tools/SocialExtractorView').then((m) => ({ default: m.SocialExtractorView }))
+);
+const PageTextExtractorView = React.lazy(() =>
+  import('@/components/tools/PageTextExtractorView').then((m) => ({ default: m.PageTextExtractorView }))
+);
+const ImageDownloaderView = React.lazy(() =>
+  import('@/components/tools/ImageDownloaderView').then((m) => ({ default: m.ImageDownloaderView }))
+);
 
 interface TableView {
   kind: 'table';
@@ -112,6 +124,42 @@ export const TableWorkbenchApp: React.FC = () => {
               <React.Suspense fallback={<p className="text-sm text-fg-muted">Loading Shopify Extractor…</p>}>
                 <ShopifyExtractorView
                   initialUrl=""
+                  onBack={() => open({ kind: 'table' })}
+                  onOpenTable={(datasetId) => open({ kind: 'table', datasetId })}
+                />
+              </React.Suspense>
+            </div>
+          ) : view.tool === 'email' ? (
+            <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-3 p-6">
+              <React.Suspense fallback={<p className="text-sm text-fg-muted">Loading Email Extractor…</p>}>
+                <EmailExtractorView
+                  onBack={() => open({ kind: 'table' })}
+                  onOpenTable={(datasetId) => open({ kind: 'table', datasetId })}
+                />
+              </React.Suspense>
+            </div>
+          ) : view.tool === 'social' ? (
+            <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-3 p-6">
+              <React.Suspense fallback={<p className="text-sm text-fg-muted">Loading Social Link Extractor…</p>}>
+                <SocialExtractorView
+                  onBack={() => open({ kind: 'table' })}
+                  onOpenTable={(datasetId) => open({ kind: 'table', datasetId })}
+                />
+              </React.Suspense>
+            </div>
+          ) : view.tool === 'page_text' ? (
+            <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-3 p-6">
+              <React.Suspense fallback={<p className="text-sm text-fg-muted">Loading Page Text Extractor…</p>}>
+                <PageTextExtractorView
+                  onBack={() => open({ kind: 'table' })}
+                  onOpenTable={(datasetId) => open({ kind: 'table', datasetId })}
+                />
+              </React.Suspense>
+            </div>
+          ) : view.tool === 'images' ? (
+            <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-3 p-6">
+              <React.Suspense fallback={<p className="text-sm text-fg-muted">Loading Image Downloader…</p>}>
+                <ImageDownloaderView
                   onBack={() => open({ kind: 'table' })}
                   onOpenTable={(datasetId) => open({ kind: 'table', datasetId })}
                 />

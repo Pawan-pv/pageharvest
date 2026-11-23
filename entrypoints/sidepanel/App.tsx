@@ -110,6 +110,18 @@ const PageExtractorView = lazy(() =>
 const ShopifyExtractorView = lazy(() =>
   import('@/components/tools/ShopifyExtractorView').then((module) => ({ default: module.ShopifyExtractorView }))
 );
+const EmailExtractorView = lazy(() =>
+  import('@/components/tools/EmailExtractorView').then((module) => ({ default: module.EmailExtractorView }))
+);
+const SocialExtractorView = lazy(() =>
+  import('@/components/tools/SocialExtractorView').then((module) => ({ default: module.SocialExtractorView }))
+);
+const PageTextExtractorView = lazy(() =>
+  import('@/components/tools/PageTextExtractorView').then((module) => ({ default: module.PageTextExtractorView }))
+);
+const ImageDownloaderView = lazy(() =>
+  import('@/components/tools/ImageDownloaderView').then((module) => ({ default: module.ImageDownloaderView }))
+);
 
 /** The three destinations in the command dock. Help and Settings are icon buttons above it. */
 type NavSection = 'tools' | 'datasets' | 'recipes';
@@ -143,7 +155,9 @@ export const App: React.FC = () => {
   // How the user started this extraction. It names the stepper's first step; a view reached
   // outside a flow (a saved dataset, a resumed job, the dashboard) shows no stepper.
   const [flow, setFlow] = useState<FlowKind | null>(null);
-  const [activeToolView, setActiveToolView] = useState<'page' | 'sitemap' | 'shopify' | null>(null);
+  const [activeToolView, setActiveToolView] = useState<
+    'page' | 'sitemap' | 'shopify' | 'email' | 'social' | 'page_text' | 'images' | null
+  >(null);
   const activeFlow = workflow.view === 'dashboard' ? null : flow;
   // Review fields and Pagination share one panel view; this says which half is showing.
   const [configStep, setConfigStep] = useState<ConfigStep>('fields');
@@ -530,6 +544,46 @@ export const App: React.FC = () => {
                 }}
               />
             </Suspense>
+          ) : activeToolView === 'email' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Email Extractor…" />}>
+              <EmailExtractorView
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
+          ) : activeToolView === 'social' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Social Link Extractor…" />}>
+              <SocialExtractorView
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
+          ) : activeToolView === 'page_text' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Page Text Extractor…" />}>
+              <PageTextExtractorView
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
+          ) : activeToolView === 'images' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Image Downloader…" />}>
+              <ImageDownloaderView
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
           ) : (
             <>
               {/* 1. Main Dashboard */}
@@ -548,6 +602,10 @@ export const App: React.FC = () => {
                   onOpenPageExtractor={() => setActiveToolView('page')}
                   onOpenSitemapExplorer={() => setActiveToolView('sitemap')}
                   onOpenShopifyExtractor={() => setActiveToolView('shopify')}
+                  onOpenEmailExtractor={() => setActiveToolView('email')}
+                  onOpenSocialExtractor={() => setActiveToolView('social')}
+                  onOpenPageTextExtractor={() => setActiveToolView('page_text')}
+                  onOpenImageDownloader={() => setActiveToolView('images')}
                   onViewAllHistory={() => handleNavChange('datasets')}
                 />
               )}
@@ -730,7 +788,15 @@ export const App: React.FC = () => {
                     onRecordsChange={workflow.applyDatasetEdit}
                     onNewExtraction={handleNewExtraction}
                     onOpenTool={(tool) => {
-                      if (tool === 'page' || tool === 'sitemap' || tool === 'shopify') {
+                      if (
+                        tool === 'page' ||
+                        tool === 'sitemap' ||
+                        tool === 'shopify' ||
+                        tool === 'email' ||
+                        tool === 'social' ||
+                        tool === 'page_text' ||
+                        tool === 'images'
+                      ) {
                         setActiveToolView(tool);
                       } else {
                         void openWorkbench({ tool });

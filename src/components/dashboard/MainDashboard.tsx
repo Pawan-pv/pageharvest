@@ -13,12 +13,16 @@ export interface MainDashboardProps {
   onOpenPageExtractor?: () => void;
   onOpenSitemapExplorer?: () => void;
   onOpenShopifyExtractor?: () => void;
+  onOpenEmailExtractor?: () => void;
+  onOpenSocialExtractor?: () => void;
+  onOpenPageTextExtractor?: () => void;
+  onOpenImageDownloader?: () => void;
   onViewAllHistory: () => void;
 }
 
 /**
  * The home screen. The active page and the command dock live in the panel shell, so this
- * view is the tool hub itself: three live extractors and the v2.0 preview suite.
+ * view is the tool hub itself: all 10 live extractors across in-page, multi-URL, and asset tools.
  */
 export const MainDashboard: React.FC<MainDashboardProps> = ({
   datasets,
@@ -29,6 +33,10 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
   onOpenPageExtractor,
   onOpenSitemapExplorer,
   onOpenShopifyExtractor,
+  onOpenEmailExtractor,
+  onOpenSocialExtractor,
+  onOpenPageTextExtractor,
+  onOpenImageDownloader,
   onViewAllHistory,
 }) => {
   return (
@@ -42,6 +50,10 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
         onOpenPageExtractor={onOpenPageExtractor}
         onOpenSitemapExplorer={onOpenSitemapExplorer}
         onOpenShopifyExtractor={onOpenShopifyExtractor}
+        onOpenEmailExtractor={onOpenEmailExtractor}
+        onOpenSocialExtractor={onOpenSocialExtractor}
+        onOpenPageTextExtractor={onOpenPageTextExtractor}
+        onOpenImageDownloader={onOpenImageDownloader}
         onViewAllHistory={onViewAllHistory}
       />
 

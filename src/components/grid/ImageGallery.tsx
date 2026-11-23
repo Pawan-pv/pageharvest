@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Copy, Images, X } from 'lucide-react';
+import { Check, Copy, Download, Images, X } from 'lucide-react';
 import { Button } from '@/components/common/Button';
 
 export interface GalleryImage {
@@ -10,13 +10,14 @@ export interface GalleryImage {
 
 export interface ImageGalleryProps {
   images: GalleryImage[];
+  onDownloadImages?: () => void;
 }
 
 /**
  * A picture view of an image column. Clicking a picture opens it at full size, where its
  * address can be copied. Nothing is uploaded: the browser loads the same address the page did.
  */
-export const ImageGallery: React.FC<ImageGalleryProps> = ({ images }) => {
+export const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onDownloadImages }) => {
   const [zoomed, setZoomed] = useState<GalleryImage | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -44,6 +45,22 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({ images }) => {
 
   return (
     <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between pb-1">
+        <span className="text-2xs text-fg-subtle">
+          {images.length} {images.length === 1 ? 'image' : 'images'}
+        </span>
+        {onDownloadImages && (
+          <Button
+            variant="outline"
+            size="sm"
+            iconLeft={<Download className="h-3.5 w-3.5" />}
+            onClick={onDownloadImages}
+          >
+            Download Images →
+          </Button>
+        )}
+      </div>
+
       {problem && (
         <p role="alert" className="text-xs text-danger-fg">
           {problem}

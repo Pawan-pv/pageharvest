@@ -17,12 +17,12 @@ const ROOT = resolve(import.meta.dirname, '..');
 const OUT = join(ROOT, '.output', 'chrome-mv3');
 const CHUNKS = join(OUT, 'chunks');
 
-// Recorded after Sprint 2.2 (Sitemap Explorer, Page Extractor 2.0, Shopify Extractor lazy tool workspaces).
+// Recorded after Sprint 2.3 (Email Extractor, Social Link Extractor, Page Text Extractor, Image Downloader lazy tool workspaces).
 // Re-baseline only with a recorded reason in docs/DECISIONS.md.
 const BASELINE = {
-  sidepanelReachable: 895408,
-  tableReachable: 720170,
-  content: 280289,
+  sidepanelReachable: 966689,
+  tableReachable: 792077,
+  content: 281730,
   background: 285587,
 };
 const TOLERANCE = 0.05;

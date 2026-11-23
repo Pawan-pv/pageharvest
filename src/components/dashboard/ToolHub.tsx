@@ -200,13 +200,16 @@ export interface ToolHubProps {
   onOpenPageExtractor?: () => void;
   onOpenSitemapExplorer?: () => void;
   onOpenShopifyExtractor?: () => void;
+  onOpenEmailExtractor?: () => void;
+  onOpenSocialExtractor?: () => void;
+  onOpenPageTextExtractor?: () => void;
+  onOpenImageDownloader?: () => void;
   onViewAllHistory: () => void;
 }
 
 /**
- * The home screen's tool hub: three live extractors, then the v2.0 suite as disabled
- * preview cards. The manual picker lives in the sticky command dock above, so it is
- * always one click away and never competes with the tool list.
+ * The home screen's tool hub: all 10 live extractors across in-page, multi-URL,
+ * sitemap, store catalog, and asset workflows.
  */
 export const ToolHub: React.FC<ToolHubProps> = ({
   datasetsCount,
@@ -217,6 +220,10 @@ export const ToolHub: React.FC<ToolHubProps> = ({
   onOpenPageExtractor,
   onOpenSitemapExplorer,
   onOpenShopifyExtractor,
+  onOpenEmailExtractor,
+  onOpenSocialExtractor,
+  onOpenPageTextExtractor,
+  onOpenImageDownloader,
   onViewAllHistory,
 }) => {
   return (
@@ -306,8 +313,8 @@ export const ToolHub: React.FC<ToolHubProps> = ({
 
       <div className="mt-2 flex items-center justify-between gap-2">
         <h3 className="text-2xs font-bold uppercase tracking-widest text-fg-subtle">v2.0 suite</h3>
-        <span className="rounded-full border border-line bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold text-fg-subtle">
-          Coming Soon
+        <span className="rounded-full border border-tool-emerald/30 bg-tool-emerald/10 px-1.5 py-0.5 text-2xs font-semibold text-tool-emerald">
+          10 Tools Live
         </span>
       </div>
 
@@ -317,32 +324,40 @@ export const ToolHub: React.FC<ToolHubProps> = ({
           description="Bulk download images with custom file naming"
           icon={<Image className="h-5 w-5" />}
           accent="violet"
-          badge="Coming Soon"
-          disabled
+          badge="Ready"
+          ariaLabel="Image Downloader"
+          disabled={disabled}
+          onClick={onOpenImageDownloader}
         />
         <ToolCard
           title="Email Extractor"
           description="Find and extract email addresses across pages"
           icon={<Mail className="h-5 w-5" />}
           accent="green"
-          badge="Coming Soon"
-          disabled
+          badge="Ready"
+          ariaLabel="Email Extractor"
+          disabled={disabled}
+          onClick={onOpenEmailExtractor}
         />
         <ToolCard
           title="Social Link Extractor"
           description="Find social media profiles across multiple pages"
           icon={<Globe className="h-5 w-5" />}
           accent="amber"
-          badge="Coming Soon"
-          disabled
+          badge="Ready"
+          ariaLabel="Social Link Extractor"
+          disabled={disabled}
+          onClick={onOpenSocialExtractor}
         />
         <ToolCard
           title="Page Text Extractor"
           description="Extract clean AI-ready Markdown and metadata"
           icon={<FileText className="h-5 w-5" />}
           accent="slate"
-          badge="Coming Soon"
-          disabled
+          badge="Ready"
+          ariaLabel="Page Text Extractor"
+          disabled={disabled}
+          onClick={onOpenPageTextExtractor}
         />
       </div>
     </section>

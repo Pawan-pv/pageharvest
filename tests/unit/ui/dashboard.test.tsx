@@ -88,13 +88,17 @@ describe('UI: Tool Hub', () => {
       onOpenPageExtractor: vi.fn(),
       onOpenSitemapExplorer: vi.fn(),
       onOpenShopifyExtractor: vi.fn(),
+      onOpenEmailExtractor: vi.fn(),
+      onOpenSocialExtractor: vi.fn(),
+      onOpenPageTextExtractor: vi.fn(),
+      onOpenImageDownloader: vi.fn(),
       onViewAllHistory: vi.fn(),
     };
     render(<ToolHub datasetsCount={0} {...handlers} {...props} />);
     return handlers;
   };
 
-  it('runs the live extractors from their cards', () => {
+  it('runs all 10 live extractors from their cards', () => {
     const handlers = renderHub();
 
     fireEvent.click(screen.getByRole('button', { name: 'Find Data on This Page' }));
@@ -115,6 +119,18 @@ describe('UI: Tool Hub', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Shopify Extractor' }));
     expect(handlers.onOpenShopifyExtractor).toHaveBeenCalledTimes(1);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Email Extractor' }));
+    expect(handlers.onOpenEmailExtractor).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Social Link Extractor' }));
+    expect(handlers.onOpenSocialExtractor).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Page Text Extractor' }));
+    expect(handlers.onOpenPageTextExtractor).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Image Downloader' }));
+    expect(handlers.onOpenImageDownloader).toHaveBeenCalledTimes(1);
+
     expect(screen.getByRole('heading', { name: /Tools/i })).toBeInTheDocument();
     expect(screen.getByText('List Extractor')).toBeInTheDocument();
     expect(screen.getByText('Table Extractor')).toBeInTheDocument();
@@ -122,6 +138,11 @@ describe('UI: Tool Hub', () => {
     expect(screen.getByText('Page Extractor')).toBeInTheDocument();
     expect(screen.getByText('Sitemap Explorer')).toBeInTheDocument();
     expect(screen.getByText('Shopify Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Email Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Social Link Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Page Text Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Image Downloader')).toBeInTheDocument();
+    expect(screen.getByText('10 Tools Live')).toBeInTheDocument();
   });
 
   it('shows the recent-data count and opens the Data view', () => {
@@ -145,13 +166,11 @@ describe('UI: Tool Hub', () => {
     'Email Extractor',
     'Social Link Extractor',
     'Page Text Extractor',
-  ])('previews the roadmap tool %s as disabled and badged', (name) => {
+  ])('renders %s as a live and ready tool card', (name) => {
     renderHub();
 
     const card = screen.getByRole('button', { name });
-    expect(card).toBeDisabled();
-    expect(screen.getByText('v2.0 suite')).toBeInTheDocument();
-    expect(screen.getAllByText('Coming Soon').length).toBeGreaterThan(0);
+    expect(card).toBeEnabled();
   });
 });
 

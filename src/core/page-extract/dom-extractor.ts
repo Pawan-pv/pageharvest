@@ -99,30 +99,34 @@ export async function executeDomExtraction(args: DomExtractionArgs): Promise<Rec
       result.schemaType = String(Array.isArray(primary['@type']) ? primary['@type'][0] : primary['@type'] || '');
       result.name = String(primary.name || primary.headline || primary.title || '');
       result.sku = String(primary.sku || '');
-      result.brand = typeof primary.brand === 'object' && primary.brand ? String(primary.brand.name || '') : String(primary.brand || '');
+      const brandObj = primary.brand as Record<string, unknown> | undefined;
+      result.brand = typeof primary.brand === 'object' && primary.brand ? String(brandObj?.name || '') : String(primary.brand || '');
 
       let offers = primary.offers;
       if (Array.isArray(offers)) offers = offers[0];
+      const offersObj = offers as Record<string, unknown> | undefined;
       if (offers && typeof offers === 'object') {
-        result.price = String(offers.price || '');
-        result.priceCurrency = String(offers.priceCurrency || '');
-        result.availability = String(offers.availability || '');
+        result.price = String(offersObj?.price || '');
+        result.priceCurrency = String(offersObj?.priceCurrency || '');
+        result.availability = String(offersObj?.availability || '');
       } else {
         result.price = String(primary.price || '');
         result.priceCurrency = String(primary.priceCurrency || '');
         result.availability = String(primary.availability || '');
       }
 
+      const ratingObj = primary.aggregateRating as Record<string, unknown> | undefined;
       if (primary.aggregateRating && typeof primary.aggregateRating === 'object') {
-        result.ratingValue = String(primary.aggregateRating.ratingValue || '');
-        result.reviewCount = String(primary.aggregateRating.reviewCount || '');
+        result.ratingValue = String(ratingObj?.ratingValue || '');
+        result.reviewCount = String(ratingObj?.reviewCount || '');
       }
+      const imageObj = primary.image as Record<string, unknown> | undefined;
       if (typeof primary.image === 'string') {
         result.schemaImage = primary.image;
       } else if (Array.isArray(primary.image) && primary.image.length > 0) {
         result.schemaImage = String(primary.image[0]);
       } else if (typeof primary.image === 'object' && primary.image) {
-        result.schemaImage = String(primary.image.url || '');
+        result.schemaImage = String(imageObj?.url || '');
       }
     }
   }

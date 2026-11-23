@@ -1181,7 +1181,7 @@ export const DataTable: React.FC<DataTableProps> = ({
       ) : viewMode === 'gallery' && imageColumns.length > 0 ? (
         /* Picture view: the image columns as a gallery, click to zoom */
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <ImageGallery images={galleryImages} />
+          <ImageGallery images={galleryImages} onDownloadImages={() => onOpenTool?.('images')} />
         </div>
       ) : (
         /* Spreadsheet Data Table */

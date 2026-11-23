@@ -65,9 +65,9 @@ describe('Start screen with Advanced options on', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Find Data on This Page' }));
     expect(handlers.onAutoDetectLists).toHaveBeenCalledTimes(1);
 
-    // Page Extractor is now live; roadmap tools like Email Extractor remain disabled.
+    // Page Extractor and Email Extractor are now live in the v2.0 suite.
     expect(screen.getByRole('button', { name: 'Page Extractor' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Email Extractor' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Email Extractor' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Find data automatically' })).not.toBeInTheDocument();
   });
 });

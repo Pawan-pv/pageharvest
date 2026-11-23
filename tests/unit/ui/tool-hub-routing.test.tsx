@@ -57,6 +57,10 @@ describe('UI: Tool Hub Routing & Shopify Integration', () => {
     const onOpenPage = vi.fn();
     const onOpenSitemap = vi.fn();
     const onOpenShopify = vi.fn();
+    const onOpenEmail = vi.fn();
+    const onOpenSocial = vi.fn();
+    const onOpenPageText = vi.fn();
+    const onOpenImages = vi.fn();
 
     render(
       <MainDashboard
@@ -67,6 +71,10 @@ describe('UI: Tool Hub Routing & Shopify Integration', () => {
         onOpenPageExtractor={onOpenPage}
         onOpenSitemapExplorer={onOpenSitemap}
         onOpenShopifyExtractor={onOpenShopify}
+        onOpenEmailExtractor={onOpenEmail}
+        onOpenSocialExtractor={onOpenSocial}
+        onOpenPageTextExtractor={onOpenPageText}
+        onOpenImageDownloader={onOpenImages}
         onViewAllHistory={vi.fn()}
       />
     );
@@ -79,6 +87,18 @@ describe('UI: Tool Hub Routing & Shopify Integration', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Shopify Extractor' }));
     expect(onOpenShopify).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Email Extractor' }));
+    expect(onOpenEmail).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Social Link Extractor' }));
+    expect(onOpenSocial).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Page Text Extractor' }));
+    expect(onOpenPageText).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Image Downloader' }));
+    expect(onOpenImages).toHaveBeenCalledTimes(1);
   });
 
   it('provides Shopify Admin CSV export format in ExportDialog', () => {
