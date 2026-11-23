@@ -85,13 +85,16 @@ describe('UI: Tool Hub', () => {
       onAutoDetectLists: vi.fn(),
       onExtractTable: vi.fn(),
       onExtractLinks: vi.fn(),
+      onOpenPageExtractor: vi.fn(),
+      onOpenSitemapExplorer: vi.fn(),
+      onOpenShopifyExtractor: vi.fn(),
       onViewAllHistory: vi.fn(),
     };
     render(<ToolHub datasetsCount={0} {...handlers} {...props} />);
     return handlers;
   };
 
-  it('runs the three live extractors from their cards', () => {
+  it('runs the live extractors from their cards', () => {
     const handlers = renderHub();
 
     fireEvent.click(screen.getByRole('button', { name: 'Find Data on This Page' }));
@@ -103,10 +106,22 @@ describe('UI: Tool Hub', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Extract all links' }));
     expect(handlers.onExtractLinks).toHaveBeenCalledTimes(1);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Page Extractor' }));
+    expect(handlers.onOpenPageExtractor).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sitemap Explorer' }));
+    expect(handlers.onOpenSitemapExplorer).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Shopify Extractor' }));
+    expect(handlers.onOpenShopifyExtractor).toHaveBeenCalledTimes(1);
+
     expect(screen.getByRole('heading', { name: /Tools/i })).toBeInTheDocument();
     expect(screen.getByText('List Extractor')).toBeInTheDocument();
     expect(screen.getByText('Table Extractor')).toBeInTheDocument();
     expect(screen.getByText('Links Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Page Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Sitemap Explorer')).toBeInTheDocument();
+    expect(screen.getByText('Shopify Extractor')).toBeInTheDocument();
   });
 
   it('shows the recent-data count and opens the Data view', () => {
@@ -117,7 +132,7 @@ describe('UI: Tool Hub', () => {
     expect(handlers.onViewAllHistory).toHaveBeenCalledTimes(1);
   });
 
-  it('disables every live extractor when the page cannot be read', () => {
+  it('disables page-bound live extractors when the page cannot be read', () => {
     renderHub({ disabled: true });
 
     expect(screen.getByRole('button', { name: 'Find Data on This Page' })).toBeDisabled();
@@ -126,11 +141,8 @@ describe('UI: Tool Hub', () => {
   });
 
   it.each([
-    'Page Extractor',
-    'Sitemap Explorer',
     'Image Downloader',
     'Email Extractor',
-    'Shopify Extractor',
     'Social Link Extractor',
     'Page Text Extractor',
   ])('previews the roadmap tool %s as disabled and badged', (name) => {

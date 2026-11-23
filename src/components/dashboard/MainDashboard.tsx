@@ -10,6 +10,9 @@ export interface MainDashboardProps {
   onAutoDetectLists: () => void;
   onExtractTable: () => void;
   onExtractLinks: () => void;
+  onOpenPageExtractor?: () => void;
+  onOpenSitemapExplorer?: () => void;
+  onOpenShopifyExtractor?: () => void;
   onViewAllHistory: () => void;
 }
 
@@ -23,6 +26,9 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
   onAutoDetectLists,
   onExtractTable,
   onExtractLinks,
+  onOpenPageExtractor,
+  onOpenSitemapExplorer,
+  onOpenShopifyExtractor,
   onViewAllHistory,
 }) => {
   return (
@@ -33,6 +39,9 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
         onAutoDetectLists={onAutoDetectLists}
         onExtractTable={onExtractTable}
         onExtractLinks={onExtractLinks}
+        onOpenPageExtractor={onOpenPageExtractor}
+        onOpenSitemapExplorer={onOpenSitemapExplorer}
+        onOpenShopifyExtractor={onOpenShopifyExtractor}
         onViewAllHistory={onViewAllHistory}
       />
 

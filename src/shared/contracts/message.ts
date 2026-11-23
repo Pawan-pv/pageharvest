@@ -310,6 +310,17 @@ export const deleteDatasetMessageSchema = baseMessageSchema.extend({
   }),
 });
 
+/** Creates a new dataset with its records transactionally via the background single-writer. */
+export const createDatasetMessageSchema = baseMessageSchema.extend({
+  type: z.literal('CREATE_DATASET'),
+  payload: z.object({
+    name: z.string().trim().min(1).max(200),
+    url: z.string().trim().min(1),
+    fields: z.array(ExtractionFieldSchema).max(500),
+    records: z.array(ExtractionRecordSchema).max(50_000),
+  }),
+});
+
 /** Stores one validated recipe imported from a .pageharvest-recipe.json file. */
 export const importRecipeMessageSchema = baseMessageSchema.extend({
   type: z.literal('IMPORT_RECIPE'),
@@ -502,6 +513,7 @@ export const BrowserMessageSchema = z.discriminatedUnion('type', [
   applyDatasetEditMessageSchema,
   renameDatasetMessageSchema,
   deleteDatasetMessageSchema,
+  createDatasetMessageSchema,
   importRecipeMessageSchema,
   extractRecordsMessageSchema,
   controlJobMessageSchema,
@@ -569,6 +581,7 @@ export const DataCommandResultSchema = z.object({
    */
   code: z.enum(['DATASET_IN_USE', 'DATASET_NOT_FOUND', 'UNKNOWN']).optional(),
   deleted: z.number().int().min(0).optional(),
+  datasetId: z.string().optional(),
 });
 
 export type DataCommandResult = z.infer<typeof DataCommandResultSchema>;

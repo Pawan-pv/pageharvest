@@ -17,13 +17,13 @@ const ROOT = resolve(import.meta.dirname, '..');
 const OUT = join(ROOT, '.output', 'chrome-mv3');
 const CHUNKS = join(OUT, 'chunks');
 
-// Recorded after Sprint 2.1 (workbench entry point, Data Table 2.0, vendor chunks).
+// Recorded after Sprint 2.2 (Sitemap Explorer, Page Extractor 2.0, Shopify Extractor lazy tool workspaces).
 // Re-baseline only with a recorded reason in docs/DECISIONS.md.
 const BASELINE = {
-  sidepanelReachable: 833241,
-  tableReachable: 662669,
-  content: 280109,
-  background: 284844,
+  sidepanelReachable: 895408,
+  tableReachable: 720170,
+  content: 280289,
+  background: 285587,
 };
 const TOLERANCE = 0.05;
 const SIDEPANEL_ENTRY_LIMIT = 500000; // 500 kB: the shell must stay quick to open.

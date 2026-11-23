@@ -29,15 +29,21 @@ export interface ExportDialogProps {
   activeColumnOrder?: string[];
 }
 
-type ExportFormat = 'csv' | 'xlsx' | 'json' | 'ndjson';
+type ExportFormat = 'csv' | 'xlsx' | 'json' | 'ndjson' | 'shopify_csv';
 type Delimiter = ',' | ';' | '\t';
 
-const FORMATS: { value: ExportFormat; label: string; description: string }[] = [
+const BASE_FORMATS: { value: ExportFormat; label: string; description: string }[] = [
   { value: 'csv', label: 'CSV', description: 'For Excel, Numbers and Google Sheets.' },
   { value: 'xlsx', label: 'Excel', description: 'An Excel workbook, with numbers kept as numbers.' },
   { value: 'json', label: 'JSON', description: 'For developers and other tools.' },
   { value: 'ndjson', label: 'NDJSON', description: 'One row per line, for large data tools.' },
 ];
+
+const SHOPIFY_FORMAT: { value: ExportFormat; label: string; description: string } = {
+  value: 'shopify_csv',
+  label: 'Shopify Import CSV',
+  description: 'Formatted for direct import into Shopify Admin products.',
+};
 
 const DELIMITERS: { value: Delimiter; label: string }[] = [
   { value: ',', label: 'Comma (,)' },
@@ -47,7 +53,7 @@ const DELIMITERS: { value: Delimiter; label: string }[] = [
 
 
 const FormatOption: React.FC<{
-  option: (typeof FORMATS)[number];
+  option: { value: ExportFormat; label: string; description: string };
   checked: boolean;
   onSelect: () => void;
 }> = ({ option, checked, onSelect }) => {
@@ -101,15 +107,26 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
+  const isShopifyDataset = Boolean(
+    dataset?.name?.toLowerCase().includes('shopify') ||
+      fields.some((f) => f.name === 'Variant Price' || f.name === 'Handle')
+  );
+  const availableFormats = isShopifyDataset ? [SHOPIFY_FORMAT, ...BASE_FORMATS] : BASE_FORMATS;
+
   // Start from the saved preferences each time the dialog opens.
   useEffect(() => {
     if (!isOpen) return undefined;
+    if (isShopifyDataset) {
+      setFormat('shopify_csv');
+    }
     let cancelled = false;
     new SettingsRepository()
       .getSettings()
       .then((settings) => {
         if (cancelled) return;
-        setFormat(settings.defaultExportFormat);
+        if (!isShopifyDataset) {
+          setFormat(settings.defaultExportFormat);
+        }
         setIncludeBom(settings.csvIncludeBom);
         setDelimiter(settings.csvDelimiter);
         setJsonIndent(settings.jsonIndent);
@@ -121,13 +138,14 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, isShopifyDataset]);
 
   if (!isOpen) return null;
 
   const datasetName = dataset?.name || 'harvested-data';
-  const autoFilename = generateExportFilename({ datasetName: customFilename.trim() || datasetName, format });
-  const filename = customFilename.trim() ? `${customFilename.trim()}.${format}` : autoFilename;
+  const formatForFilename = format === 'shopify_csv' ? 'csv' : format;
+  const autoFilename = generateExportFilename({ datasetName: customFilename.trim() || datasetName, format: formatForFilename });
+  const filename = customFilename.trim() ? `${customFilename.trim()}.${formatForFilename}` : autoFilename;
   // The exporter's own rule, so the count always matches the file. An empty order means "as the fields are".
   const columnCount = resolveColumns(records, fields, { orderedColumns: activeColumnOrder }).length;
   const rows = records.length;
@@ -148,7 +166,12 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
         : activeColumnOrder;
 
       let result;
-      if (format === 'csv') {
+      if (format === 'shopify_csv') {
+        const { recordsToShopifyCsv } = await import('@/core/export/shopify-csv');
+        const content = recordsToShopifyCsv(exportRecords, includeBom);
+        const shopifyFilename = customFilename.trim() ? `${customFilename.trim()}.csv` : `${datasetName}-shopify.csv`;
+        result = await triggerDownload({ content, filename: shopifyFilename, mimeType: 'text/csv' });
+      } else if (format === 'csv') {
         // Chunks go straight into the Blob, so memory follows the chunk size, not the export size.
         const content = Array.from(
           recordsToCsvChunks(exportRecords, exportFields, { useBom: includeBom, delimiter, includeMetadata, orderedColumns })
@@ -230,7 +253,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
           <span id={legendId} className="font-semibold text-fg-muted">
             Format
           </span>
-          {FORMATS.map((option) => (
+          {availableFormats.map((option) => (
             <FormatOption
               key={option.value}
               option={option}

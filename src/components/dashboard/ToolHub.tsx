@@ -197,6 +197,9 @@ export interface ToolHubProps {
   onAutoDetectLists: () => void;
   onExtractTable: () => void;
   onExtractLinks: () => void;
+  onOpenPageExtractor?: () => void;
+  onOpenSitemapExplorer?: () => void;
+  onOpenShopifyExtractor?: () => void;
   onViewAllHistory: () => void;
 }
 
@@ -211,6 +214,9 @@ export const ToolHub: React.FC<ToolHubProps> = ({
   onAutoDetectLists,
   onExtractTable,
   onExtractLinks,
+  onOpenPageExtractor,
+  onOpenSitemapExplorer,
+  onOpenShopifyExtractor,
   onViewAllHistory,
 }) => {
   return (
@@ -266,6 +272,36 @@ export const ToolHub: React.FC<ToolHubProps> = ({
           disabled={disabled}
           onClick={onExtractLinks}
         />
+        <ToolCard
+          title="Page Extractor"
+          description="Bulk-extract structured data from multiple URLs"
+          icon={<Database className="h-5 w-5" />}
+          accent="sky"
+          badge="Ready"
+          ariaLabel="Page Extractor"
+          disabled={disabled}
+          onClick={onOpenPageExtractor}
+        />
+        <ToolCard
+          title="Sitemap Explorer"
+          description="Parse XML sitemaps and filter site URLs"
+          icon={<Map className="h-5 w-5" />}
+          accent="indigo"
+          badge="Ready"
+          ariaLabel="Sitemap Explorer"
+          disabled={disabled}
+          onClick={onOpenSitemapExplorer}
+        />
+        <ToolCard
+          title="Shopify Extractor"
+          description="Extract a store's full catalog to Shopify CSV"
+          icon={<Table2 className="h-5 w-5" />}
+          accent="lime"
+          badge="Ready"
+          ariaLabel="Shopify Extractor"
+          disabled={disabled}
+          onClick={onOpenShopifyExtractor}
+        />
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-2">
@@ -276,22 +312,6 @@ export const ToolHub: React.FC<ToolHubProps> = ({
       </div>
 
       <div className="flex flex-col gap-2">
-        <ToolCard
-          title="Page Extractor"
-          description="Bulk-extract structured data from multiple URLs"
-          icon={<Database className="h-5 w-5" />}
-          accent="sky"
-          badge="Coming Soon"
-          disabled
-        />
-        <ToolCard
-          title="Sitemap Explorer"
-          description="Parse XML sitemaps and filter site URLs"
-          icon={<Map className="h-5 w-5" />}
-          accent="indigo"
-          badge="Coming Soon"
-          disabled
-        />
         <ToolCard
           title="Image Downloader"
           description="Bulk download images with custom file naming"
@@ -305,14 +325,6 @@ export const ToolHub: React.FC<ToolHubProps> = ({
           description="Find and extract email addresses across pages"
           icon={<Mail className="h-5 w-5" />}
           accent="green"
-          badge="Coming Soon"
-          disabled
-        />
-        <ToolCard
-          title="Shopify Extractor"
-          description="Extract a store's full catalog to Shopify CSV"
-          icon={<Table2 className="h-5 w-5" />}
-          accent="lime"
           badge="Coming Soon"
           disabled
         />

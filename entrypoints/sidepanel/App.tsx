@@ -23,6 +23,7 @@ import { flowSteps, simpleFlowSteps, stepForView, type FlowKind } from '@/compon
 import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
 import { requestSiteOrigin } from '@/platform/permissions';
+import { openWorkbench } from '@/platform/workbench';
 import { simpleStartingPagination } from '@/components/simple/more-pages';
 import type { ConfigStep } from '@/components/picker/FieldSelectionPanel';
 import type { ExtractionRecipe } from '@/types';
@@ -100,6 +101,16 @@ const ErrorBanner = lazy(() =>
   import('@/components/common/ErrorBanner').then((module) => ({ default: module.ErrorBanner }))
 );
 
+const SitemapExplorerView = lazy(() =>
+  import('@/components/tools/SitemapExplorerView').then((module) => ({ default: module.SitemapExplorerView }))
+);
+const PageExtractorView = lazy(() =>
+  import('@/components/tools/PageExtractorView').then((module) => ({ default: module.PageExtractorView }))
+);
+const ShopifyExtractorView = lazy(() =>
+  import('@/components/tools/ShopifyExtractorView').then((module) => ({ default: module.ShopifyExtractorView }))
+);
+
 /** The three destinations in the command dock. Help and Settings are icon buttons above it. */
 type NavSection = 'tools' | 'datasets' | 'recipes';
 type ActiveSection = NavSection | 'settings' | 'help';
@@ -132,6 +143,7 @@ export const App: React.FC = () => {
   // How the user started this extraction. It names the stepper's first step; a view reached
   // outside a flow (a saved dataset, a resumed job, the dashboard) shows no stepper.
   const [flow, setFlow] = useState<FlowKind | null>(null);
+  const [activeToolView, setActiveToolView] = useState<'page' | 'sitemap' | 'shopify' | null>(null);
   const activeFlow = workflow.view === 'dashboard' ? null : flow;
   // Review fields and Pagination share one panel view; this says which half is showing.
   const [configStep, setConfigStep] = useState<ConfigStep>('fields');
@@ -155,6 +167,7 @@ export const App: React.FC = () => {
       : viewStep;
 
   const startFlow = (kind: FlowKind, start: () => void) => {
+    setActiveToolView(null);
     setFlow(kind);
     setConfigStep('fields');
     setSimpleStage('check');
@@ -231,6 +244,7 @@ export const App: React.FC = () => {
 
   const handleNavChange = (section: NavSection) => {
     setIsHelpOpen(false);
+    setActiveToolView(null);
     setActiveTabNav(section);
     if (section === 'datasets' || section === 'recipes') {
       workflow.setView('history');
@@ -242,12 +256,14 @@ export const App: React.FC = () => {
 
   const handleOpenSettings = () => {
     setIsHelpOpen(false);
+    setActiveToolView(null);
     setActiveTabNav('tools');
     workflow.setView('settings');
   };
 
   const handleViewDataset = (dataset: (typeof datasets)[0]) => {
     setActiveTabNav('tools');
+    setActiveToolView(null);
     setFlow(null);
     setShowAllRows(false);
     setOpenedSavedData(true);
@@ -256,6 +272,7 @@ export const App: React.FC = () => {
 
   const handleNewExtraction = () => {
     setActiveTabNav('tools');
+    setActiveToolView(null);
     setShowAllRows(false);
     setOpenedSavedData(false);
     workflow.resetToDashboard();
@@ -264,6 +281,7 @@ export const App: React.FC = () => {
 
   const handleRunRecipe = (recipe: ExtractionRecipe) => {
     setActiveTabNav('tools');
+    setActiveToolView(null);
     setFlow('recipe');
     setConfigStep('fields');
     setSimpleStage('columns');
@@ -429,7 +447,13 @@ export const App: React.FC = () => {
 
         {/* Compact active-page context, directly under the dock. */}
         <div className="mb-2">
-          <WebsiteCard tab={tab} isLoading={isTabLoading} advanced={advanced} onRefresh={refreshTab} />
+          <WebsiteCard
+            tab={tab}
+            isLoading={isTabLoading}
+            advanced={advanced}
+            onRefresh={refreshTab}
+            onOpenShopify={() => setActiveToolView('shopify')}
+          />
         </div>
 
         {/* Jobs that can really be resumed: stored in RECOVERABLE with a checkpoint. */}
@@ -477,6 +501,35 @@ export const App: React.FC = () => {
             <Suspense fallback={<ViewSkeleton label="Loading the guide…" />}>
               <HelpView onClose={() => setIsHelpOpen(false)} onRestartTour={onboarding.open} />
             </Suspense>
+          ) : activeToolView === 'page' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Page Extractor…" />}>
+              <PageExtractorView
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
+          ) : activeToolView === 'sitemap' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Sitemap Explorer…" />}>
+              <SitemapExplorerView
+                initialUrl={tab.url}
+                onBack={() => setActiveToolView(null)}
+                onSendUrlsToTool={() => setActiveToolView('page')}
+              />
+            </Suspense>
+          ) : activeToolView === 'shopify' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Shopify Extractor…" />}>
+              <ShopifyExtractorView
+                initialUrl={tab.url}
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
           ) : (
             <>
               {/* 1. Main Dashboard */}
@@ -492,6 +545,9 @@ export const App: React.FC = () => {
                   onAutoDetectLists={() => startFlow('auto', workflow.autoDetectLists)}
                   onExtractTable={() => startFlow('table', () => workflow.startPresetDetection('table'))}
                   onExtractLinks={() => startFlow('links', () => workflow.startPresetDetection('links'))}
+                  onOpenPageExtractor={() => setActiveToolView('page')}
+                  onOpenSitemapExplorer={() => setActiveToolView('sitemap')}
+                  onOpenShopifyExtractor={() => setActiveToolView('shopify')}
                   onViewAllHistory={() => handleNavChange('datasets')}
                 />
               )}
@@ -673,6 +729,13 @@ export const App: React.FC = () => {
                     onDeleteRecord={workflow.deleteRecord}
                     onRecordsChange={workflow.applyDatasetEdit}
                     onNewExtraction={handleNewExtraction}
+                    onOpenTool={(tool) => {
+                      if (tool === 'page' || tool === 'sitemap' || tool === 'shopify') {
+                        setActiveToolView(tool);
+                      } else {
+                        void openWorkbench({ tool });
+                      }
+                    }}
                   />
                 </Suspense>
               )}

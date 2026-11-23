@@ -470,6 +470,32 @@ class ExtensionMessagingService {
     });
   }
 
+  /**
+   * Creates a dataset and its initial records atomically through the background (single-writer rule N5).
+   */
+  public async createDataset(
+    name: string,
+    url: string,
+    fields: FieldDefinition[],
+    records: ExtractedRecord[]
+  ): Promise<string> {
+    const normalizedFields = fields.map((f) => ({
+      ...f,
+      required: f.required ?? false,
+      transform: f.transform ?? 'trim',
+    }));
+    const result = await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'CREATE_DATASET',
+      payload: { name, url, fields: normalizedFields, records },
+    });
+    if (!result.datasetId) {
+      throw new Error(result.error ?? 'Dataset could not be created.');
+    }
+    return result.datasetId;
+  }
+
   /** Stores one recipe imported from a validated file. */
   public async importRecipe(recipe: ExtractionRecipe): Promise<void> {
     await this.sendDataCommand({

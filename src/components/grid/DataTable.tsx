@@ -120,6 +120,8 @@ export interface DataTableProps {
   fullPage?: boolean;
   /** Opens these rows in the full-tab workbench. Hidden inside the workbench itself. */
   onOpenFullTable?: () => void;
+  /** Opens a tool workspace (e.g. Page Extractor) directly. */
+  onOpenTool?: (tool: ToolType) => void;
   /** Workbench only: the saved lists the picker can switch between. */
   datasets?: Dataset[];
   /** Workbench only: rename the open saved list, through the background writer. */
@@ -173,6 +175,7 @@ export const DataTable: React.FC<DataTableProps> = ({
   runSummary,
   fullPage = false,
   onOpenFullTable,
+  onOpenTool,
   datasets,
   onRenameDataset,
   onDeleteDataset,
@@ -496,7 +499,11 @@ export const DataTable: React.FC<DataTableProps> = ({
       datasetId: dataset?.id,
       column,
     });
-    await openWorkbench({ tool });
+    if (onOpenTool) {
+      onOpenTool(tool);
+    } else {
+      await openWorkbench({ tool });
+    }
   };
 
   const handleOpenFullTable = () => {

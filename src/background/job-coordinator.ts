@@ -49,7 +49,7 @@ import {
   SettingsRepository,
 } from '@/storage/repositories';
 import { schemaToRecipe } from '@/core/library/recipe-file';
-import { ErrorCategory, ExtractionRunHistory, FieldDefinition, HarvestError, RecordEntity } from '@/types';
+import { DatasetEntity, ErrorCategory, ExtractionRunHistory, FieldDefinition, HarvestError, RecordEntity } from '@/types';
 import type { ExtractionErrorCode } from '@/shared/contracts/error';
 
 /**
@@ -655,6 +655,35 @@ export class JobCoordinator {
   /** Deletes a saved list and its rows in one transaction. Refused while a job can write. */
   public async deleteDataset(datasetId: string): Promise<void> {
     await new DatasetRepository(this.db).deleteDataset(datasetId);
+  }
+
+  /**
+   * Creates a dataset and its initial records as one atomic transaction (single-writer rule N5).
+   */
+  public async createDatasetWithRecords(
+    name: string,
+    url: string,
+    fields: FieldDefinition[],
+    records: RecordEntity[]
+  ): Promise<string> {
+    const datasetId = `ds_${this.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const now = this.now();
+    const dataset: DatasetEntity = {
+      id: datasetId,
+      name,
+      url,
+      createdAt: now,
+      updatedAt: now,
+      recordsCount: records.length,
+      fields,
+    };
+    await this.db.transaction('rw', this.db.datasets, this.db.records, async () => {
+      await this.db.datasets.add(dataset);
+      if (records.length > 0) {
+        await this.db.saveExtractedBatch(datasetId, records);
+      }
+    });
+    return datasetId;
   }
 
   /**

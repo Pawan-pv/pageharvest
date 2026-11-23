@@ -65,10 +65,14 @@ export function registerJobHandlers(router: MessageRouter, coordinator: JobCoord
 
   // Data writes go through the background too (AGENTS.md: one writer). The router has
   // already validated each payload against its Zod schema before this handler runs.
-  const dataCommand = async (work: () => Promise<{ deleted?: number } | void>) => {
+  const dataCommand = async (work: () => Promise<{ deleted?: number; datasetId?: string } | void>) => {
     try {
       const result = await work();
-      return { ok: true, ...(result && 'deleted' in result ? { deleted: result.deleted } : {}) };
+      return {
+        ok: true,
+        ...(result && 'deleted' in result ? { deleted: result.deleted } : {}),
+        ...(result && 'datasetId' in result ? { datasetId: result.datasetId } : {}),
+      };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       const code =
@@ -100,6 +104,17 @@ export function registerJobHandlers(router: MessageRouter, coordinator: JobCoord
   );
   fromPanel('DELETE_DATASET', (message) =>
     dataCommand(() => coordinator.deleteDataset(message.payload.datasetId))
+  );
+  fromPanel('CREATE_DATASET', (message) =>
+    dataCommand(async () => {
+      const datasetId = await coordinator.createDatasetWithRecords(
+        message.payload.name,
+        message.payload.url,
+        message.payload.fields,
+        message.payload.records
+      );
+      return { datasetId };
+    })
   );
   fromPanel('IMPORT_RECIPE', (message) =>
     dataCommand(() => coordinator.importRecipe(message.payload.recipe))

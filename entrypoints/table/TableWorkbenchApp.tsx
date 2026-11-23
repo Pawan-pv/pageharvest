@@ -13,6 +13,16 @@ import { messagingService } from '@/services/messaging';
 import type { ToolJobProgress, ToolType, UrlHandoff } from '@/shared/contracts/tool-job';
 import type { Dataset, ExtractedRecord, FieldDefinition } from '@/types';
 
+const SitemapExplorerView = React.lazy(() =>
+  import('@/components/tools/SitemapExplorerView').then((m) => ({ default: m.SitemapExplorerView }))
+);
+const PageExtractorView = React.lazy(() =>
+  import('@/components/tools/PageExtractorView').then((m) => ({ default: m.PageExtractorView }))
+);
+const ShopifyExtractorView = React.lazy(() =>
+  import('@/components/tools/ShopifyExtractorView').then((m) => ({ default: m.ShopifyExtractorView }))
+);
+
 interface TableView {
   kind: 'table';
   datasetId?: string;
@@ -78,13 +88,44 @@ export const TableWorkbenchApp: React.FC = () => {
 
       <main className="min-h-0 flex-1">
         {view.kind === 'tool' ? (
-          <ToolWorkspace
-            key={view.tool}
-            tool={view.tool}
-            onOpenTable={(datasetId) => open({ kind: 'table', datasetId })}
-          />
+          view.tool === 'page' ? (
+            <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-3 p-6">
+              <React.Suspense fallback={<p className="text-sm text-fg-muted">Loading Page Extractor…</p>}>
+                <PageExtractorView
+                  onBack={() => open({ kind: 'table' })}
+                  onOpenTable={(datasetId) => open({ kind: 'table', datasetId })}
+                />
+              </React.Suspense>
+            </div>
+          ) : view.tool === 'sitemap' ? (
+            <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-3 p-6">
+              <React.Suspense fallback={<p className="text-sm text-fg-muted">Loading Sitemap Explorer…</p>}>
+                <SitemapExplorerView
+                  initialUrl=""
+                  onBack={() => open({ kind: 'table' })}
+                  onSendUrlsToTool={() => open({ kind: 'tool', tool: 'page' })}
+                />
+              </React.Suspense>
+            </div>
+          ) : view.tool === 'shopify' ? (
+            <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-3 p-6">
+              <React.Suspense fallback={<p className="text-sm text-fg-muted">Loading Shopify Extractor…</p>}>
+                <ShopifyExtractorView
+                  initialUrl=""
+                  onBack={() => open({ kind: 'table' })}
+                  onOpenTable={(datasetId) => open({ kind: 'table', datasetId })}
+                />
+              </React.Suspense>
+            </div>
+          ) : (
+            <ToolWorkspace
+              key={view.tool}
+              tool={view.tool}
+              onOpenTable={(datasetId) => open({ kind: 'table', datasetId })}
+            />
+          )
         ) : (
-          <DatasetWorkbench initialDatasetId={view.datasetId} />
+          <DatasetWorkbench initialDatasetId={view.datasetId} onOpenTool={(tool) => open({ kind: 'tool', tool })} />
         )}
       </main>
     </div>
@@ -95,7 +136,10 @@ export const TableWorkbenchApp: React.FC = () => {
 // Saved lists
 // ---------------------------------------------------------------------------
 
-const DatasetWorkbench: React.FC<{ initialDatasetId?: string }> = ({ initialDatasetId }) => {
+const DatasetWorkbench: React.FC<{
+  initialDatasetId?: string;
+  onOpenTool?: (tool: ToolType) => void;
+}> = ({ initialDatasetId, onOpenTool }) => {
   const { datasets, isLoading, error, deleteDataset, renameDataset, getDatasetRecords } = useDatasets();
   const [activeId, setActiveId] = useState<string | undefined>(initialDatasetId);
   const [records, setRecords] = useState<ExtractedRecord[]>([]);
@@ -209,6 +253,7 @@ const DatasetWorkbench: React.FC<{ initialDatasetId?: string }> = ({ initialData
           onDeleteRecordsBatch={(recordIds) => {
             if (active) void messagingService.deleteRecords(active.id, recordIds);
           }}
+          onOpenTool={onOpenTool}
         />
       )}
     </div>
