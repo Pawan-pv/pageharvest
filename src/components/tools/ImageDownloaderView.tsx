@@ -702,15 +702,15 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
-                    <div className="absolute top-1 left-1 rounded bg-black/60 p-0.5 text-white">
+                    <div className="absolute top-1 left-1 rounded bg-dock/80 p-0.5 text-fg">
                       {isSelected ? (
                         <CheckSquare className="h-3.5 w-3.5 text-tool-violet" />
                       ) : (
-                        <Square className="h-3.5 w-3.5 text-white/70" />
+                        <Square className="h-3.5 w-3.5 text-fg-subtle" />
                       )}
                     </div>
                     {img.width > 0 && img.height > 0 && (
-                      <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.2 text-4xs font-mono text-white">
+                      <span className="absolute bottom-1 right-1 rounded bg-dock/80 px-1 py-0.5 text-4xs font-mono text-on-strong">
                         {img.width}×{img.height}
                       </span>
                     )}
