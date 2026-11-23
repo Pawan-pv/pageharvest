@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { WebsiteCard } from '@/components/dashboard/WebsiteCard';
 import { MainDashboard } from '@/components/dashboard/MainDashboard';
 import { ExportDialog } from '@/components/grid/ExportDialog';
@@ -19,27 +19,8 @@ describe('UI: Tool Hub Routing & Shopify Integration', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders Shopify store detected pill when detector succeeds, and invokes onOpenShopify on click', async () => {
-    vi.spyOn(shopifyDetector, 'detectShopifyStore').mockResolvedValue(true);
-    const onOpenShopify = vi.fn();
-
-    render(
-      <WebsiteCard
-        tab={mockTab}
-        onRefresh={vi.fn()}
-        onOpenShopify={onOpenShopify}
-      />
-    );
-
-    const pill = await screen.findByRole('button', { name: /Shopify store detected/i });
-    expect(pill).toBeInTheDocument();
-
-    fireEvent.click(pill);
-    expect(onOpenShopify).toHaveBeenCalledWith('https://shop.example.com/products');
-  });
-
-  it('does not render Shopify pill when detector returns false', async () => {
-    vi.spyOn(shopifyDetector, 'detectShopifyStore').mockResolvedValue(false);
+  it('does not make passive network requests or probe Shopify on WebsiteCard mount', async () => {
+    const detectSpy = vi.spyOn(shopifyDetector, 'detectShopifyStore');
 
     render(
       <WebsiteCard
@@ -48,9 +29,8 @@ describe('UI: Tool Hub Routing & Shopify Integration', () => {
       />
     );
 
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /Shopify store detected/i })).not.toBeInTheDocument();
-    });
+    expect(detectSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Shopify store detected/i })).not.toBeInTheDocument();
   });
 
   it('wires all tool open callbacks from MainDashboard down to ToolHub', () => {

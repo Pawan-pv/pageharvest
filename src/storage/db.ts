@@ -259,7 +259,9 @@ export class PageHarvestDB extends Dexie {
 
       const dataset = await this.datasets.get(datasetId);
       if (dataset) {
-        const count = await this.records.where('datasetId').equals(datasetId).count();
+        const count = typeof dataset.recordsCount === 'number'
+          ? dataset.recordsCount + recordsToInsert.length
+          : await this.records.where('datasetId').equals(datasetId).count();
         await this.datasets.update(datasetId, {
           recordsCount: count,
           updatedAt: Date.now(),

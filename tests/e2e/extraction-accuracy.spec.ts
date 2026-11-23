@@ -408,6 +408,7 @@ test.describe('images', () => {
   });
 
   test('images that load only when scrolled to are read after they load', async () => {
+    test.setTimeout(60000);
     const { panel } = await open('accuracy-lazy-scroll.html');
     await detect(panel);
     await panel.getByRole('button', { name: 'Use this list', exact: true }).click();

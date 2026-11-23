@@ -88,7 +88,7 @@ The package contains `THIRD_PARTY_NOTICES.txt`, the licence text of every bundle
 
 ## Support contact
 
-Primary support email: `support@pageharvest.dev`
+Primary support email: `pawan.kumar.developer@gmail.com`
 
 ## Before you submit
 
@@ -101,4 +101,4 @@ Primary support email: `support@pageharvest.dev`
 - [ ] `PRIVACY.md` merged to `main`, and its URL opens.
 - [ ] The Excel file opens in Excel, Google Sheets and LibreOffice (open one download in each by hand).
 - [ ] `docs/drafts/TERMS_OF_USE.md` and `docs/drafts/ACCEPTABLE_USE.md` are drafts: fill in the bracketed items, have them reviewed, then link them from the listing and from `PRIVACY.md`.
-- [x] A support email is configured: `support@pageharvest.dev` (Developer Dashboard & PRIVACY.md).
+- [x] A support email is configured: `pawan.kumar.developer@gmail.com` (Developer Dashboard & PRIVACY.md).

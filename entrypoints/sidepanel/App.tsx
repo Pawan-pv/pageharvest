@@ -466,7 +466,6 @@ export const App: React.FC = () => {
             isLoading={isTabLoading}
             advanced={advanced}
             onRefresh={refreshTab}
-            onOpenShopify={() => setActiveToolView('shopify')}
           />
         </div>
 

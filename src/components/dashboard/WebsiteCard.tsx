@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Globe, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/common/Badge';
 import { Banner } from '@/components/common/Banner';
 import { TabInfo } from '@/services/messaging';
-import { detectShopifyStore } from '@/core/shopify/detector';
 
 export interface WebsiteCardProps {
   tab: TabInfo;
@@ -11,7 +10,6 @@ export interface WebsiteCardProps {
   /** Advanced options is on: the manual "check again" button is shown (ADR-039). */
   advanced?: boolean;
   onRefresh: () => void;
-  onOpenShopify?: (url: string) => void;
 }
 
 /**
@@ -25,30 +23,7 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
   isLoading = false,
   advanced = false,
   onRefresh,
-  onOpenShopify,
 }) => {
-  const [isShopify, setIsShopify] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    if (!tab.url || !tab.isInjectable) {
-      setIsShopify(false);
-      return;
-    }
-    // Only probe non-local web origins to avoid triggering background network traffic on local fixture pages or loopback
-    const isLoopback = tab.url.includes('127.0.0.1') || tab.url.includes('localhost');
-    if (isLoopback) {
-      setIsShopify(false);
-      return;
-    }
-    void detectShopifyStore(tab.url).then((detected) => {
-      if (live) setIsShopify(detected);
-    });
-    return () => {
-      live = false;
-    };
-  }, [tab.url, tab.isInjectable]);
-
   let hostname = tab.needsAccess ? 'Page not shared yet' : 'This page';
   try {
     if (tab.url) {
@@ -85,16 +60,6 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
               <Badge variant="warning" size="sm" icon={<AlertCircle className="w-2.5 h-2.5" />}>
                 Can&apos;t read this page
               </Badge>
-            )}
-            {isShopify && (
-              <button
-                type="button"
-                onClick={() => onOpenShopify?.(tab.url)}
-                className="inline-flex items-center gap-1 rounded-full border border-tool-lime/30 bg-tool-lime/10 px-2 py-0.5 text-3xs font-semibold text-tool-lime transition-colors hover:bg-tool-lime/20 cursor-pointer"
-                title="Open Shopify Extractor for this store"
-              >
-                Shopify store detected →
-              </button>
             )}
           </div>
           {tab.url && (

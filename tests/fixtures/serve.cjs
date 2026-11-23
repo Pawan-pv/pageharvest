@@ -128,8 +128,22 @@ const server = http.createServer((req, res) => {
       'Content-Type': contentType,
       'Access-Control-Allow-Origin': '*'
     });
-    fs.createReadStream(filePath).pipe(res);
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', () => {
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
+    });
+    res.on('error', () => {});
+    stream.pipe(res);
   });
+});
+
+server.on('error', (err) => {
+  console.error('[Fixture Server Error]', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Fixture Server Uncaught Exception]', err);
 });
 
 server.listen(PORT, '127.0.0.1', () => {

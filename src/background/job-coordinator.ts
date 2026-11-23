@@ -189,7 +189,7 @@ export class JobCoordinator {
     this.checkPermissions = deps.checkPermissions ?? checkRequiredPermissions;
     this.reporter = deps.reporter ?? errorReporter;
     this.schedule = deps.schedule ?? ((callback, delayMs) => void setTimeout(callback, delayMs));
-    this.pageLoadGraceMs = deps.pageLoadGraceMs ?? 4_000;
+    this.pageLoadGraceMs = deps.pageLoadGraceMs ?? 15_000;
 
     this.jobs = new JobRepository(this.db);
     this.projects = new ProjectRepository(this.db);

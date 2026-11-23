@@ -54,6 +54,10 @@ The fixture server used by browser tests is started automatically by Playwright.
 
 `pnpm build` and `pnpm zip` first write `public/THIRD_PARTY_NOTICES.txt`, the licence texts of the open-source packages inside the package; commit it when it changes. `node scripts/generate-screenshots.mjs` makes the store screenshots from the built extension collecting a public practice site.
 
+## Support
+
+Questions or support: email `pawan.kumar.developer@gmail.com` or open an issue at <https://github.com/Pawan-pv/pageharvest/issues>.
+
 ## Architecture
 
 Read [ARCHITECTURE.md](docs/ARCHITECTURE.md), [INTEGRATION_GUIDE.md](docs/INTEGRATION_GUIDE.md), and [FILE_OWNERSHIP.md](docs/FILE_OWNERSHIP.md) before changing a subsystem. Canonical runtime contracts live under `src/shared/contracts/`. The background `JobCoordinator` owns all job state and is the only writer of extraction data; a batch is acknowledged only after its IndexedDB transaction commits. The side panel is a view of stored state, so it can close at any time. Extraction and detection run locally in the page content script, and overlays use a closed Shadow DOM.
