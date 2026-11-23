@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, CheckCircle2, Copy, Download, FileSpreadsheet, Plus, Table2 } from 'lucide-react';
+import { Check, CheckCircle2, Copy, Download, ExternalLink, FileSpreadsheet, Plus, Table2 } from 'lucide-react';
 import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
 import { SavedFileNotice } from '@/components/common/SavedFileNotice';
 import { downloadRows, type QuickFormat } from '@/components/grid/download-rows';
+import { openWorkbench } from '@/platform/workbench';
 import { recordsToCsv } from '@/core/export/exporter';
 import type { ExtractionStats } from '@/hooks/useExtractionWorkflow';
 import { isRecordMetadataKey } from '@/shared/contracts/record';
@@ -201,6 +202,16 @@ export const SimpleDone: React.FC<SimpleDoneProps> = ({
         >
           {copied ? 'Copied. Paste it into a spreadsheet' : 'Copy the table'}
         </Button>
+        {dataset && (
+          <Button
+            variant="outline"
+            size="sm"
+            iconLeft={<ExternalLink aria-hidden="true" className="w-3.5 h-3.5" />}
+            onClick={() => void openWorkbench({ datasetId: dataset.id })}
+          >
+            Open Full Table ↗
+          </Button>
+        )}
       </div>
 
       {downloadId !== null && <SavedFileNotice downloadId={downloadId} onDismiss={() => setDownloadId(null)} />}

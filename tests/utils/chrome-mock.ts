@@ -18,6 +18,13 @@ type TabUpdatedListener = (
   tab: chrome.tabs.Tab
 ) => void;
 
+/** Enough of Chrome's match-pattern rules for `tabs.query({ url })` in tests. */
+function matchUrlPattern(pattern: string, url: string): boolean {
+  if (pattern === '<all_urls>') return true;
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  return new RegExp(`^${escaped}$`).test(url);
+}
+
 export class ChromeMock {
   private runtimeListeners: Set<MessageListener> = new Set();
   private tabListeners: Map<number, Set<MessageListener>> = new Map();
@@ -25,6 +32,10 @@ export class ChromeMock {
   private tabUpdatedListeners: Set<TabUpdatedListener> = new Set();
   private tabRemovedListeners: Set<(tabId: number) => void> = new Set();
   private localStorageData: Record<string, unknown> = {};
+  private sessionStorageData: Record<string, unknown> = {};
+  /** Tabs this mock has created, in addition to the fixture `activeTab`. */
+  public openTabs: Map<number, chrome.tabs.Tab> = new Map();
+  private nextTabId = 1000;
   public grantedPermissions: Set<string> = new Set(['activeTab', 'sidePanel', 'storage', 'scripting', 'downloads']);
   // Optional host grants default to allowed (tests opt into revocation via
   // request/remove). contains() returns true for every origin except revoked.
@@ -90,12 +101,72 @@ export class ChromeMock {
 
   public tabs = {
     query: (
-      _queryInfo: chrome.tabs.QueryInfo,
+      queryInfo: chrome.tabs.QueryInfo,
       callback?: (result: chrome.tabs.Tab[]) => void
     ): Promise<chrome.tabs.Tab[]> => {
-      const result = this.activeTab ? [this.activeTab] : [];
+      const all = [this.activeTab, ...this.openTabs.values()].filter(Boolean);
+      let result = all;
+      if (queryInfo?.url) {
+        const patterns = Array.isArray(queryInfo.url) ? queryInfo.url : [queryInfo.url];
+        result = all.filter((tab) => typeof tab.url === 'string' && patterns.some((pattern) => matchUrlPattern(pattern, tab.url as string)));
+      }
+      if (queryInfo?.active) result = result.filter((tab) => tab.active);
+      if (queryInfo?.currentWindow) result = result.filter((tab) => tab.windowId === this.activeTab.windowId);
       if (callback) callback(result);
       return Promise.resolve(result);
+    },
+    create: (
+      createProperties: chrome.tabs.CreateProperties,
+      callback?: (tab: chrome.tabs.Tab) => void
+    ): Promise<chrome.tabs.Tab> => {
+      const id = this.nextTabId++;
+      const tab = {
+        ...this.activeTab,
+        id,
+        index: this.openTabs.size + 1,
+        active: createProperties.active ?? true,
+        status: 'complete',
+        url: createProperties.url ?? 'about:blank',
+        title: createProperties.url ?? 'about:blank',
+      } as chrome.tabs.Tab;
+      this.openTabs.set(id, tab);
+      if (callback) callback(tab);
+      return Promise.resolve(tab);
+    },
+    get: (
+      tabId: number,
+      callback?: (tab: chrome.tabs.Tab) => void
+    ): Promise<chrome.tabs.Tab> => {
+      const tab = tabId === this.activeTab.id ? this.activeTab : this.openTabs.get(tabId);
+      if (!tab) return Promise.reject(new Error(`No tab with id: ${tabId}.`));
+      if (callback) callback(tab);
+      return Promise.resolve(tab);
+    },
+    update: (
+      tabId: number,
+      updateProperties: chrome.tabs.UpdateProperties,
+      callback?: (tab: chrome.tabs.Tab) => void
+    ): Promise<chrome.tabs.Tab> => {
+      const existing = tabId === this.activeTab.id ? this.activeTab : this.openTabs.get(tabId);
+      if (!existing) return Promise.reject(new Error(`No tab with id: ${tabId}.`));
+      const updated = {
+        ...existing,
+        ...(updateProperties.url !== undefined ? { url: updateProperties.url, status: 'complete' } : {}),
+        ...(updateProperties.active !== undefined ? { active: updateProperties.active } : {}),
+      } as chrome.tabs.Tab;
+      if (tabId === this.activeTab.id) this.activeTab = updated;
+      else this.openTabs.set(tabId, updated);
+      if (callback) callback(updated);
+      return Promise.resolve(updated);
+    },
+    remove: (tabIds: number | number[], callback?: () => void): Promise<void> => {
+      const ids = Array.isArray(tabIds) ? tabIds : [tabIds];
+      for (const id of ids) this.openTabs.delete(id);
+      for (const id of ids) {
+        for (const listener of this.tabRemovedListeners) listener(id);
+      }
+      if (callback) callback();
+      return Promise.resolve();
     },
     sendMessage: (
       tabId: number,
@@ -234,7 +305,52 @@ export class ChromeMock {
         if (callback) callback();
         return Promise.resolve();
       }
+    },
+    session: {
+      get: (
+        keys: string | string[] | Record<string, unknown> | null,
+        callback?: (items: { [key: string]: unknown }) => void
+      ): Promise<{ [key: string]: unknown }> => {
+        let result: Record<string, unknown> = {};
+        if (keys === null) {
+          result = { ...this.sessionStorageData };
+        } else if (typeof keys === 'string') {
+          result[keys] = this.sessionStorageData[keys];
+        } else if (Array.isArray(keys)) {
+          keys.forEach((k) => {
+            result[k] = this.sessionStorageData[k];
+          });
+        } else {
+          Object.keys(keys).forEach((k) => {
+            result[k] = this.sessionStorageData[k] ?? keys[k];
+          });
+        }
+        if (callback) callback(result);
+        return Promise.resolve(result);
+      },
+      set: (items: Record<string, unknown>, callback?: () => void): Promise<void> => {
+        Object.assign(this.sessionStorageData, items);
+        if (callback) callback();
+        return Promise.resolve();
+      },
+      remove: (keys: string | string[], callback?: () => void): Promise<void> => {
+        const keyList = Array.isArray(keys) ? keys : [keys];
+        keyList.forEach((k) => delete this.sessionStorageData[k]);
+        if (callback) callback();
+        return Promise.resolve();
+      },
+      clear: (callback?: () => void): Promise<void> => {
+        this.sessionStorageData = {};
+        if (callback) callback();
+        return Promise.resolve();
+      }
     }
+  };
+
+  public windows = {
+    update: vi.fn(
+      (_windowId: number, _updateInfo: chrome.windows.UpdateInfo) => Promise.resolve({} as chrome.windows.Window)
+    )
   };
 
   public sidePanel = {
@@ -314,6 +430,16 @@ export class ChromeMock {
     this.tabUpdatedListeners.clear();
     this.tabRemovedListeners.clear();
     this.localStorageData = {};
+    this.sessionStorageData = {};
+    this.openTabs.clear();
+    this.nextTabId = 1000;
+    this.activeTab = {
+      ...this.activeTab,
+      url: 'http://127.0.0.1:3456/simple-grid.html',
+      title: 'Simple Product Grid',
+      active: true,
+      status: undefined,
+    } as chrome.tabs.Tab;
     this.runtime.lastError = undefined;
     this.sidePanel.open.mockClear();
     this.sidePanel.setPanelBehavior.mockClear();
@@ -326,6 +452,7 @@ export class ChromeMock {
     this.permissions.request.mockClear();
     this.permissions.remove.mockClear();
     this.scripting.executeScript.mockClear();
+    this.windows.update.mockClear();
     this.grantedOrigins = new Set([
       'http://localhost:3000/*',
       'http://127.0.0.1:3456/*',

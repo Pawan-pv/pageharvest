@@ -211,7 +211,8 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     expect(await screen.findByRole('heading', { name: 'My data' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Library sections' })).not.toBeInTheDocument();
 
-    await user.click(await screen.findByRole('button', { name: /^Open / }));
+    const [openButton] = await screen.findAllByRole('button', { name: /^Open / });
+    await user.click(openButton);
     expect(await screen.findByText(/^20 rows from 127\.0\.0\.1, collected on /)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /^Done/ })).not.toBeInTheDocument();
 

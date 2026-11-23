@@ -44,9 +44,11 @@ import {
   JobRepository,
   ProjectRepository,
   RecordRepository,
+  RecipeRepository,
   SchemaRepository,
   SettingsRepository,
 } from '@/storage/repositories';
+import { schemaToRecipe } from '@/core/library/recipe-file';
 import { ErrorCategory, ExtractionRunHistory, FieldDefinition, HarvestError, RecordEntity } from '@/types';
 import type { ExtractionErrorCode } from '@/shared/contracts/error';
 
@@ -640,6 +642,28 @@ export class JobCoordinator {
     fields: FieldDefinition[]
   ): Promise<void> {
     await new DatasetRepository(this.db).applyEdit(datasetId, records, fields);
+  }
+
+  /** Renames a saved list without touching its rows. */
+  public async renameDataset(datasetId: string, name: string): Promise<void> {
+    const changed = await this.db.datasets.update(datasetId, { name, updatedAt: this.now() });
+    if (changed === 0) {
+      throw new Error('This saved list no longer exists.');
+    }
+  }
+
+  /** Deletes a saved list and its rows in one transaction. Refused while a job can write. */
+  public async deleteDataset(datasetId: string): Promise<void> {
+    await new DatasetRepository(this.db).deleteDataset(datasetId);
+  }
+
+  /**
+   * Stores one validated recipe imported from a file. The recipe id is kept when it is
+   * free; a second import of the same file replaces the earlier copy instead of creating
+   * a duplicate.
+   */
+  public async importRecipe(recipe: ExtractionSchema): Promise<void> {
+    await new RecipeRepository(this.db).saveRecipe(schemaToRecipe(recipe));
   }
 
   // -------------------------------------------------------------------------

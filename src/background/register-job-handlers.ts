@@ -70,7 +70,12 @@ export function registerJobHandlers(router: MessageRouter, coordinator: JobCoord
       const result = await work();
       return { ok: true, ...(result && 'deleted' in result ? { deleted: result.deleted } : {}) };
     } catch (error: unknown) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      const message = error instanceof Error ? error.message : String(error);
+      const code =
+        error instanceof Error && error.name === 'DatasetInUseError'
+          ? ('DATASET_IN_USE' as const)
+          : ('UNKNOWN' as const);
+      return { ok: false, error: message, code };
     }
   };
 
@@ -89,6 +94,15 @@ export function registerJobHandlers(router: MessageRouter, coordinator: JobCoord
     dataCommand(() =>
       coordinator.applyDatasetEdit(message.payload.datasetId, message.payload.records, message.payload.fields)
     )
+  );
+  fromPanel('RENAME_DATASET', (message) =>
+    dataCommand(() => coordinator.renameDataset(message.payload.datasetId, message.payload.name))
+  );
+  fromPanel('DELETE_DATASET', (message) =>
+    dataCommand(() => coordinator.deleteDataset(message.payload.datasetId))
+  );
+  fromPanel('IMPORT_RECIPE', (message) =>
+    dataCommand(() => coordinator.importRecipe(message.payload.recipe))
   );
 
   fromPage('RECORD_BATCH', (message, sender) => coordinator.commitBatch(message.payload, sender));

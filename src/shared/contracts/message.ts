@@ -295,6 +295,29 @@ export const applyDatasetEditMessageSchema = baseMessageSchema.extend({
   }),
 });
 
+export const renameDatasetMessageSchema = baseMessageSchema.extend({
+  type: z.literal('RENAME_DATASET'),
+  payload: z.object({
+    datasetId: z.string().min(1),
+    name: z.string().trim().min(1).max(200),
+  }),
+});
+
+export const deleteDatasetMessageSchema = baseMessageSchema.extend({
+  type: z.literal('DELETE_DATASET'),
+  payload: z.object({
+    datasetId: z.string().min(1),
+  }),
+});
+
+/** Stores one validated recipe imported from a .pageharvest-recipe.json file. */
+export const importRecipeMessageSchema = baseMessageSchema.extend({
+  type: z.literal('IMPORT_RECIPE'),
+  payload: z.object({
+    recipe: ExtractionSchemaSchema,
+  }),
+});
+
 // ---------------------------------------------------------------------------
 // Job execution: background -> content script
 // ---------------------------------------------------------------------------
@@ -477,6 +500,9 @@ export const BrowserMessageSchema = z.discriminatedUnion('type', [
   updateRecordCellMessageSchema,
   deleteRecordsMessageSchema,
   applyDatasetEditMessageSchema,
+  renameDatasetMessageSchema,
+  deleteDatasetMessageSchema,
+  importRecipeMessageSchema,
   extractRecordsMessageSchema,
   controlJobMessageSchema,
   queryJobRunMessageSchema,
@@ -537,6 +563,11 @@ export type JobCommandResult = z.infer<typeof JobCommandResultSchema>;
 export const DataCommandResultSchema = z.object({
   ok: z.boolean(),
   error: z.string().optional(),
+  /**
+   * Why a command was refused. The panel turns DATASET_IN_USE back into the storage error it
+   * knows, so its wording and its "kept on purpose" banner do not depend on message text.
+   */
+  code: z.enum(['DATASET_IN_USE', 'DATASET_NOT_FOUND', 'UNKNOWN']).optional(),
   deleted: z.number().int().min(0).optional(),
 });
 

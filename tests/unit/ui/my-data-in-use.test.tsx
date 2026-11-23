@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { JobCoordinator } from '@/background/job-coordinator';
@@ -6,7 +6,7 @@ import { SimpleMyData } from '@/components/simple/MyData';
 import { ExtractionHistoryView } from '@/components/history/ExtractionHistoryView';
 import { useDatasets } from '@/hooks/useDatasets';
 import { db } from '@/storage/db';
-import { BASE_URL, makeRecipe } from '../../utils/job-harness';
+import { BASE_URL, installBackground, makeRecipe } from '../../utils/job-harness';
 
 /**
  * "My data" lists a job's list from the moment the job starts. Deleting it while the job
@@ -61,6 +61,11 @@ function AdvancedScreen() {
     />
   );
 }
+
+beforeEach(() => {
+  // Deletes and renames go through the background, the only writer.
+  installBackground(db);
+});
 
 afterEach(async () => {
   await db.clearAllData();

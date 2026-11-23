@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileSpreadsheet, Search, Trash2 } from 'lucide-react';
+import { ExternalLink, FileSpreadsheet, Search, Trash2 } from 'lucide-react';
 import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { Input } from '@/components/common/Input';
 import { SavedFileNotice } from '@/components/common/SavedFileNotice';
 import { downloadRows } from '@/components/grid/download-rows';
+import { openWorkbench } from '@/platform/workbench';
 import type { Dataset, ExtractedRecord } from '@/types';
 import { relativeTime } from '@/utils/relative-time';
 import { rowCount } from './Done';
@@ -185,6 +186,15 @@ export const SimpleMyData: React.FC<SimpleMyDataProps> = ({
                       onClick={() => void download(dataset)}
                     >
                       Download for Excel
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      iconLeft={<ExternalLink aria-hidden="true" className="w-3.5 h-3.5" />}
+                      aria-label={`Open Full Table for ${dataset.name}`}
+                      onClick={() => void openWorkbench({ datasetId: dataset.id })}
+                    >
+                      Open Full Table ↗
                     </Button>
                     <Button
                       variant="ghost"

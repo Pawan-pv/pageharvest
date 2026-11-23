@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PageHarvestDB } from '@/storage/db';
-import { installBackground, uniqueDb } from '../utils/job-harness';
+import type { ExtractionJob } from '@/types';
+import { installBackground, makeRecipe, uniqueDb } from '../utils/job-harness';
 
 const TAB = 77;
 const DATASET_ID = 'ds_data_commands';
@@ -135,5 +136,84 @@ describe('Data commands from the side panel', () => {
     expect(reply.ok).toBe(false);
     expect(reply.error).toMatch(/INVALID_MESSAGE/);
     expect((await db.records.get('r1'))?.Name).toBe('One');
+  });
+
+  it('renames a dataset through the background', async () => {
+    const reply = await fromPanel({
+      ...envelope,
+      type: 'RENAME_DATASET',
+      payload: { datasetId: DATASET_ID, name: 'Renamed list' },
+    });
+
+    expect(reply).toEqual({ ok: true });
+    expect((await db.datasets.get(DATASET_ID))?.name).toBe('Renamed list');
+  });
+
+  it('deletes a dataset and its rows through the background', async () => {
+    const reply = await fromPanel({
+      ...envelope,
+      type: 'DELETE_DATASET',
+      payload: { datasetId: DATASET_ID },
+    });
+
+    expect(reply).toEqual({ ok: true });
+    expect(await db.datasets.get(DATASET_ID)).toBeUndefined();
+    expect(await db.records.where('datasetId').equals(DATASET_ID).count()).toBe(0);
+  });
+
+  it('refuses to delete a dataset while a job is still writing to it', async () => {
+    await db.jobs.put({
+      id: 'job_busy',
+      datasetId: DATASET_ID,
+      targetUrl: 'https://example.com/list',
+      schema: makeRecipe(),
+      status: 'RUNNING',
+    } as unknown as ExtractionJob);
+
+    const reply = await fromPanel({
+      ...envelope,
+      type: 'DELETE_DATASET',
+      payload: { datasetId: DATASET_ID },
+    });
+
+    expect(reply).toMatchObject({ ok: false, code: 'DATASET_IN_USE' });
+    expect((await db.datasets.get(DATASET_ID))?.name).toBe('Editable list');
+    expect(await db.records.where('datasetId').equals(DATASET_ID).count()).toBe(2);
+  });
+
+  it('imports a recipe through the background', async () => {
+    const recipe = makeRecipe();
+    const reply = await fromPanel({
+      ...envelope,
+      type: 'IMPORT_RECIPE',
+      payload: { recipe },
+    });
+
+    expect(reply).toEqual({ ok: true });
+    const stored = await db.recipes.get(recipe.id);
+    expect(stored).toBeDefined();
+    expect(stored?.name).toBe(recipe.name);
+  });
+
+  it('refuses to import a recipe that fails schema validation', async () => {
+    const reply = await fromPanel({
+      ...envelope,
+      type: 'IMPORT_RECIPE',
+      payload: { recipe: { ...makeRecipe(), urlPattern: '' } },
+    });
+
+    expect(reply).toMatchObject({ ok: false });
+    expect(await db.recipes.count()).toBe(0);
+  });
+
+  it('refuses dataset commands from a content script', async () => {
+    const reply = await chromeMock.sendFromContentScript(TAB, {
+      ...envelope,
+      type: 'DELETE_DATASET',
+      payload: { datasetId: DATASET_ID },
+    });
+
+    expect(reply).toMatchObject({ ok: false });
+    expect(await db.datasets.count()).toBe(1);
   });
 });

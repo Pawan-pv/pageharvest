@@ -36,6 +36,11 @@ import {
   RefreshCw,
   Loader2,
   Filter,
+  Sparkles,
+  Combine,
+  Images,
+  Table2,
+  Send,
 } from 'lucide-react';
 import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
@@ -61,6 +66,21 @@ import {
 } from '@/core/cleaning/data-cleaner';
 import { DataCleaningToolbar } from './DataCleaningToolbar';
 import { ExportDialog } from './ExportDialog';
+import { DatasetSwitcher } from './DatasetSwitcher';
+import { ImageGallery, type GalleryImage } from './ImageGallery';
+import { MergeColumnsDialog } from './MergeColumnsDialog';
+import { SendUrlsDialog } from './SendUrlsDialog';
+import {
+  describeSmartClean,
+  detectImageColumns,
+  detectUrlColumns,
+  mergeColumns,
+  smartClean,
+  type MergeColumnsOptions,
+} from './grid-features';
+import { handOffUrls } from '@/platform/url-handoff';
+import { openWorkbench } from '@/platform/workbench';
+import type { ToolType } from '@/shared/contracts/tool-job';
 
 export interface DataTableProps {
   dataset?: Dataset | null;
@@ -96,6 +116,18 @@ export interface DataTableProps {
     recordsFailed: number;
     duplicatesSkipped: number;
   } | null;
+  /** The full-tab workbench: more room, and the table picker instead of a Back button. */
+  fullPage?: boolean;
+  /** Opens these rows in the full-tab workbench. Hidden inside the workbench itself. */
+  onOpenFullTable?: () => void;
+  /** Workbench only: the saved lists the picker can switch between. */
+  datasets?: Dataset[];
+  /** Workbench only: rename the open saved list, through the background writer. */
+  onRenameDataset?: (name: string) => Promise<void>;
+  /** Workbench only: delete the open saved list, through the background writer. */
+  onDeleteDataset?: () => Promise<void>;
+  /** Workbench only: switch to another saved list. */
+  onSelectDataset?: (dataset: Dataset) => void;
 }
 
 const EditableCellInput: React.FC<{
@@ -139,6 +171,12 @@ export const DataTable: React.FC<DataTableProps> = ({
   onBack,
   dataRevision,
   runSummary,
+  fullPage = false,
+  onOpenFullTable,
+  datasets,
+  onRenameDataset,
+  onDeleteDataset,
+  onSelectDataset,
 }) => {
   // Local active dataset state backed by DataCleaningHistory for full reversibility
   const [currentRecords, setCurrentRecords] = useState<ExtractedRecord[]>(initialRecords);
@@ -186,6 +224,11 @@ export const DataTable: React.FC<DataTableProps> = ({
   >(null);
   const [cleaningFeedback, setCleaningFeedback] = useState<string | null>(null);
 
+  // Data Table 2.0: merge, one-click clean, picture view and URL handoff.
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showSendUrlsDialog, setShowSendUrlsDialog] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table');
+
   // Editing state
   const [editingCell, setEditingCell] = useState<{ recordId: string; columnId: string } | null>(null);
   const [, setEditValue] = useState<string>('');
@@ -230,6 +273,31 @@ export const DataTable: React.FC<DataTableProps> = ({
         extractor: 'text' as const,
       }));
   }, [currentFields, currentRecords]);
+
+  const imageColumns = useMemo(
+    () => detectImageColumns(currentRecords, visibleFields),
+    [currentRecords, visibleFields]
+  );
+  const urlColumns = useMemo(
+    () => detectUrlColumns(currentRecords, visibleFields),
+    [currentRecords, visibleFields]
+  );
+  const galleryImages = useMemo<GalleryImage[]>(() => {
+    if (imageColumns.length === 0) return [];
+    const labelColumn =
+      visibleFields.find((field) => !imageColumns.includes(field.name))?.name ?? visibleFields[0]?.name;
+    const images: GalleryImage[] = [];
+    for (const record of currentRecords) {
+      const label = labelColumn ? String(record[labelColumn] ?? '').trim() : '';
+      for (const column of imageColumns) {
+        const value = record[column];
+        if (typeof value === 'string' && value.trim()) {
+          images.push({ url: value.trim(), label });
+        }
+      }
+    }
+    return images;
+  }, [currentRecords, imageColumns, visibleFields]);
 
   /**
    * Saves a change that is already showing in the grid. Success is only announced once
@@ -392,6 +460,56 @@ export const DataTable: React.FC<DataTableProps> = ({
   ) => {
     const { records: updated, cellsModified } = normalizeValues(currentRecords, column, type, dataset?.url);
     commitCleaningState(`Normalize ${column}`, updated, currentFields, false, `Normalized ${cellsModified} cell(s) in ${column}`);
+  };
+
+  const handleSmartClean = () => {
+    const result = smartClean(currentRecords, currentFields);
+    commitCleaningState(
+      'Smart Clean',
+      result.records,
+      result.fields,
+      false,
+      describeSmartClean(result.summary)
+    );
+  };
+
+  const handleMergeColumns = (options: MergeColumnsOptions) => {
+    try {
+      const merged = mergeColumns(currentRecords, currentFields, options);
+      commitCleaningState(
+        `Merge ${options.columns.length} columns`,
+        merged.records,
+        merged.fields,
+        options.dropSources,
+        `Merged ${options.columns.length} columns into "${options.newName}"`
+      );
+    } catch (error: unknown) {
+      setGridError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const handleSendUrls = async (tool: ToolType, urls: string[], column: string) => {
+    await handOffUrls({
+      tool,
+      urls,
+      source: 'dataset_column',
+      datasetId: dataset?.id,
+      column,
+    });
+    await openWorkbench({ tool });
+  };
+
+  const handleOpenFullTable = () => {
+    if (onOpenFullTable) {
+      onOpenFullTable();
+      return;
+    }
+    if (!dataset?.id) return;
+    void openWorkbench({ datasetId: dataset.id }).catch((error: unknown) => {
+      setGridError(
+        `The full table did not open: ${error instanceof Error ? error.message : String(error)}`
+      );
+    });
   };
 
   const handleMoveColumn = useCallback((columnId: string, direction: 'left' | 'right') => {
@@ -694,7 +812,11 @@ export const DataTable: React.FC<DataTableProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-2.5 p-4 text-left h-full bg-surface-sunken/30">
+    <div
+      className={`flex flex-col text-left h-full bg-surface-sunken/30 ${
+        fullPage ? 'gap-3 p-6' : 'gap-2.5 p-4'
+      }`}
+    >
       {gridError && (
         <Banner tone="danger" onDismiss={() => setGridError(null)}>
           {gridError}
@@ -771,6 +893,15 @@ export const DataTable: React.FC<DataTableProps> = ({
       {/* Top Header & Actions */}
       {!simple && (
       <div className="flex flex-col gap-2 bg-surface p-3 rounded-xl border border-line/80 shadow-xs">
+        {fullPage && datasets && onRenameDataset && onDeleteDataset && onSelectDataset && (
+          <DatasetSwitcher
+            datasets={datasets}
+            activeId={dataset?.id ?? null}
+            onSelect={onSelectDataset}
+            onRename={onRenameDataset}
+            onDelete={onDeleteDataset}
+          />
+        )}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-sm font-bold text-fg leading-tight">
@@ -821,6 +952,18 @@ export const DataTable: React.FC<DataTableProps> = ({
             >
               Export
             </Button>
+
+            {!fullPage && dataset && (
+              <Button
+                variant="subtle"
+                size="xs"
+                iconLeft={<ExternalLink className="w-3.5 h-3.5 text-brand-fg" />}
+                onClick={handleOpenFullTable}
+                title="Open this table in a full browser tab"
+              >
+                Open Full Table ↗
+              </Button>
+            )}
           </div>
         </div>
 
@@ -882,6 +1025,72 @@ export const DataTable: React.FC<DataTableProps> = ({
               )}
             </div>
           </div>
+        </div>
+
+        {/* Data Table 2.0: tidy, join, pictures and URL handoff */}
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-line-subtle flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Button
+              variant="subtle"
+              size="xs"
+              iconLeft={<Sparkles className="w-3.5 h-3.5 text-brand-fg" />}
+              onClick={handleSmartClean}
+              title="Trim spaces, drop empty rows, duplicates and empty columns"
+            >
+              Smart Clean
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
+              iconLeft={<Combine className="w-3.5 h-3.5" />}
+              disabled={visibleFields.length < 2}
+              onClick={() => setShowMergeDialog(true)}
+            >
+              Merge columns
+            </Button>
+            {urlColumns.length > 0 && (
+              <Button
+                variant="outline"
+                size="xs"
+                iconLeft={<Send className="w-3.5 h-3.5" />}
+                onClick={() => setShowSendUrlsDialog(true)}
+                title="Send the web addresses in this table to a tool"
+              >
+                Send URLs to Tool →
+              </Button>
+            )}
+          </div>
+
+          {imageColumns.length > 0 && (
+            <div
+              className="flex items-center rounded-lg border border-line-strong bg-surface p-0.5"
+              role="group"
+              aria-label="View"
+            >
+              <button
+                type="button"
+                aria-pressed={viewMode === 'table'}
+                onClick={() => setViewMode('table')}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
+                  viewMode === 'table' ? 'bg-surface-muted text-fg' : 'text-fg-muted hover:text-fg'
+                }`}
+              >
+                <Table2 aria-hidden="true" className="w-3.5 h-3.5" />
+                Table
+              </button>
+              <button
+                type="button"
+                aria-pressed={viewMode === 'gallery'}
+                onClick={() => setViewMode('gallery')}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
+                  viewMode === 'gallery' ? 'bg-surface-muted text-fg' : 'text-fg-muted hover:text-fg'
+                }`}
+              >
+                <Images aria-hidden="true" className="w-3.5 h-3.5" />
+                Gallery
+              </button>
+            </div>
+          )}
         </div>
       </div>
       )}
@@ -962,6 +1171,11 @@ export const DataTable: React.FC<DataTableProps> = ({
           description="Run an extraction to fill this table. Rows appear here as soon as they are saved."
           action={onNewExtraction ? { label: 'Start an extraction', onClick: onNewExtraction } : null}
         />
+      ) : viewMode === 'gallery' && imageColumns.length > 0 ? (
+        /* Picture view: the image columns as a gallery, click to zoom */
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <ImageGallery images={galleryImages} />
+        </div>
       ) : (
         /* Spreadsheet Data Table */
         <div className="flex-1 flex flex-col min-h-0 border border-line rounded-xl bg-surface shadow-xs overflow-hidden">
@@ -1179,6 +1393,25 @@ export const DataTable: React.FC<DataTableProps> = ({
           ? 'Its values are removed from every row. Undo brings it back while this table stays open.'
           : 'Undo brings them back while this table stays open.'}
       </Dialog>
+
+      {/* Merge columns */}
+      <MergeColumnsDialog
+        isOpen={showMergeDialog}
+        onClose={() => setShowMergeDialog(false)}
+        fields={visibleFields}
+        records={currentRecords}
+        onMerge={handleMergeColumns}
+      />
+
+      {/* Send a URL column to a tool */}
+      <SendUrlsDialog
+        isOpen={showSendUrlsDialog}
+        onClose={() => setShowSendUrlsDialog(false)}
+        records={currentRecords}
+        columns={urlColumns}
+        datasetId={dataset?.id}
+        onSend={handleSendUrls}
+      />
 
       {/* Export Dialog */}
       <ExportDialog

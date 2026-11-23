@@ -43,6 +43,12 @@ export * from './message';
 // Export
 export * from './export';
 
+// Recipe files (JSON import / export)
+export * from './recipe-file';
+
+// Multi-URL tool jobs and URL handoff
+export * from './tool-job';
+
 // Settings
 export * from './settings';
 

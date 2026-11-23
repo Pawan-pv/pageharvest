@@ -16,6 +16,7 @@ import { injectContentScript } from '@/platform/content-script';
 import { hasAllSitesAccess, requestSiteOrigin, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import { isHarvestableUrl } from '@/platform/tab-manager';
 import { JobIdentity } from '@/shared/contracts/job';
+import { recipeToSchema } from '@/core/library/recipe-file';
 import { ExtractedRecord, ExtractionRecipe, FieldDefinition } from '@/types';
 
 export { SITE_PERMISSION_MESSAGE };
@@ -449,6 +450,36 @@ class ExtensionMessagingService {
     });
   }
 
+  /** Renames a saved list through the background, the only writer. */
+  public async renameDataset(datasetId: string, name: string): Promise<void> {
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'RENAME_DATASET',
+      payload: { datasetId, name },
+    });
+  }
+
+  /** Deletes a saved list and its rows through the background. */
+  public async deleteDataset(datasetId: string): Promise<void> {
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'DELETE_DATASET',
+      payload: { datasetId },
+    });
+  }
+
+  /** Stores one recipe imported from a validated file. */
+  public async importRecipe(recipe: ExtractionRecipe): Promise<void> {
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'IMPORT_RECIPE',
+      payload: { recipe: recipeToSchema(recipe) },
+    });
+  }
+
   private async sendDataCommand(message: ExtensionMessage): Promise<DataCommandResult> {
     const validated = extensionMessageSchema.parse(message);
     const reply = await this.client.sendToBackground<unknown>(validated, {
@@ -461,7 +492,11 @@ class ExtensionMessagingService {
       throw new Error('The background worker did not confirm the change.');
     }
     if (!parsed.data.ok) {
-      throw new Error(parsed.data.error ?? 'The change could not be saved.');
+      const failure = new Error(parsed.data.error ?? 'The change could not be saved.');
+      // The panel recognises this storage error by name, so a refused delete keeps its own
+      // banner and wording instead of reading like an unexplained failure.
+      if (parsed.data.code === 'DATASET_IN_USE') failure.name = 'DatasetInUseError';
+      throw failure;
     }
     return parsed.data;
   }

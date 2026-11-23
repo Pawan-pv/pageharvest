@@ -1,13 +1,35 @@
 import { defineConfig } from 'wxt';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import type { OutputOptions } from 'rollup';
 
 export default defineConfig({
   hooks: {
     'config:resolved': (wxt) => {
       wxt.config.alias['@'] = path.resolve(__dirname, 'src');
       wxt.config.alias['~'] = path.resolve(__dirname, '.');
-    }
+    },
+    'vite:build:extendConfig': (entrypoints, viteConfig) => {
+      const isHtml = entrypoints.every((e) => e.type !== 'background' && e.type !== 'content-script');
+      if (!isHtml) return;
+      viteConfig.build = viteConfig.build || {};
+      viteConfig.build.rollupOptions = viteConfig.build.rollupOptions || {};
+      const current = viteConfig.build.rollupOptions.output;
+      const output: OutputOptions = Array.isArray(current) ? current[0] ?? {} : current ?? {};
+      viteConfig.build.rollupOptions.output = output;
+      output.manualChunks = (id: string) => {
+        if (!id.includes('node_modules')) return undefined;
+        const p = id.replace(/\\/g, '/');
+        if (p.includes('/react-dom/') || p.includes('/react/') || p.includes('/scheduler/')) {
+          return 'vendor-react';
+        }
+        if (p.includes('/@tanstack/')) return 'vendor-table';
+        if (p.includes('/dexie/')) return 'vendor-db';
+        if (p.includes('/zod/')) return 'vendor-zod';
+        if (p.includes('/lucide-react/')) return 'vendor-icons';
+        return 'vendor';
+      };
+    },
   },
   vite: () => ({
     plugins: [react()],

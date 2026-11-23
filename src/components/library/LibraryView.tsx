@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Play, Pencil, Trash2, Plus } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Download, Play, Pencil, Trash2, Plus, Upload } from 'lucide-react';
 import { Banner } from '@/components/common/Banner';
 import { Badge } from '@/components/common/Badge';
 import { Button } from '@/components/common/Button';
@@ -8,6 +8,9 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { Input } from '@/components/common/Input';
 import { Dialog } from '@/components/common/Dialog';
 import { ExtractionHistoryView, ExtractionHistoryViewProps } from '@/components/history/ExtractionHistoryView';
+import { parseRecipeFile, recipeFileName, serializeRecipeFile } from '@/core/library/recipe-file';
+import { triggerDownload } from '@/platform/downloads';
+import { messagingService } from '@/services/messaging';
 import { JobStatus } from '@/shared/contracts/job';
 import { ExtractionProject } from '@/shared/contracts/project';
 import { ExtractionSchema } from '@/shared/contracts/schema';
@@ -255,6 +258,41 @@ export const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) =>
   const [draft, setDraft] = useState({ name: '', urlPattern: '', containerSelector: '' });
   const [deleting, setDeleting] = useState<ExtractionRecipe | null>(null);
   const [isWorking, setIsWorking] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const exportRecipe = async (recipe: ExtractionRecipe) => {
+    setError(null);
+    try {
+      const result = await triggerDownload({
+        filename: recipeFileName(recipe),
+        content: serializeRecipeFile(recipe),
+        mimeType: 'application/json',
+      });
+      if (!result.success) {
+        setError(result.error ?? 'The recipe file was not saved.');
+      }
+    } catch (err) {
+      setError(`The recipe file was not saved: ${errorText(err)}`);
+    }
+  };
+
+  const importRecipeFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Clearing the value lets the same file be chosen again after a correction.
+    event.target.value = '';
+    if (!file) return;
+    setIsWorking(true);
+    setError(null);
+    try {
+      const recipe = parseRecipeFile(await file.text());
+      await messagingService.importRecipe(recipe);
+      await reload();
+    } catch (err) {
+      setError(`The recipe was not imported: ${errorText(err)}`);
+    } finally {
+      setIsWorking(false);
+    }
+  };
 
   const openEditor = (recipe: ExtractionRecipe) => {
     setEditing(recipe);
@@ -307,6 +345,29 @@ export const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) =>
     <div className="flex flex-col gap-3">
       {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
 
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-2xs text-fg-subtle">
+          Recipes can be shared as <span className="font-mono">.pageharvest-recipe.json</span> files.
+        </p>
+        <Button
+          variant="outline"
+          size="xs"
+          iconLeft={<Upload aria-hidden="true" className="w-3.5 h-3.5" />}
+          isLoading={isWorking}
+          onClick={() => fileInput.current?.click()}
+        >
+          Import recipe
+        </Button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".json,application/json,.pageharvest-recipe.json"
+          className="hidden"
+          aria-label="Recipe file"
+          onChange={(event) => void importRecipeFile(event)}
+        />
+      </div>
+
       {!isLoading && recipes.length === 0 && (
         <EmptyState
           title="No saved recipes"
@@ -341,6 +402,15 @@ export const RecipesPanel: React.FC<{ onRunRecipe: (recipe: ExtractionRecipe) =>
               onClick={() => openEditor(recipe)}
             >
               Edit
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
+              iconLeft={<Download aria-hidden="true" className="w-3 h-3" />}
+              aria-label={`Export recipe ${recipe.name}`}
+              onClick={() => void exportRecipe(recipe)}
+            >
+              Export
             </Button>
             <Button
               variant="ghost"
