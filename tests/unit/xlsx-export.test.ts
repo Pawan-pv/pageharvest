@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import JSZip from 'jszip';
-import { recordsToXlsx, recordsToXlsxBuffer, recordsToXlsxBlob } from '@/core/export/exporter';
+import { recordsToXlsx, recordsToXlsxBuffer, recordsToXlsxBlob } from '@/core/export/xlsx';
 import { ExtractedRecord, FieldDefinition } from '@/types';
 
 describe('XLSX export', () => {

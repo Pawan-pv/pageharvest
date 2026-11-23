@@ -16,6 +16,7 @@ export * from './engine';
 
 import { ExtractionEngine } from '@/core/extraction/extractor';
 import { ExtractionSchema } from '@/shared/contracts/schema';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
 import { BatchStats, JobNavigationState, JobResumeState } from '@/shared/contracts/message';
 import { ExtractedRecord, FieldDefinition } from '@/types';
 import { runMultiPageExtraction } from './engine';
@@ -46,6 +47,11 @@ export interface JobBatchPayload {
 export interface CommitOutcome {
   inserted: number;
   shouldStop: boolean;
+  /**
+   * The batch had already been stored by an earlier delivery whose reply was lost, so
+   * `inserted` (0) says nothing about whether the page had new rows.
+   */
+  alreadyStored?: boolean;
 }
 
 export interface NavigationJobOptions {
@@ -75,9 +81,13 @@ export type NavigationJobOutcome =
   | { kind: 'navigating' };
 
 export class NavigationJobError extends Error {
-  constructor(message: string) {
+  /** What the panel tells the user (ADR-031). Each throw site knows what went wrong. */
+  public readonly code: ExtractionErrorCode;
+
+  constructor(message: string, code: ExtractionErrorCode = 'UNKNOWN_ERROR') {
     super(message);
     this.name = 'NavigationJobError';
+    this.code = code;
   }
 }
 
@@ -118,7 +128,8 @@ function assertValidContainer(recipe: ExtractionSchema, root: Document): void {
     root.querySelector(recipe.containerSelector);
   } catch {
     throw new NavigationJobError(
-      `The container selector "${recipe.containerSelector}" is not a valid CSS selector.`
+      `The container selector "${recipe.containerSelector}" is not a valid CSS selector.`,
+      'VALIDATION_ERROR'
     );
   }
 }
@@ -180,7 +191,7 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
   };
   const validation = validateUrlTemplate(sequence, resume.startUrl);
   if (!validation.valid) {
-    throw new NavigationJobError(validation.error ?? 'The URL template is not valid.');
+    throw new NavigationJobError(validation.error ?? 'The URL template is not valid.', 'VALIDATION_ERROR');
   }
 
   await waitWhilePaused();
@@ -203,10 +214,10 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
   const nextUrl = isLastAllowedPage ? undefined : buildTemplateUrl(sequence, step + 1);
 
   if (nextUrl && !isSameOrigin(nextUrl, resume.startUrl)) {
-    throw new NavigationJobError(`Refusing to navigate to another website: ${nextUrl}`);
+    throw new NavigationJobError(`Refusing to navigate to another website: ${nextUrl}`, 'VALIDATION_ERROR');
   }
   if (nextUrl && visitedUrls.includes(normalizeUrlForDeduplication(nextUrl))) {
-    throw new NavigationJobError('URL pagination generated a repeated or invalid next URL.');
+    throw new NavigationJobError('URL pagination generated a repeated or invalid next URL.', 'VALIDATION_ERROR');
   }
 
   const hasRows = output.records.length > 0;
@@ -232,7 +243,7 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
 
   if (commit.shouldStop) return { kind: 'finished', stopReason: 'stopped_by_coordinator' };
   if (!hasRows) return { kind: 'finished', stopReason: 'empty_page' };
-  if (commit.inserted === 0) return { kind: 'finished', stopReason: 'no_new_records' };
+  if (commit.inserted === 0 && !commit.alreadyStored) return { kind: 'finished', stopReason: 'no_new_records' };
   if (!nextUrl) return { kind: 'finished', stopReason: 'max_pages_reached' };
 
   await sleepUnlessCancelled(pagination.delayMs, signal);
@@ -338,7 +349,7 @@ async function runEngineJob(options: NavigationJobOptions): Promise<NavigationJo
 
   if (result.stopReason === 'cancelled') return { kind: 'cancelled' };
   if (result.stopReason === 'navigation_failure') {
-    throw new NavigationJobError(result.error ?? 'The next page could not be opened.');
+    throw new NavigationJobError(result.error ?? 'The next page could not be opened.', 'PAGINATION_TIMEOUT');
   }
   return { kind: 'finished', stopReason: result.stopReason };
 }

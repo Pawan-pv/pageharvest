@@ -1,4 +1,5 @@
 import { ExtensionMessage } from '@/contracts/messages';
+import { injectContentScript } from '@/platform/content-script';
 import { MessagingClient } from '@/platform/messaging-client';
 import { JobTransport } from './job-coordinator';
 
@@ -16,6 +17,9 @@ export function createChromeJobTransport(
     sendToTab: (tabId, message: ExtensionMessage) =>
       client.sendToTab<unknown>(tabId, message, { timeoutMs: TAB_MESSAGE_TIMEOUT_MS }),
 
+    // On-demand injection (ADR-037). Reports whether this document is new to the script.
+    injectContentScript: (tabId: number) => injectContentScript(tabId),
+
     broadcast: async (message: ExtensionMessage) => {
       // With no side panel open there is no receiver, which is not an error.
       await client
@@ -32,7 +36,24 @@ export function createChromeJobTransport(
     },
 
     navigateTab: async (tabId, url) => {
-      await chrome.tabs.update(tabId, { url });
+      await chrome.tabs.update(tabId, { url, active: true });
+    },
+
+    closeTab: async (tabId) => {
+      try {
+        await chrome.tabs.remove(tabId);
+      } catch {
+        // The tab may already be gone; closing it is best effort.
+      }
+    },
+
+    getTabUrl: async (tabId) => {
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        return tab.url || undefined;
+      } catch {
+        return undefined;
+      }
     },
 
     getTabLoadStatus: async (tabId) => {

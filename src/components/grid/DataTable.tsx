@@ -26,6 +26,8 @@ import {
   SlidersHorizontal,
   PlusCircle,
   ExternalLink,
+  ArrowLeft,
+  Undo2,
   ChevronLeftSquare,
   ChevronRightSquare,
   Edit2,
@@ -34,11 +36,18 @@ import {
   RefreshCw,
   Loader2,
   Filter,
+  Sparkles,
+  Combine,
+  Images,
+  Table2,
+  Send,
 } from 'lucide-react';
-import { Alert } from '@/components/common/Alert';
+import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
 import { Badge } from '@/components/common/Badge';
+import { Dialog } from '@/components/common/Dialog';
+import { SavedFileNotice } from '@/components/common/SavedFileNotice';
 import { EmptyState } from '@/components/common/EmptyState';
 import { isRecordMetadataKey } from '@/shared/contracts/record';
 import { ExtractedRecord, FieldDefinition, Dataset } from '@/types';
@@ -57,6 +66,21 @@ import {
 } from '@/core/cleaning/data-cleaner';
 import { DataCleaningToolbar } from './DataCleaningToolbar';
 import { ExportDialog } from './ExportDialog';
+import { DatasetSwitcher } from './DatasetSwitcher';
+import { ImageGallery, type GalleryImage } from './ImageGallery';
+import { MergeColumnsDialog } from './MergeColumnsDialog';
+import { SendUrlsDialog } from './SendUrlsDialog';
+import {
+  describeSmartClean,
+  detectImageColumns,
+  detectUrlColumns,
+  mergeColumns,
+  smartClean,
+  type MergeColumnsOptions,
+} from './grid-features';
+import { handOffUrls } from '@/platform/url-handoff';
+import { openWorkbench } from '@/platform/workbench';
+import type { ToolType } from '@/shared/contracts/tool-job';
 
 export interface DataTableProps {
   dataset?: Dataset | null;
@@ -72,6 +96,13 @@ export interface DataTableProps {
   onRecordsChange?: (records: ExtractedRecord[], fields?: FieldDefinition[]) => void | Promise<void>;
   onNewExtraction?: () => void;
   /**
+   * Simple mode (ADR-039): the rows, a search box and cell editing. The cleaning tools,
+   * filters, column tools and the run's counts are shown with Advanced options on.
+   */
+  simple?: boolean;
+  /** Simple mode only: goes back to the summary this table was opened from. */
+  onBack?: () => void;
+  /**
    * Changes only when a different set of rows has been loaded. Once this is provided, the
    * grid owns its working copy: edits made here do not reset the grid or its undo history.
    */
@@ -85,6 +116,20 @@ export interface DataTableProps {
     recordsFailed: number;
     duplicatesSkipped: number;
   } | null;
+  /** The full-tab workbench: more room, and the table picker instead of a Back button. */
+  fullPage?: boolean;
+  /** Opens these rows in the full-tab workbench. Hidden inside the workbench itself. */
+  onOpenFullTable?: () => void;
+  /** Opens a tool workspace (e.g. Page Extractor) directly. */
+  onOpenTool?: (tool: ToolType) => void;
+  /** Workbench only: the saved lists the picker can switch between. */
+  datasets?: Dataset[];
+  /** Workbench only: rename the open saved list, through the background writer. */
+  onRenameDataset?: (name: string) => Promise<void>;
+  /** Workbench only: delete the open saved list, through the background writer. */
+  onDeleteDataset?: () => Promise<void>;
+  /** Workbench only: switch to another saved list. */
+  onSelectDataset?: (dataset: Dataset) => void;
 }
 
 const EditableCellInput: React.FC<{
@@ -97,7 +142,7 @@ const EditableCellInput: React.FC<{
     <input
       type="text"
       autoFocus
-      className="w-full px-1.5 py-0.5 text-xs border border-emerald-500 rounded bg-white shadow-xs focus:outline-none"
+      className="w-full px-1.5 py-0.5 text-xs border border-brand rounded bg-surface shadow-xs focus:outline-none"
       value={val}
       onChange={(e) => setVal(e.target.value)}
       onBlur={() => onSave(val)}
@@ -124,8 +169,17 @@ export const DataTable: React.FC<DataTableProps> = ({
   onDeleteRecordsBatch,
   onRecordsChange,
   onNewExtraction,
+  simple = false,
+  onBack,
   dataRevision,
   runSummary,
+  fullPage = false,
+  onOpenFullTable,
+  onOpenTool,
+  datasets,
+  onRenameDataset,
+  onDeleteDataset,
+  onSelectDataset,
 }) => {
   // Local active dataset state backed by DataCleaningHistory for full reversibility
   const [currentRecords, setCurrentRecords] = useState<ExtractedRecord[]>(initialRecords);
@@ -164,7 +218,19 @@ export const DataTable: React.FC<DataTableProps> = ({
   const [showFilterBar, setShowFilterBar] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  // The download the export dialog last started, so the grid can say where the file went.
+  const [exportedDownloadId, setExportedDownloadId] = useState<number | null>(null);
+  // A deletion waiting for the user's answer. Asked in the panel: a browser confirm() box
+  // is not reliably shown for a side panel, and would name the extension's address.
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: 'column'; name: string } | { kind: 'rows'; count: number } | null
+  >(null);
   const [cleaningFeedback, setCleaningFeedback] = useState<string | null>(null);
+
+  // Data Table 2.0: merge, one-click clean, picture view and URL handoff.
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showSendUrlsDialog, setShowSendUrlsDialog] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table');
 
   // Editing state
   const [editingCell, setEditingCell] = useState<{ recordId: string; columnId: string } | null>(null);
@@ -174,10 +240,25 @@ export const DataTable: React.FC<DataTableProps> = ({
   const [renamingCol, setRenamingCol] = useState<string | null>(null);
   const [newColName, setNewColName] = useState('');
 
-  // Auto-clear feedback toast
+  // Auto-clear feedback toast. The timer is cancelled when the grid closes, and a save
+  // that finishes after that announces nothing: there is no grid left to show it.
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gridOpen = useRef(true);
+  useEffect(() => {
+    gridOpen.current = true;
+    return () => {
+      gridOpen.current = false;
+      if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
+    };
+  }, []);
   const triggerFeedback = useCallback((msg: string) => {
+    if (!gridOpen.current) return;
+    if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
     setCleaningFeedback(msg);
-    setTimeout(() => setCleaningFeedback(null), 3000);
+    feedbackTimer.current = setTimeout(() => {
+      feedbackTimer.current = null;
+      setCleaningFeedback(null);
+    }, 3000);
   }, []);
 
   const valuesNeedingReview = useMemo(() => countValuesNeedingReview(currentRecords), [currentRecords]);
@@ -195,6 +276,31 @@ export const DataTable: React.FC<DataTableProps> = ({
         extractor: 'text' as const,
       }));
   }, [currentFields, currentRecords]);
+
+  const imageColumns = useMemo(
+    () => detectImageColumns(currentRecords, visibleFields),
+    [currentRecords, visibleFields]
+  );
+  const urlColumns = useMemo(
+    () => detectUrlColumns(currentRecords, visibleFields),
+    [currentRecords, visibleFields]
+  );
+  const galleryImages = useMemo<GalleryImage[]>(() => {
+    if (imageColumns.length === 0) return [];
+    const labelColumn =
+      visibleFields.find((field) => !imageColumns.includes(field.name))?.name ?? visibleFields[0]?.name;
+    const images: GalleryImage[] = [];
+    for (const record of currentRecords) {
+      const label = labelColumn ? String(record[labelColumn] ?? '').trim() : '';
+      for (const column of imageColumns) {
+        const value = record[column];
+        if (typeof value === 'string' && value.trim()) {
+          images.push({ url: value.trim(), label });
+        }
+      }
+    }
+    return images;
+  }, [currentRecords, imageColumns, visibleFields]);
 
   /**
    * Saves a change that is already showing in the grid. Success is only announced once
@@ -262,7 +368,7 @@ export const DataTable: React.FC<DataTableProps> = ({
     persistChange(cleaningHistory.currentRecords, cleaningHistory.currentFields, () => {
       cleaningHistory.redo();
       showHistoryState();
-    }, 'Undone last action');
+    }, 'Undone. Your last change was taken back.');
   };
 
   const handleRedo = () => {
@@ -279,7 +385,8 @@ export const DataTable: React.FC<DataTableProps> = ({
   const applyRowChange = useCallback((
     description: string,
     nextRecords: ExtractedRecord[],
-    save: () => void | Promise<void>
+    save: () => void | Promise<void>,
+    successMessage?: string
   ) => {
     cleaningHistory.recordOperation({
       description,
@@ -289,12 +396,18 @@ export const DataTable: React.FC<DataTableProps> = ({
       nextFields: currentFields,
     });
     setCurrentRecords(nextRecords);
-    void Promise.resolve(save()).catch((error: unknown) => {
-      setGridError(`Your change was not saved: ${error instanceof Error ? error.message : String(error)}`);
-      cleaningHistory.undo();
-      showHistoryState();
-    });
-  }, [cleaningHistory, currentFields, currentRecords, showHistoryState]);
+    void Promise.resolve(save()).then(
+      () => {
+        // Said only once the change is stored.
+        if (successMessage) triggerFeedback(successMessage);
+      },
+      (error: unknown) => {
+        setGridError(`Your change was not saved: ${error instanceof Error ? error.message : String(error)}`);
+        cleaningHistory.undo();
+        showHistoryState();
+      }
+    );
+  }, [cleaningHistory, currentFields, currentRecords, showHistoryState, triggerFeedback]);
 
   const handleCellSave = useCallback((recordId: string, columnId: string, value: string) => {
     setEditingCell(null);
@@ -309,7 +422,8 @@ export const DataTable: React.FC<DataTableProps> = ({
     applyRowChange(
       'Delete row',
       currentRecords.filter((r) => r._id !== recordId),
-      () => onDeleteRecord?.(recordId)
+      () => onDeleteRecord?.(recordId),
+      'Row deleted. Undo brings it back.'
     );
   }, [applyRowChange, currentRecords, onDeleteRecord]);
 
@@ -349,6 +463,60 @@ export const DataTable: React.FC<DataTableProps> = ({
   ) => {
     const { records: updated, cellsModified } = normalizeValues(currentRecords, column, type, dataset?.url);
     commitCleaningState(`Normalize ${column}`, updated, currentFields, false, `Normalized ${cellsModified} cell(s) in ${column}`);
+  };
+
+  const handleSmartClean = () => {
+    const result = smartClean(currentRecords, currentFields);
+    commitCleaningState(
+      'Smart Clean',
+      result.records,
+      result.fields,
+      false,
+      describeSmartClean(result.summary)
+    );
+  };
+
+  const handleMergeColumns = (options: MergeColumnsOptions) => {
+    try {
+      const merged = mergeColumns(currentRecords, currentFields, options);
+      commitCleaningState(
+        `Merge ${options.columns.length} columns`,
+        merged.records,
+        merged.fields,
+        options.dropSources,
+        `Merged ${options.columns.length} columns into "${options.newName}"`
+      );
+    } catch (error: unknown) {
+      setGridError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const handleSendUrls = async (tool: ToolType, urls: string[], column: string) => {
+    await handOffUrls({
+      tool,
+      urls,
+      source: 'dataset_column',
+      datasetId: dataset?.id,
+      column,
+    });
+    if (onOpenTool) {
+      onOpenTool(tool);
+    } else {
+      await openWorkbench({ tool });
+    }
+  };
+
+  const handleOpenFullTable = () => {
+    if (onOpenFullTable) {
+      onOpenFullTable();
+      return;
+    }
+    if (!dataset?.id) return;
+    void openWorkbench({ datasetId: dataset.id }).catch((error: unknown) => {
+      setGridError(
+        `The full table did not open: ${error instanceof Error ? error.message : String(error)}`
+      );
+    });
   };
 
   const handleMoveColumn = useCallback((columnId: string, direction: 'left' | 'right') => {
@@ -405,7 +573,10 @@ export const DataTable: React.FC<DataTableProps> = ({
   };
 
   const handleDeleteColumn = useCallback((columnName: string) => {
-    if (!confirm(`Are you sure you want to permanently delete column "${columnName}"?`)) return;
+    setPendingDelete({ kind: 'column', name: columnName });
+  }, []);
+
+  const deleteColumnNow = useCallback((columnName: string) => {
     const { records: updatedRecords, fields: updatedFields } = deleteColumns(
       currentRecords,
       currentFields,
@@ -415,10 +586,13 @@ export const DataTable: React.FC<DataTableProps> = ({
   }, [commitCleaningState, currentFields, currentRecords]);
 
   const handleDeleteSelectedRows = () => {
+    const count = Object.keys(rowSelection).length;
+    if (count > 0) setPendingDelete({ kind: 'rows', count });
+  };
+
+  const deleteSelectedRowsNow = () => {
     const selectedIndices = Object.keys(rowSelection).map(Number);
     if (selectedIndices.length === 0) return;
-
-    if (!confirm(`Are you sure you want to delete ${selectedIndices.length} selected row(s)?`)) return;
 
     const selectedIds = selectedIndices.map((idx) => currentRecords[idx]._id);
     const remaining = currentRecords.filter((_, idx) => !rowSelection[idx]);
@@ -449,7 +623,7 @@ export const DataTable: React.FC<DataTableProps> = ({
           checked={table.getIsAllPageRowsSelected()}
           onChange={table.getToggleAllPageRowsSelectedHandler()}
           aria-label="Select all rows on page"
-          className="w-3.5 h-3.5 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer"
+          className="w-3.5 h-3.5 rounded text-brand-fg border-line-strong focus:ring-focus cursor-pointer"
         />
       ),
       cell: ({ row }) => (
@@ -459,7 +633,7 @@ export const DataTable: React.FC<DataTableProps> = ({
           disabled={!row.getCanSelect()}
           onChange={row.getToggleSelectedHandler()}
           aria-label="Select row"
-          className="w-3.5 h-3.5 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer"
+          className="w-3.5 h-3.5 rounded text-brand-fg border-line-strong focus:ring-focus cursor-pointer"
         />
       ),
       size: 32,
@@ -476,7 +650,11 @@ export const DataTable: React.FC<DataTableProps> = ({
         header: () => (
           <div className="flex items-center justify-between gap-1 w-full group/hdr">
             <span className="truncate">{field.name}</span>
-            <div className="flex items-center opacity-0 group-hover/hdr:opacity-100 transition-opacity">
+            <div
+              className={
+                simple ? 'hidden' : 'flex items-center opacity-0 group-hover/hdr:opacity-100 transition-opacity'
+              }
+            >
               <button
                 type="button"
                 onClick={(e) => {
@@ -484,7 +662,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   handleMoveColumn(field.name, 'left');
                 }}
                 title="Move column left"
-                className="p-0.5 text-slate-400 hover:text-slate-700 rounded"
+                className="p-0.5 text-fg-subtle hover:text-fg-muted rounded"
               >
                 <ChevronLeftSquare className="w-3 h-3" />
               </button>
@@ -495,7 +673,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   handleMoveColumn(field.name, 'right');
                 }}
                 title="Move column right"
-                className="p-0.5 text-slate-400 hover:text-slate-700 rounded"
+                className="p-0.5 text-fg-subtle hover:text-fg-muted rounded"
               >
                 <ChevronRightSquare className="w-3 h-3" />
               </button>
@@ -507,7 +685,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   setNewColName(field.name);
                 }}
                 title="Rename column"
-                className="p-0.5 text-slate-400 hover:text-slate-700 rounded"
+                className="p-0.5 text-fg-subtle hover:text-fg-muted rounded"
               >
                 <Edit2 className="w-3 h-3" />
               </button>
@@ -518,7 +696,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   handleDeleteColumn(field.name);
                 }}
                 title="Delete column"
-                className="p-0.5 text-slate-400 hover:text-rose-600 rounded"
+                className="p-0.5 text-fg-subtle hover:text-danger-fg rounded"
               >
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -557,15 +735,15 @@ export const DataTable: React.FC<DataTableProps> = ({
                   href={strVal}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-emerald-700 hover:underline truncate inline-flex items-center gap-0.5"
+                  className="text-brand-fg hover:underline truncate inline-flex items-center gap-0.5"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <span className="truncate">{strVal}</span>
                   <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-70" />
                 </a>
               ) : (
-                <span className="truncate text-slate-800">
-                  {strVal || <span className="text-slate-300 italic">empty</span>}
+                <span className="truncate text-fg">
+                  {strVal || <span className="text-fg-faint italic">empty</span>}
                 </span>
               )}
             </div>
@@ -586,7 +764,7 @@ export const DataTable: React.FC<DataTableProps> = ({
           onClick={() => handleDeleteRow(row.original._id)}
           aria-label="Delete row"
           title="Delete row"
-          className="p-1 text-slate-300 hover:text-rose-600 rounded transition-colors"
+          className="p-1 text-fg-faint hover:text-danger-fg rounded transition-colors"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -594,7 +772,7 @@ export const DataTable: React.FC<DataTableProps> = ({
     });
 
     return cols;
-  }, [visibleFields, editingCell, handleCellSave, handleDeleteRow, handleDeleteColumn, handleMoveColumn]);
+  }, [visibleFields, editingCell, handleCellSave, handleDeleteRow, handleDeleteColumn, handleMoveColumn, simple]);
 
   const table = useReactTable({
     data: currentRecords,
@@ -641,37 +819,102 @@ export const DataTable: React.FC<DataTableProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-2.5 p-4 text-left h-full bg-slate-50/30">
+    <div
+      className={`flex flex-col text-left h-full bg-surface-sunken/30 ${
+        fullPage ? 'gap-3 p-6' : 'gap-2.5 p-4'
+      }`}
+    >
       {gridError && (
-        <Alert variant="error" onDismiss={() => setGridError(null)}>
+        <Banner tone="danger" onDismiss={() => setGridError(null)}>
           {gridError}
-        </Alert>
+        </Banner>
       )}
 
-      {valuesNeedingReview > 0 && (
-        <Alert variant="warning">
+      {!simple && valuesNeedingReview > 0 && (
+        <Banner tone="warning">
           {valuesNeedingReview} {valuesNeedingReview === 1 ? 'value' : 'values'} could not be read as one
-          certain number, so {valuesNeedingReview === 1 ? 'it was' : 'they were'} kept as written. Export with
-          the original text and currency to see why.
-        </Alert>
+          certain number, so {valuesNeedingReview === 1 ? 'it was' : 'they were'} kept as written. To see why,
+          export with "Add columns showing how each number was read".
+        </Banner>
       )}
 
-      {runSummary && runSummary.recordsDetected > 0 && (
-        <p className="text-[11px] text-slate-500" aria-label="Extraction summary">
+      {!simple && runSummary && runSummary.recordsDetected > 0 && (
+        <p className="text-2xs text-fg-subtle" aria-label="Extraction summary">
           {runSummary.recordsDetected} detected, {runSummary.totalExtracted} kept,{' '}
           {runSummary.recordsWithMissingFields} with missing fields, {runSummary.recordsFiltered} filtered,{' '}
           {runSummary.recordsFailed} failed, {runSummary.duplicatesSkipped} duplicates skipped
         </p>
       )}
 
+      {exportedDownloadId !== null && (
+        <SavedFileNotice downloadId={exportedDownloadId} onDismiss={() => setExportedDownloadId(null)} />
+      )}
+
+      {simple && (
+        <div className="flex flex-col gap-2">
+          {onBack && (
+            <div>
+              <Button
+                variant="ghost"
+                size="sm"
+                iconLeft={<ArrowLeft aria-hidden="true" className="w-3.5 h-3.5" />}
+                onClick={onBack}
+              >
+                Back
+              </Button>
+            </div>
+          )}
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-fg leading-snug break-words">{dataset?.name || 'Your rows'}</h2>
+            <p className="text-body text-fg-muted mt-0.5">
+              {currentRecords.length.toLocaleString('en-US')} {currentRecords.length === 1 ? 'row' : 'rows'},{' '}
+              {visibleFields.length} {visibleFields.length === 1 ? 'column' : 'columns'}. Double-click a cell to change
+              it. Changes are saved as you make them.
+            </p>
+          </div>
+          <Input
+            aria-label="Search these rows"
+            placeholder="Search these rows"
+            value={globalFilter ?? ''}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            iconLeft={<Search aria-hidden="true" className="w-3.5 h-3.5" />}
+          />
+          {/* A change or a deleted row can always be taken back while the table stays open. */}
+          <div className="flex flex-wrap items-center gap-2 min-h-8">
+            <Button
+              variant="outline"
+              size="sm"
+              iconLeft={<Undo2 aria-hidden="true" className="w-3.5 h-3.5" />}
+              disabled={!cleaningHistory.canUndo()}
+              onClick={handleUndo}
+            >
+              Undo
+            </Button>
+            <span role="status" className="text-body text-fg-muted">
+              {cleaningFeedback ?? ''}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Top Header & Actions */}
-      <div className="flex flex-col gap-2 bg-white p-3 rounded-xl border border-slate-200/80 shadow-xs">
+      {!simple && (
+      <div className="flex flex-col gap-2 bg-surface p-3 rounded-xl border border-line/80 shadow-xs">
+        {fullPage && datasets && onRenameDataset && onDeleteDataset && onSelectDataset && (
+          <DatasetSwitcher
+            datasets={datasets}
+            activeId={dataset?.id ?? null}
+            onSelect={onSelectDataset}
+            onRename={onRenameDataset}
+            onDelete={onDeleteDataset}
+          />
+        )}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="text-sm font-bold text-slate-900 leading-tight">
-              {dataset?.name || 'Local Data Workspace'}
+            <h2 className="text-sm font-bold text-fg leading-tight">
+              {dataset?.name || 'Your rows'}
             </h2>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
+            <div className="flex items-center gap-1.5 text-xs text-fg-subtle mt-0.5">
               <Badge variant="brand" size="sm">
                 {currentRecords.length} records
               </Badge>
@@ -680,7 +923,7 @@ export const DataTable: React.FC<DataTableProps> = ({
               {selectedCount > 0 && (
                 <>
                   <span>•</span>
-                  <span className="text-emerald-700 font-semibold">{selectedCount} selected</span>
+                  <span className="text-brand-fg font-semibold">{selectedCount} selected</span>
                 </>
               )}
             </div>
@@ -691,7 +934,7 @@ export const DataTable: React.FC<DataTableProps> = ({
               <Button
                 variant="subtle"
                 size="xs"
-                iconLeft={<PlusCircle className="w-3.5 h-3.5 text-emerald-700" />}
+                iconLeft={<PlusCircle className="w-3.5 h-3.5 text-brand-fg" />}
                 onClick={onNewExtraction}
               >
                 New Extraction
@@ -701,7 +944,7 @@ export const DataTable: React.FC<DataTableProps> = ({
             <Button
               variant="outline"
               size="xs"
-              iconLeft={copyFeedback ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              iconLeft={copyFeedback ? <Check className="w-3.5 h-3.5 text-brand-fg" /> : <Copy className="w-3.5 h-3.5" />}
               onClick={handleCopyToClipboard}
               title="Copy table as CSV"
             >
@@ -716,11 +959,23 @@ export const DataTable: React.FC<DataTableProps> = ({
             >
               Export
             </Button>
+
+            {!fullPage && dataset && (
+              <Button
+                variant="subtle"
+                size="xs"
+                iconLeft={<ExternalLink className="w-3.5 h-3.5 text-brand-fg" />}
+                onClick={handleOpenFullTable}
+                title="Open this table in a full browser tab"
+              >
+                Open Full Table ↗
+              </Button>
+            )}
           </div>
         </div>
 
         {/* Global Filter Bar, Column Visibility, Column Filters Toggle */}
-        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 flex-wrap">
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-line-subtle flex-wrap">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Input
               placeholder="Search across all columns..."
@@ -752,8 +1007,8 @@ export const DataTable: React.FC<DataTableProps> = ({
               </Button>
 
               {showColMenu && (
-                <div className="absolute right-0 top-full mt-1 z-30 w-48 bg-white border border-slate-200 rounded-xl shadow-lg p-2 text-xs flex flex-col gap-1 max-h-60 overflow-y-auto">
-                  <span className="font-semibold text-slate-700 px-1 py-0.5 border-b border-slate-100">
+                <div className="absolute right-0 top-full mt-1 z-30 w-48 bg-surface border border-line rounded-xl shadow-lg p-2 text-xs flex flex-col gap-1 max-h-60 overflow-y-auto">
+                  <span className="font-semibold text-fg-muted px-1 py-0.5 border-b border-line-subtle">
                     Visible Columns
                   </span>
                   {table.getAllLeafColumns().map((column) => {
@@ -761,13 +1016,13 @@ export const DataTable: React.FC<DataTableProps> = ({
                     return (
                       <label
                         key={column.id}
-                        className="flex items-center gap-2 px-1 py-1 hover:bg-slate-50 rounded cursor-pointer text-slate-700"
+                        className="flex items-center gap-2 px-1 py-1 hover:bg-surface-sunken rounded cursor-pointer text-fg-muted"
                       >
                         <input
                           type="checkbox"
                           checked={column.getIsVisible()}
                           onChange={column.getToggleVisibilityHandler()}
-                          className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          className="w-3.5 h-3.5 rounded border-line-strong text-brand-fg focus:ring-focus"
                         />
                         <span className="truncate">{column.id}</span>
                       </label>
@@ -778,9 +1033,77 @@ export const DataTable: React.FC<DataTableProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Data Table 2.0: tidy, join, pictures and URL handoff */}
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-line-subtle flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Button
+              variant="subtle"
+              size="xs"
+              iconLeft={<Sparkles className="w-3.5 h-3.5 text-brand-fg" />}
+              onClick={handleSmartClean}
+              title="Trim spaces, drop empty rows, duplicates and empty columns"
+            >
+              Smart Clean
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
+              iconLeft={<Combine className="w-3.5 h-3.5" />}
+              disabled={visibleFields.length < 2}
+              onClick={() => setShowMergeDialog(true)}
+            >
+              Merge columns
+            </Button>
+            {urlColumns.length > 0 && (
+              <Button
+                variant="outline"
+                size="xs"
+                iconLeft={<Send className="w-3.5 h-3.5" />}
+                onClick={() => setShowSendUrlsDialog(true)}
+                title="Send the web addresses in this table to a tool"
+              >
+                Send URLs to Tool →
+              </Button>
+            )}
+          </div>
+
+          {imageColumns.length > 0 && (
+            <div
+              className="flex items-center rounded-lg border border-line-strong bg-surface p-0.5"
+              role="group"
+              aria-label="View"
+            >
+              <button
+                type="button"
+                aria-pressed={viewMode === 'table'}
+                onClick={() => setViewMode('table')}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
+                  viewMode === 'table' ? 'bg-surface-muted text-fg' : 'text-fg-muted hover:text-fg'
+                }`}
+              >
+                <Table2 aria-hidden="true" className="w-3.5 h-3.5" />
+                Table
+              </button>
+              <button
+                type="button"
+                aria-pressed={viewMode === 'gallery'}
+                onClick={() => setViewMode('gallery')}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
+                  viewMode === 'gallery' ? 'bg-surface-muted text-fg' : 'text-fg-muted hover:text-fg'
+                }`}
+              >
+                <Images aria-hidden="true" className="w-3.5 h-3.5" />
+                Gallery
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+      )}
 
       {/* Data Cleaning Toolbar */}
+      {!simple && (
       <DataCleaningToolbar
         canUndo={cleaningHistory.canUndo()}
         canRedo={cleaningHistory.canRedo()}
@@ -795,10 +1118,11 @@ export const DataTable: React.FC<DataTableProps> = ({
         fields={currentFields}
         feedbackMessage={cleaningFeedback}
       />
+      )}
 
       {/* Selection Action Banner */}
       {selectedCount > 0 && (
-        <div className="flex items-center justify-between px-3 py-1.5 bg-emerald-50/80 border border-emerald-200 rounded-lg text-xs text-emerald-900">
+        <div className="flex items-center justify-between px-3 py-1.5 bg-brand-soft/80 border border-brand-line rounded-lg text-xs text-brand-emphasis">
           <span className="font-medium">{selectedCount} row(s) selected</span>
           <div className="flex items-center gap-2">
             <Button
@@ -822,9 +1146,9 @@ export const DataTable: React.FC<DataTableProps> = ({
 
       {/* Error State Banner */}
       {error && (
-        <div className="flex items-center justify-between p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800">
+        <div className="flex items-center justify-between p-3 bg-danger-soft border border-danger-line rounded-xl text-xs text-danger-emphasis">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-danger-fg shrink-0" />
             <span>{error}</span>
           </div>
           {onRetry && (
@@ -842,31 +1166,29 @@ export const DataTable: React.FC<DataTableProps> = ({
 
       {/* Loading State Banner */}
       {isLoading ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-12 bg-white border border-slate-200 rounded-xl">
-          <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mb-3" />
-          <h4 className="text-sm font-semibold text-slate-800">Loading data workspace...</h4>
-          <p className="text-xs text-slate-500 mt-1">Retrieving records from IndexedDB</p>
+        <div className="flex-1 flex flex-col items-center justify-center p-12 bg-surface border border-line rounded-xl">
+          <Loader2 className="w-8 h-8 text-brand-fg animate-spin mb-3" />
+          <h4 className="text-sm font-semibold text-fg">Loading your rows…</h4>
         </div>
       ) : currentRecords.length === 0 ? (
         /* Empty State */
         <EmptyState
-          icon={<FileSpreadsheet className="w-8 h-8 text-slate-400" />}
-          title="No records extracted yet"
-          description="Pick elements on the active web page and run an extraction to populate this workspace."
-          action={
-            onNewExtraction && (
-              <Button variant="primary" size="sm" onClick={onNewExtraction}>
-                Start New Extraction
-              </Button>
-            )
-          }
+          icon={<FileSpreadsheet className="w-8 h-8 text-fg-subtle" />}
+          title="No rows yet"
+          description="Run an extraction to fill this table. Rows appear here as soon as they are saved."
+          action={onNewExtraction ? { label: 'Start an extraction', onClick: onNewExtraction } : null}
         />
+      ) : viewMode === 'gallery' && imageColumns.length > 0 ? (
+        /* Picture view: the image columns as a gallery, click to zoom */
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <ImageGallery images={galleryImages} onDownloadImages={() => onOpenTool?.('images')} />
+        </div>
       ) : (
         /* Spreadsheet Data Table */
-        <div className="flex-1 flex flex-col min-h-0 border border-slate-200 rounded-xl bg-white shadow-xs overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 border border-line rounded-xl bg-surface shadow-xs overflow-hidden">
           <div className="overflow-x-auto overflow-y-auto flex-1">
             <table className="w-full border-collapse text-left text-xs" style={{ width: table.getTotalSize() }}>
-              <thead className="bg-slate-50/90 sticky top-0 z-10 border-b border-slate-200 text-slate-700 font-semibold select-none">
+              <thead className="bg-surface-sunken/90 sticky top-0 z-10 border-b border-line text-fg-muted font-semibold select-none">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => {
@@ -875,21 +1197,21 @@ export const DataTable: React.FC<DataTableProps> = ({
                         <th
                           key={header.id}
                           style={{ width: header.getSize() }}
-                          className="relative px-3 py-2 text-left font-semibold border-r border-slate-200/60 last:border-r-0 whitespace-nowrap"
+                          className="relative px-3 py-2 text-left font-semibold border-r border-line/60 last:border-r-0 whitespace-nowrap"
                         >
                           {header.isPlaceholder ? null : (
                             <div className="flex flex-col gap-1">
                               <div
                                 onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                                className={`flex items-center gap-1.5 ${canSort ? 'cursor-pointer hover:text-slate-900' : ''}`}
+                                className={`flex items-center gap-1.5 ${canSort ? 'cursor-pointer hover:text-fg' : ''}`}
                               >
                                 {flexRender(header.column.columnDef.header, header.getContext())}
                                 {canSort && (
-                                  <span className="text-slate-400">
+                                  <span className="text-fg-subtle">
                                     {header.column.getIsSorted() === 'asc' ? (
-                                      <ArrowUp className="w-3 h-3 text-emerald-600" />
+                                      <ArrowUp className="w-3 h-3 text-brand-fg" />
                                     ) : header.column.getIsSorted() === 'desc' ? (
-                                      <ArrowDown className="w-3 h-3 text-emerald-600" />
+                                      <ArrowDown className="w-3 h-3 text-brand-fg" />
                                     ) : (
                                       <ArrowUpDown className="w-3 h-3 opacity-30 hover:opacity-100" />
                                     )}
@@ -904,7 +1226,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                                   value={(header.column.getFilterValue() as string) ?? ''}
                                   onChange={(e) => header.column.setFilterValue(e.target.value)}
                                   placeholder={`Filter ${header.id}...`}
-                                  className="w-full px-1.5 py-0.5 text-[11px] font-normal border border-slate-200 rounded bg-white"
+                                  className="w-full px-1.5 py-0.5 text-2xs font-normal border border-line rounded bg-surface"
                                   onClick={(e) => e.stopPropagation()}
                                 />
                               )}
@@ -916,8 +1238,8 @@ export const DataTable: React.FC<DataTableProps> = ({
                             <div
                               onMouseDown={header.getResizeHandler()}
                               onTouchStart={header.getResizeHandler()}
-                              className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none hover:bg-emerald-500 ${
-                                header.column.getIsResizing() ? 'bg-emerald-600 w-2' : ''
+                              className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none hover:bg-brand ${
+                                header.column.getIsResizing() ? 'bg-brand w-2' : ''
                               }`}
                             />
                           )}
@@ -927,10 +1249,10 @@ export const DataTable: React.FC<DataTableProps> = ({
                   </tr>
                 ))}
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+              <tbody className="divide-y divide-line-subtle text-fg-muted">
                 {table.getRowModel().rows.length === 0 ? (
                   <tr>
-                    <td colSpan={columns.length} className="px-3 py-10 text-center text-slate-400">
+                    <td colSpan={columns.length} className="px-3 py-10 text-center text-fg-subtle">
                       No matching records found.
                     </td>
                   </tr>
@@ -938,15 +1260,15 @@ export const DataTable: React.FC<DataTableProps> = ({
                   table.getRowModel().rows.map((row) => (
                     <tr
                       key={row.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${
-                        row.getIsSelected() ? 'bg-emerald-50/40' : ''
+                      className={`hover:bg-surface-sunken/80 transition-colors ${
+                        row.getIsSelected() ? 'bg-brand-soft/40' : ''
                       }`}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <td
                           key={cell.id}
                           style={{ width: cell.column.getSize() }}
-                          className="px-3 py-1.5 border-r border-slate-100 last:border-r-0 max-w-[250px]"
+                          className="px-3 py-1.5 border-r border-line-subtle last:border-r-0 max-w-[250px]"
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>
@@ -959,13 +1281,13 @@ export const DataTable: React.FC<DataTableProps> = ({
           </div>
 
           {/* Table Footer / Pagination */}
-          <div className="p-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 flex-wrap gap-2">
+          <div className="p-2.5 bg-surface-sunken border-t border-line flex items-center justify-between text-xs text-fg-muted flex-wrap gap-2">
             <div className="flex items-center gap-1.5">
               <span>Rows per page:</span>
               <select
                 value={table.getState().pagination.pageSize}
                 onChange={(e) => table.setPageSize(Number(e.target.value))}
-                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 focus:outline-none"
+                className="rounded border border-line-strong bg-surface px-2 py-0.5 text-xs text-fg-muted focus:outline-none"
               >
                 {[10, 25, 50, 100].map((pageSize) => (
                   <option key={pageSize} value={pageSize}>
@@ -973,7 +1295,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   </option>
                 ))}
               </select>
-              <span className="text-slate-400">|</span>
+              <span className="text-fg-subtle">|</span>
               <span>
                 Showing {table.getRowModel().rows.length > 0 ? table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1 : 0} -{' '}
                 {Math.min(
@@ -994,7 +1316,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   onClick={() => table.previousPage()}
                   disabled={!table.getCanPreviousPage()}
                   aria-label="Previous table page"
-                  className="p-1 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="p-1 rounded border border-line bg-surface text-fg-muted hover:bg-surface-muted disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
@@ -1002,7 +1324,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
                   aria-label="Next table page"
-                  className="p-1 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="p-1 rounded border border-line bg-surface text-fg-muted hover:bg-surface-muted disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -1014,18 +1336,18 @@ export const DataTable: React.FC<DataTableProps> = ({
 
       {/* Rename Column Modal */}
       {renamingCol && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-2xs p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-xs p-4 flex flex-col gap-3">
-            <span className="font-bold text-slate-900 text-xs">Rename Column "{renamingCol}"</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/30 backdrop-blur-2xs p-4">
+          <div className="bg-surface rounded-xl shadow-xl border border-line w-full max-w-xs p-4 flex flex-col gap-3">
+            <span className="font-bold text-fg text-xs">Rename Column "{renamingCol}"</span>
             <input
               type="text"
               value={newColName}
               onChange={(e) => setNewColName(e.target.value)}
               placeholder="Enter new column name..."
-              className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
+              className="w-full px-2.5 py-1 text-xs border border-line rounded-lg focus:outline-none focus:border-brand"
               autoFocus
             />
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-line-subtle">
               <Button variant="outline" size="xs" onClick={() => setRenamingCol(null)}>
                 Cancel
               </Button>
@@ -1042,10 +1364,67 @@ export const DataTable: React.FC<DataTableProps> = ({
         </div>
       )}
 
+      {/* Delete confirmation, asked in the panel */}
+      <Dialog
+        isOpen={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        title={
+          pendingDelete?.kind === 'column'
+            ? `Delete the column "${pendingDelete.name}"?`
+            : `Delete ${pendingDelete?.kind === 'rows' ? pendingDelete.count : 0} selected ${
+                pendingDelete?.kind === 'rows' && pendingDelete.count === 1 ? 'row' : 'rows'
+              }?`
+        }
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setPendingDelete(null)}>
+              Keep
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                const pending = pendingDelete;
+                setPendingDelete(null);
+                if (pending?.kind === 'column') deleteColumnNow(pending.name);
+                if (pending?.kind === 'rows') deleteSelectedRowsNow();
+              }}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      >
+        {pendingDelete?.kind === 'column'
+          ? 'Its values are removed from every row. Undo brings it back while this table stays open.'
+          : 'Undo brings them back while this table stays open.'}
+      </Dialog>
+
+      {/* Merge columns */}
+      <MergeColumnsDialog
+        isOpen={showMergeDialog}
+        onClose={() => setShowMergeDialog(false)}
+        fields={visibleFields}
+        records={currentRecords}
+        onMerge={handleMergeColumns}
+      />
+
+      {/* Send a URL column to a tool */}
+      <SendUrlsDialog
+        isOpen={showSendUrlsDialog}
+        onClose={() => setShowSendUrlsDialog(false)}
+        records={currentRecords}
+        columns={urlColumns}
+        datasetId={dataset?.id}
+        onSend={handleSendUrls}
+      />
+
       {/* Export Dialog */}
       <ExportDialog
         isOpen={showExportDialog}
         onClose={() => setShowExportDialog(false)}
+        onExported={(downloadId) => setExportedDownloadId(downloadId ?? null)}
         records={currentRecords}
         fields={currentFields}
         dataset={dataset}

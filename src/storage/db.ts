@@ -10,6 +10,7 @@ import { ExtractionProject } from '@/shared/contracts/project';
 import { ExtractionJob, JobCheckpoint, JobStatus } from '@/shared/contracts/job';
 import { ExtractionSchema } from '@/shared/contracts/schema';
 import { UserSettingsSchema } from '@/shared/contracts/settings';
+import { MIN_PAGE_DELAY_MS } from '@/shared/contracts/pagination';
 
 export type { RecordEntity };
 
@@ -34,6 +35,34 @@ const LEGACY_RUN_STATUS: Record<string, JobStatus> = {
   PAUSED: 'CANCELLED',
   ERROR: 'FAILED',
 };
+
+/** Raises a stored page wait below the minimum (ADR-046). Returns whether it changed anything. */
+function raisePageDelay(pagination: { delayMs?: unknown } | undefined): boolean {
+  if (!pagination || typeof pagination.delayMs !== 'number' || pagination.delayMs >= MIN_PAGE_DELAY_MS) return false;
+  pagination.delayMs = MIN_PAGE_DELAY_MS;
+  return true;
+}
+
+/**
+ * A saved list cannot be changed from under a job that may still write to it. The check
+ * reads the job inside the same transaction as the change, and the coordinator's batch
+ * commits are transactions on the same tables, so the two can never interleave.
+ */
+export class DatasetInUseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DatasetInUseError';
+  }
+}
+
+export const DATASET_COLLECTING_MESSAGE = 'This list is still being collected. Stop it first, then delete it.';
+export const DATASET_EDIT_WHILE_COLLECTING_MESSAGE =
+  'This list is still being collected. Edit it once it has finished.';
+export const DATASET_RESUMABLE_MESSAGE =
+  'This list stopped early and can still continue. Continue it, or stop it and keep the rows, then delete it.';
+
+/** Jobs executing now; their next batch is committed into their dataset. */
+const EXECUTING_STATUSES: readonly JobStatus[] = ['CREATED', 'RUNNING', 'PAUSED'];
 
 function trailingIndex(id: string): number {
   const match = /_(\d+)$/.exec(id);
@@ -191,6 +220,27 @@ export class PageHarvestDB extends Dexie {
           await recordsTable.bulkPut(group);
         }
       });
+
+    // Version 4: the wait between pages is at least one second (ADR-046). Stored waits below
+    // it (settings, saved setups, column sets, jobs) are raised to it, so they still parse.
+    // No index changes.
+    this.version(4).upgrade(async (tx) => {
+      await tx.table<UserSettings, string>('settings').toCollection().modify((stored) => {
+        const row = stored as unknown as { defaultDelayMs?: unknown };
+        if (typeof row.defaultDelayMs === 'number' && row.defaultDelayMs < MIN_PAGE_DELAY_MS) {
+          row.defaultDelayMs = MIN_PAGE_DELAY_MS;
+        }
+      });
+      await tx.table<ExtractionRecipe, string>('recipes').toCollection().modify((recipe) => {
+        raisePageDelay(recipe.pagination);
+      });
+      await tx.table<ExtractionSchema, string>('schemas').toCollection().modify((schema) => {
+        raisePageDelay(schema.pagination);
+      });
+      await tx.table<ExtractionJob, string>('jobs').toCollection().modify((job) => {
+        raisePageDelay(job.schema?.pagination);
+      });
+    });
   }
 
   /**
@@ -229,10 +279,30 @@ export class PageHarvestDB extends Dexie {
   }
 
   /**
-   * Deletes a dataset and all associated records in a single transaction.
+   * Throws DatasetInUseError when a job could still write to this dataset. A job that
+   * stopped early (RECOVERABLE) counts for deletion, since Continue writes to the same list.
+   * Must run inside a transaction that covers `jobs`.
+   */
+  async assertNoJobWritingTo(datasetId: string, purpose: 'delete' | 'edit'): Promise<void> {
+    const jobs = await this.jobs.where('datasetId').equals(datasetId).toArray();
+    if (jobs.some((job) => EXECUTING_STATUSES.includes(job.status))) {
+      throw new DatasetInUseError(
+        purpose === 'delete' ? DATASET_COLLECTING_MESSAGE : DATASET_EDIT_WHILE_COLLECTING_MESSAGE
+      );
+    }
+    if (purpose === 'delete' && jobs.some((job) => job.status === 'RECOVERABLE')) {
+      throw new DatasetInUseError(DATASET_RESUMABLE_MESSAGE);
+    }
+  }
+
+  /**
+   * Deletes a dataset and all associated records in a single transaction. Refused while a
+   * job can still write to it (see assertNoJobWritingTo), which would leave rows that
+   * belong to no list.
    */
   async deleteDatasetWithRecords(datasetId: string): Promise<void> {
-    await this.transaction('rw', this.datasets, this.records, async () => {
+    await this.transaction('rw', this.datasets, this.records, this.jobs, async () => {
+      await this.assertNoJobWritingTo(datasetId, 'delete');
       await this.records.where('datasetId').equals(datasetId).delete();
       await this.datasets.delete(datasetId);
     });

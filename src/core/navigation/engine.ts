@@ -224,7 +224,7 @@ export async function runMultiPageExtraction(
 
     const newRecords = extractionResult.records;
     const batchDuplicates = extractionResult.duplicatesCount;
-    const isCatchUp = strategy === 'infinite_scroll' && scrollsCompleted < catchUpScrolls;
+    const isCatchUp = strategy === 'infinite_scroll' && scrollsCompleted <= catchUpScrolls;
     duplicatesSkipped += batchDuplicates;
     allRecords.push(...newRecords);
 

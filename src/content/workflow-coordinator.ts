@@ -27,6 +27,9 @@ import {
   runNavigationJob,
 } from '@/core/navigation/runner';
 import { errorReporter } from '@/core/resilience/error-reporter';
+import type { FieldPreviewResult, MoreItemsHint } from '@/shared/contracts/message';
+import { findMoreItems } from './more-items';
+import { previewFields } from './preview-fields';
 import { JobIdentity } from '@/shared/contracts/job';
 import { getVisualOverlay } from '@/content/extraction-visual-overlay';
 
@@ -34,6 +37,20 @@ type DetectRepeatedElementsMessage = Extract<ExtensionMessage, { type: 'DETECT_R
 type DetectFieldsMessage = Extract<ExtensionMessage, { type: 'DETECT_FIELDS' }>;
 type ExtractRecordsMessage = Extract<ExtensionMessage, { type: 'EXTRACT_RECORDS' }>;
 type ControlJobMessage = Extract<ExtensionMessage, { type: 'CONTROL_JOB' }>;
+type PreviewFieldsMessage = Extract<ExtensionMessage, { type: 'PREVIEW_FIELDS' }>;
+
+/**
+ * Detection found nothing to offer. It carries CONTAINER_NOT_FOUND so the panel explains it
+ * as "nothing like that is on this page" instead of an unexpected error (ADR-031).
+ */
+export class DetectionError extends Error {
+  public readonly code = 'CONTAINER_NOT_FOUND' as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'DetectionError';
+  }
+}
 
 export interface ContentWorkflowCoordinator {
   detectRepeatedElements(
@@ -46,6 +63,8 @@ export interface ContentWorkflowCoordinator {
   extractRecords(message: ExtractRecordsMessage): ContentCommandResult;
   controlJob(message: ControlJobMessage): ContentCommandResult;
   queryJobRun(): JobRunStatus;
+  /** Reads the first rows with the given fields. Read-only, and refused while a job runs here. */
+  previewFields(message: PreviewFieldsMessage): FieldPreviewResult;
   /** Resolves once the current run, if any, has ended. */
   runSettled(): Promise<void>;
 }
@@ -60,6 +79,24 @@ export interface ContentWorkflowOptions {
   deliveryAttempts?: number;
   deliveryRetryDelayMs?: number;
   engineOverrides?: NavigationJobOptions['engineOverrides'];
+  /** Looks for a Next or Load more control, read-only (ADR-039). */
+  findMoreItems?: (root: Document) => MoreItemsHint;
+  /** The HTTP status this document was served with, when the browser says. */
+  getDocumentStatus?: () => number | undefined;
+}
+
+/** HTTP 429 Too Many Requests: the site asks for fewer requests. */
+const TOO_MANY_REQUESTS = 429;
+
+/**
+ * The status the page was served with, from its navigation timing entry. Chrome 109+
+ * reports it as `responseStatus`; it is undefined for a page restored from cache or when the
+ * browser does not say.
+ */
+function documentResponseStatus(): number | undefined {
+  if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') return undefined;
+  const [entry] = performance.getEntriesByType('navigation') as Array<PerformanceEntry & { responseStatus?: unknown }>;
+  return typeof entry?.responseStatus === 'number' && entry.responseStatus > 0 ? entry.responseStatus : undefined;
 }
 
 function messageId(prefix: string): string {
@@ -116,6 +153,9 @@ export function createContentWorkflowCoordinator(
     ((url: string) => {
       window.location.assign(url);
     });
+
+  const lookForMoreItems = options.findMoreItems ?? findMoreItems;
+  const readDocumentStatus = options.getDocumentStatus ?? documentResponseStatus;
 
   let activeRun: ActiveRun | null = null;
 
@@ -206,7 +246,7 @@ export function createContentWorkflowCoordinator(
       overlay.addRows(ack.inserted);
       overlay.pulseSelector(run.containerSelector, batch.records.length);
     }
-    return { inserted: ack.inserted, shouldStop: ack.shouldStop === true };
+    return { inserted: ack.inserted, shouldStop: ack.shouldStop === true, alreadyStored: ack.status === 'duplicate' };
   };
 
   const commitCheckpoint = async (run: ActiveRun, navigation: JobNavigationState): Promise<void> => {
@@ -221,6 +261,28 @@ export function createContentWorkflowCoordinator(
   };
 
   const executeRun = async (run: ActiveRun, message: ExtractRecordsMessage): Promise<void> => {
+    // A page answered with 429 holds the site's refusal, not the list. Nothing is read from
+    // it, and the job stops where it can continue once the site allows it.
+    if (readDocumentStatus() === TOO_MANY_REQUESTS) {
+      getVisualOverlay().destroy();
+      await options
+        .sendToBackground?.(
+          createContentWorkflowMessage({
+            id: messageId('failed'),
+            type: 'JOB_FAILED' as const,
+            timestamp: Date.now(),
+            payload: {
+              identity: run.identity,
+              message: 'The site answered 429 Too Many Requests: it asked for fewer requests.',
+              category: 'PAGINATION_FAILED' as const,
+              code: 'RATE_LIMITED' as const,
+              recoverable: true,
+            },
+          })
+        )
+        .catch(() => undefined);
+      return;
+    }
     try {
       const outcome = await runNavigationJob({
         recipe: message.payload.recipe,
@@ -271,8 +333,9 @@ export function createContentWorkflowCoordinator(
       const text = error instanceof Error ? error.message : String(error);
       const recoverable = error instanceof BatchDeliveryError;
       const category = error instanceof NavigationJobError ? 'PAGINATION_FAILED' : 'DOM_PARSING';
-      errorReporter.report(recoverable ? 'RUNTIME_MESSAGING' : category, error, {
+      const reported = errorReporter.report(recoverable ? 'RUNTIME_MESSAGING' : category, error, {
         context: { jobId: run.identity.jobId },
+        code: !recoverable && error instanceof NavigationJobError ? error.code : undefined,
       });
 
       await options
@@ -285,6 +348,7 @@ export function createContentWorkflowCoordinator(
               identity: run.identity,
               message: text,
               category: recoverable ? ('RUNTIME_MESSAGING' as const) : category,
+              code: reported.code,
               recoverable,
             },
           })
@@ -301,14 +365,14 @@ export function createContentWorkflowCoordinator(
 
       if (mode === 'table') {
         candidates = detectTables(root);
-        if (candidates.length === 0) throw new Error('No data table was found on this page.');
+        if (candidates.length === 0) throw new DetectionError('No data table was found on this page.');
       } else if (mode === 'links') {
         candidates = detectLinkRegions(root);
-        if (candidates.length === 0) throw new Error('No links were found on this page.');
+        if (candidates.length === 0) throw new DetectionError('No links were found on this page.');
       } else if (targetSelector) {
         const target = root.querySelector(targetSelector);
         if (!target) {
-          throw new Error(`The selected element could not be found for selector "${targetSelector}".`);
+          throw new DetectionError(`The selected element could not be found for selector "${targetSelector}".`);
         }
         const picked = detectListFromSelection(target);
         candidates = picked ? [listCandidateOf(picked)] : [];
@@ -317,10 +381,18 @@ export function createContentWorkflowCoordinator(
       }
 
       if (candidates.length === 0) {
-        throw new Error('No repeated list or table rows were detected on this page.');
+        throw new DetectionError('No repeated list or table rows were detected on this page.');
       }
 
       const [best] = candidates;
+      // A hint for the panel's "more pages" question only. If the page makes the look fail,
+      // the list is still reported, without it.
+      let moreItems: MoreItemsHint | undefined;
+      try {
+        moreItems = lookForMoreItems(root);
+      } catch {
+        moreItems = undefined;
+      }
       return publish({
         id: messageId('repeated'),
         type: 'REPEATED_ELEMENTS_DETECTED',
@@ -332,6 +404,7 @@ export function createContentWorkflowCoordinator(
           sampleSnippets: best.sampleSnippets,
           candidates,
           credible: best.credible,
+          ...(moreItems ? { moreItems } : {}),
         },
       });
     },
@@ -339,7 +412,7 @@ export function createContentWorkflowCoordinator(
     async detectFields(message) {
       const containers = Array.from(root.querySelectorAll(message.payload.containerSelector));
       if (containers.length === 0) {
-        throw new Error(
+        throw new DetectionError(
           `No elements matched the container selector "${message.payload.containerSelector}".`
         );
       }
@@ -427,6 +500,13 @@ export function createContentWorkflowCoordinator(
 
     runSettled() {
       return activeRun ? activeRun.settled : Promise.resolve();
+    },
+
+    previewFields(message) {
+      return previewFields(root, message.payload, {
+        jobActive: activeRun !== null,
+        baseUrl: options.getCurrentUrl?.() ?? root.location?.href ?? '',
+      });
     },
   };
 }

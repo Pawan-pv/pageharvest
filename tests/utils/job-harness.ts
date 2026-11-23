@@ -11,6 +11,9 @@ import { JobIdentity } from '@/shared/contracts/job';
 import { ExtractionSchema } from '@/shared/contracts/schema';
 import { PaginationConfig } from '@/shared/contracts/pagination';
 import { PageHarvestDB } from '@/storage/db';
+import { codeForCategory } from '@/core/resilience/error-reporter';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
+import type { ErrorCategory } from '@/types';
 
 /**
  * Runs the real background coordinator against the real content runtime, over real
@@ -41,7 +44,7 @@ export function makeRecipe(
     pagination: {
       type: 'none',
       maxPages: 20,
-      delayMs: 200,
+      delayMs: 1000,
       scrollCount: 30,
       scrollDelayMs: 300,
       startPage: 1,
@@ -78,6 +81,11 @@ export class ExtensionHarness {
   public coordinator: JobCoordinator;
   public readonly broadcasts: ExtensionMessage[] = [];
   public readonly navigations: Array<{ tabId: number; url: string }> = [];
+  public readonly injections: number[] = [];
+  /** Tabs showing a document that has no content script yet but can be scripted. */
+  public readonly unscriptedDocuments = new Map<number, string>();
+  /** Called with each page the background starts by injecting, so tests can spy on it. */
+  public onInject: (page: HarnessPage) => void = () => undefined;
   public readonly closedTabs = new Set<number>();
   public readonly tabsWithoutContent = new Set<number>();
   public readonly tabLoadStatus = new Map<number, string>();
@@ -114,8 +122,30 @@ export class ExtensionHarness {
         this.navigations.push({ tabId, url });
         this.onNavigate(tabId, url);
       },
+      closeTab: async (tabId) => {
+        this.closeTab(tabId);
+      },
       getTabLoadStatus: async (tabId) =>
         this.closedTabs.has(tabId) ? null : (this.tabLoadStatus.get(tabId) ?? 'complete'),
+      injectContentScript: async (tabId) => {
+        if (this.closedTabs.has(tabId)) {
+          throw new Error('No tab with id: ' + tabId + '.');
+        }
+        this.injections.push(tabId);
+        // Like chrome.scripting with the content script's __PAGEHARVEST_INJECTED__ flag:
+        // a document that already runs the script is left alone.
+        if (this.pages.has(tabId)) {
+          return { injected: false, url: this.currentUrls.get(tabId) ?? BASE_URL };
+        }
+        const url = this.unscriptedDocuments.get(tabId);
+        if (url === undefined) {
+          // tabsWithoutContent: a page Chrome will not script (error page, other site).
+          throw new Error('Cannot access contents of the page.');
+        }
+        this.unscriptedDocuments.delete(tabId);
+        this.onInject(this.loadPage(tabId, url));
+        return { injected: true, url };
+      },
     };
     this.coordinator = this.createCoordinator();
   }
@@ -143,11 +173,17 @@ export class ExtensionHarness {
   ): HarnessPage {
     this.currentUrls.set(tabId, url);
     this.tabsWithoutContent.delete(tabId);
+    const page = { tabId } as HarnessPage;
     const coordinator = createContentWorkflowCoordinator(
       () => undefined,
       document,
       {
-        sendToBackground: (message) => this.deliverFromPage(tabId, message),
+        // jsdom keeps one document, so a replaced page's run can keep going. In a browser that
+        // document is destroyed and sends nothing; this makes the harness behave the same way.
+        sendToBackground: (message) =>
+          this.pages.get(tabId) === page
+            ? this.deliverFromPage(tabId, message)
+            : Promise.reject(new Error('This document was unloaded and can no longer send.')),
         getCurrentUrl: () => this.currentUrls.get(tabId) ?? url,
         navigateUrl: (target) => {
           this.navigations.push({ tabId, url: target });
@@ -159,9 +195,20 @@ export class ExtensionHarness {
         ...options,
       }
     );
-    const page = { coordinator, tabId };
+    page.coordinator = coordinator;
     this.pages.set(tabId, page);
     return page;
+  }
+
+  /**
+   * A new document loaded in the tab and, as in Chrome since ADR-037, runs no content
+   * script until the background injects one (JobCoordinator.handleTabLoaded).
+   */
+  public loadUnscriptedPage(tabId: number, url: string): void {
+    this.pages.delete(tabId);
+    this.currentUrls.set(tabId, url);
+    this.tabsWithoutContent.add(tabId);
+    this.unscriptedDocuments.set(tabId, url);
   }
 
   /** The document is gone. Its content script no longer receives anything. */
@@ -256,12 +303,18 @@ export class ExtensionHarness {
   }
 }
 
-function quietReporter(category: string, error: unknown) {
+/** The real reporter's output, without its console noise or shared history. */
+function quietReporter(
+  category: ErrorCategory,
+  error: unknown,
+  options: { code?: ExtractionErrorCode } = {}
+) {
   const message = error instanceof Error ? error.message : String(error);
   return {
     id: `err_${Math.random().toString(36).slice(2, 10)}`,
-    category: category as never,
+    category,
     severity: 'ERROR' as const,
+    code: options.code ?? codeForCategory(category),
     message,
     timestamp: Date.now(),
   };
@@ -314,6 +367,7 @@ export function installBackground(
     openBlankTab: async () => 900,
     navigateTab: async () => undefined,
     getTabLoadStatus: async () => 'complete',
+    injectContentScript: async () => ({ injected: false, url: BASE_URL }),
   };
   const coordinator = new JobCoordinator({
     db,

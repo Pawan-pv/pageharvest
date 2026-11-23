@@ -132,6 +132,22 @@ Check:
 - [ ] Most fixes were made while looking at these sites. The held-out pages are few and similar to them.
 - [ ] Every site is a practice site. They are cleaner than commercial sites, so these results do not predict commercial-site results.
 
+## 11. Simple mode, downloads and what the store is told (ADR-039 to ADR-042)
+
+Read `src/components/simple/`, `src/platform/downloads.ts`, `PRIVACY.md` and `docs/STORE_LISTING.md`.
+
+- **Does the screen match the job?** Answer the more-pages question each way and compare `job.schema.pagination` in IndexedDB with what the screen said. `tests/unit/ui/simple-flow.test.tsx` checks three of the paths; try a page whose Next control the hint misses.
+- **Is "File saved" ever a guess?** It is shown only when `chrome.downloads.search` reports `complete`. Interrupt a download (fill the disk, or cancel it in Chrome) and confirm the panel says it was not saved.
+- **Does every statement in the policy hold?** Open the panel with DevTools' Network tab on and walk the whole flow: there should be no request to anything but the extension. `tests/e2e/simple-mode.spec.ts` asserts this for one flow only.
+- **Is each permission really used?** Remove one from `wxt.config.ts`, build, and find what breaks. `activeTab` is the one a reviewer at the store is most likely to question, because site access is already held: without it the panel cannot name a browser page it was opened on.
+
+Known weak points:
+
+- The store screenshots are two captures, the page and the panel, set side by side. They are real captures of one session, but Chrome's own side panel frame is not in them.
+- An automated browser stores downloads under a made-up name, so no automated test sees the real file name in the "File saved" message. It was checked by reading the code path and by opening a saved workbook in Excel by hand (see the audit record).
+- Simple mode cannot tell a page that grows by scrolling from one with no more items, because finding out would mean scrolling. The user is asked instead, with "just this page" chosen.
+- A browser `confirm()` box is no longer used anywhere, and `tests/unit/no-browser-dialogs.test.ts` fails if one is added. It reads source text, so a dialog reached through an alias would get past it.
+
 ## Audit record (2026-11-03, agent-assisted)
 
 Automated checks run: `pnpm test` (75 files, 928 tests, 0 failures), `pnpm typecheck` (0 errors), `pnpm lint` (clean), `pnpm build` (success). Live Chrome verification on TestingURL.dev exercised closed-Shadow-DOM picking, list/table extraction, IndexedDB persistence and CSV export.

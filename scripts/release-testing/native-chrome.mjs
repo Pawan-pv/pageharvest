@@ -5,6 +5,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { prepareTestExtension } from '../testing/test-extension.mjs';
 import { decideNativeStatus } from './release-report.mjs';
 
 /**
@@ -106,11 +107,12 @@ function devtoolsCommand(target, method, params = {}) {
   });
 }
 
-async function evaluate(target, expression) {
+async function evaluate(target, expression, { userGesture = false } = {}) {
   const result = await devtoolsCommand(target, 'Runtime.evaluate', {
     expression,
     awaitPromise: true,
     returnByValue: true,
+    userGesture,
   });
   if (result.exceptionDetails) {
     throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
@@ -152,7 +154,10 @@ const clickPanelButton = (panel, label) =>
         if (!button) return false;
         button.click();
         return true;
-      })()`
+      })()`,
+      // A person's click is a user gesture. Start confirms site access with Chrome first
+      // (ADR-037; already granted since ADR-040), which Chrome refuses without a gesture.
+      { userGesture: true }
     )
   );
 
@@ -231,12 +236,44 @@ async function collectEvidence({ browser, port, evidence, artifactDirectory, not
   evidence.panelOpened = panel !== null && notes.panelsBeforeClick.length === 0;
   if (!evidence.panelOpened) return;
 
-  await clickPanelButton(panel, 'Auto-Detect Lists');
-  await clickPanelButton(panel, 'Next: Choose Fields');
-  await clickPanelButton(panel, 'Start Extraction');
-  await waitFor('the job to complete', async () =>
-    (await readFromDatabase(panel, 'jobs')).some((job) => job.status === 'COMPLETED')
+  // A fresh profile opens the first-run tour over the panel, as it would for a new user.
+  notes.tourShown = await clickPanelButton(panel, 'Skip tour').then(
+    () => true,
+    () => false
   );
+  // A fresh profile opens in simple mode (ADR-039), as a new user's does: the list is found
+  // and shown, the user says it is theirs, and collecting starts from the columns screen.
+  await clickPanelButton(panel, 'Find Data on This Page').catch(() =>
+    clickPanelButton(panel, 'Get the list on this page')
+  );
+  await clickPanelButton(panel, 'Yes, this is my list');
+  await clickPanelButton(panel, 'Start collecting');
+  try {
+    await waitFor('the job to complete', async () =>
+      (await readFromDatabase(panel, 'jobs')).some((job) => job.status === 'COMPLETED')
+    );
+  } catch (error) {
+    // Record what the job and the panel were doing, so a timeout can be told from a stall or a failure.
+    const attempt = async (read) => read().catch((reason) => `unavailable: ${reason?.message ?? reason}`);
+    notes.atJobTimeout = {
+      jobs: await attempt(async () =>
+        (await readFromDatabase(panel, 'jobs')).map((job) => ({
+          status: job.status,
+          pagination: job.schema?.pagination?.type,
+          error: job.error ?? job.lastError ?? null,
+          createdAt: job.createdAt,
+          updatedAt: job.updatedAt,
+        }))
+      ),
+      records: await attempt(async () => (await readFromDatabase(panel, 'records')).length),
+      panelText: await attempt(() => evaluate(panel, 'document.body.innerText.slice(0, 2000)')),
+      screenshot: runToolbarAdapter(browser.pid, [
+        '--screenshot',
+        join(artifactDirectory, 'native-job-timeout.png'),
+      ]),
+    };
+    throw error;
+  }
   evidence.rowsSaved = (await readFromDatabase(panel, 'records')).length;
   notes.screenshot = runToolbarAdapter(browser.pid, [
     '--screenshot',
@@ -287,12 +324,14 @@ export async function runNativeChromeCheck({
       evidence.error = `The production build is missing: ${buildLocation}`;
     } else {
       stopServer = await ensureFixtureServer();
+      // A copy of the production build, which holds site access from install (ADR-040).
+      const extensionLocation = prepareTestExtension({ source: buildLocation });
       const port = await getFreePort();
       await mkdir(profileDirectory, { recursive: true });
       browser = spawn(browserInfo.path, [
         `--user-data-dir=${profileDirectory}`,
-        `--disable-extensions-except=${buildLocation}`,
-        `--load-extension=${buildLocation}`,
+        `--disable-extensions-except=${extensionLocation}`,
+        `--load-extension=${extensionLocation}`,
         `--remote-debugging-port=${port}`,
         '--no-first-run',
         '--no-default-browser-check',

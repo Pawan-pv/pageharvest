@@ -12,6 +12,7 @@ const ENTRY_POINTS = [
   'entrypoints/background.ts',
   'entrypoints/content.ts',
   'entrypoints/sidepanel/main.tsx',
+  'entrypoints/table/main.tsx',
 ];
 const IMPORT_PATTERN = /(?:from\s+|import\s*\(\s*|import\s+)['"]([^'"]+)['"]/g;
 

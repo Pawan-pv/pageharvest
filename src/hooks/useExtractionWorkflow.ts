@@ -1,7 +1,16 @@
-import { CandidateKind, ListCandidate } from '@/shared/contracts/message';
+import { CandidateKind, ListCandidate, MoreItemsHint } from '@/shared/contracts/message';
 import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { messagingService, TabInfo } from '@/services/messaging';
+import {
+  ensureContentScriptForPicking,
+  isSitePermissionError,
+  messagingService,
+  type MessageOrigin,
+  TabInfo,
+} from '@/services/messaging';
+import { activateTab } from '@/platform/tab-manager';
+import { holdPickerOpen } from '@/platform/picker-lifetime';
+import { requestSiteOrigin, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import {
   ExtractionJob,
   JobProgressKind,
@@ -9,13 +18,14 @@ import {
   isTerminalJobStatus,
 } from '@/shared/contracts/job';
 import { ExtractionProject } from '@/shared/contracts/project';
+import type { ExtractionErrorCode } from '@/shared/contracts/error';
+import { codeForCategory } from '@/core/resilience/error-reporter';
 import { ExtractionSchema } from '@/shared/contracts/schema';
 import {
   DatasetRepository,
   JobRepository,
   ProjectRepository,
   RecipeRepository,
-  RecordRepository,
   SettingsRepository,
 } from '@/storage/repositories';
 import {
@@ -26,7 +36,7 @@ import {
   ExtractionPaginationConfig,
   ExtractionStatus,
 } from '@/types';
-import { ExtensionMessage } from '@/contracts/messages';
+import { ExtensionMessage, FieldPreviewResult } from '@/contracts/messages';
 
 export type WorkflowView =
   | 'dashboard'
@@ -37,6 +47,31 @@ export type WorkflowView =
   | 'results'
   | 'history'
   | 'settings';
+
+/**
+ * The tab and page a list was found on. Every message about the list goes to that tab, and
+ * the list can be used only while that tab is in front and still shows that page.
+ */
+export interface ListSource {
+  tabId: number;
+  url: string;
+  title: string;
+}
+
+/** The screens that show a list the user found but has not started collecting yet. */
+const LIST_VIEWS: readonly WorkflowView[] = ['inspecting', 'review_list', 'config_fields'];
+
+/** Two addresses name the same document if they differ at most in the #fragment. */
+function sameDocument(a: string, b: string): boolean {
+  return a.split('#')[0] === b.split('#')[0];
+}
+
+export const PICKER_LEFT_NOTICE =
+  'Picking stopped because you switched to another tab. Start again when you are on the page you want.';
+export const LIST_GONE_NOTICE = 'The page changed, so the list you found is gone. Get the list again on this page.';
+/** The followed job was stopped somewhere else, such as the side panel of another window. */
+export const FOLLOWED_JOB_STOPPED_NOTICE = 'Collecting was stopped. The rows collected so far are saved in My data.';
+const LIST_ELSEWHERE_ERROR = 'This list is on another tab. Go back to that tab to start, or get the list again on this page.';
 
 export interface InspectedElement {
   selector: string;
@@ -57,6 +92,14 @@ export interface DetectedList {
   credible?: boolean;
   kind?: CandidateKind;
   dedupeFields?: string[];
+  /** Whether the page shows a Next or Load more control. Display-only (ADR-039). */
+  moreItems?: MoreItemsHint;
+}
+
+/** An error the panel shows. The code picks the explanation; the message is detail. */
+export interface OperationError {
+  message: string;
+  code?: ExtractionErrorCode;
 }
 
 export interface ExtractionStats {
@@ -72,6 +115,8 @@ export interface ExtractionStats {
   elapsedSeconds: number;
   status: ExtractionStatus;
   errorMessage?: string;
+  /** The code of the job's latest error, for the panel's explanation (ADR-031). */
+  errorCode?: ExtractionErrorCode;
   stopReason?: string;
 }
 
@@ -91,8 +136,46 @@ const IDLE_STATS: ExtractionStats = {
 
 const REFRESH_INTERVAL_MS = 1000;
 
+/** Messages a page sends about the list being found on it. */
+const PAGE_REPORTS: ReadonlySet<ExtensionMessage['type']> = new Set<ExtensionMessage['type']>([
+  'ELEMENT_SELECTED',
+  'SELECTION_CANCELLED',
+  'SELECTION_CONFIRMED',
+  'REPEATED_ELEMENTS_DETECTED',
+  'FIELDS_DETECTED',
+  'EXTRACTION_ERROR',
+]);
+
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * The banner state for a failed operation. A missing site grant keeps its typed code
+ * (ADR-037) whether it came from the panel (SitePermissionError) or as the
+ * background's reply text, so the banner can offer Allow access.
+ */
+function operationErrorFrom(error: unknown): OperationError {
+  const message = errorText(error);
+  if (isSitePermissionError(error) || message === SITE_PERMISSION_MESSAGE) {
+    return { message: SITE_PERMISSION_MESSAGE, code: 'SITE_PERMISSION_REQUIRED' };
+  }
+  return { message };
+}
+
+const SITE_PERMISSION_ERROR: OperationError = {
+  message: SITE_PERMISSION_MESSAGE,
+  code: 'SITE_PERMISSION_REQUIRED',
+};
+
+/**
+ * The code of the job's latest error. Errors stored before ADR-031 have no code, so they get
+ * the default for their category, the same one the reporter would give them today.
+ */
+function latestErrorCode(job: ExtractionJob): ExtractionErrorCode | undefined {
+  const latest = job.errors.at(-1);
+  if (!latest) return undefined;
+  return latest.code ?? codeForCategory(latest.category);
 }
 
 export function statsFromJob(job: ExtractionJob, now: number = Date.now()): ExtractionStats {
@@ -110,6 +193,7 @@ export function statsFromJob(job: ExtractionJob, now: number = Date.now()): Extr
     elapsedSeconds: Math.max(0, Math.floor((endedAt - job.startedAt - job.pausedMs) / 1000)),
     status: job.status,
     errorMessage: job.errorMessage,
+    errorCode: latestErrorCode(job),
     stopReason: job.stopReason,
   };
 }
@@ -126,7 +210,6 @@ export function useExtractionWorkflow(tab: TabInfo) {
       jobs: new JobRepository(),
       projects: new ProjectRepository(),
       recipes: new RecipeRepository(),
-      records: new RecordRepository(),
       settings: new SettingsRepository(),
     }),
     []
@@ -150,7 +233,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const [recordsRevision, setRecordsRevision] = useState(0);
   const [currentDataset, setCurrentDataset] = useState<Dataset | null>(null);
   const [stats, setStats] = useState<ExtractionStats>(IDLE_STATS);
-  const [operationError, setOperationError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<OperationError | null>(null);
   const [recoverableJobs, setRecoverableJobs] = useState<ExtractionJob[]>([]);
   const [activeJob, setActiveJob] = useState<ExtractionJob | null>(null);
   const [projects, setProjects] = useState<ExtractionProject[]>([]);
@@ -158,16 +241,53 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const [activeRecipeId, setActiveRecipeId] = useState<string | undefined>(undefined);
   const [runSummary, setRunSummary] = useState<ExtractionStats | null>(null);
   const [recordWarningThreshold, setRecordWarningThreshold] = useState<number | undefined>(undefined);
+  const [listSource, setListSourceState] = useState<ListSource | null>(null);
+  // A plain message for the start screen, such as why a found list was dropped.
+  const [notice, setNotice] = useState<string | null>(null);
 
   // The job this panel is displaying. Commands and storage decide what it does; this
   // only decides which job's state is on screen.
   const followedJobIdRef = useRef<string | null>(null);
+  // The job this panel is stopping itself, so its own stop is not announced as news.
+  const endingJobIdRef = useRef<string | null>(null);
+  // A session whose resume this panel has asked for and not heard back about. A second click
+  // on Continue meanwhile is not sent: it would only come back refused, as a stray error.
+  const resumingJobIdsRef = useRef(new Set<string>());
   const pickerActiveRef = useRef(false);
+  // Lets go of the port that keeps the page's picker alive (see platform/picker-lifetime).
+  const releasePickerRef = useRef<() => void>(() => undefined);
+  const releasePicker = useCallback(() => {
+    const release = releasePickerRef.current;
+    releasePickerRef.current = () => undefined;
+    release();
+  }, []);
+  // Pagination settings the person, or a recipe they loaded, has set. Saved defaults arrive
+  // asynchronously when the panel opens and must never overwrite these.
+  const setPaginationKeysRef = useRef(new Set<keyof ExtractionPaginationConfig>());
+  // Read by the message listener and the tab watchers, which outlive any one render.
+  const listSourceRef = useRef<ListSource | null>(null);
+  const viewRef = useRef<WorkflowView>(view);
+  viewRef.current = view;
+
+  const setListSource = useCallback((source: ListSource | null) => {
+    listSourceRef.current = source;
+    setListSourceState(source);
+  }, []);
+
+  /** Binds what is found next to the tab in front now. */
+  const bindToTab = useCallback(
+    (current: TabInfo) => {
+      setListSource(typeof current.id === 'number' ? { tabId: current.id, url: current.url, title: current.title } : null);
+    },
+    [setListSource]
+  );
+
+  /** The list's tab id, for messages about the list. Undefined before anything is bound. */
+  const listTabId = () => listSourceRef.current?.tabId;
 
   const handleOperationError = useCallback((error: unknown, fallbackView: WorkflowView) => {
-    const message = errorText(error);
-    console.warn('PageHarvest operation failed:', message);
-    setOperationError(message);
+    console.warn('PageHarvest operation failed:', errorText(error));
+    setOperationError(operationErrorFrom(error));
     setView(fallbackView);
   }, []);
 
@@ -217,6 +337,17 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setActiveJob(null);
       await loadDataset(job.datasetId);
       setView('results');
+      return;
+    }
+
+    // Ended without finishing, by something other than this panel (another window's panel).
+    // It will never run again, so the progress screen must not keep showing it as collecting.
+    if (job.status === 'CANCELLED' || job.status === 'EXPIRED') {
+      followedJobIdRef.current = null;
+      setActiveJob(null);
+      setStats(IDLE_STATS);
+      setView('dashboard');
+      if (endingJobIdRef.current !== jobId) setNotice(FOLLOWED_JOB_STOPPED_NOTICE);
     }
   }, [loadDataset, refreshRecoverableJobs, repositories]);
 
@@ -243,13 +374,16 @@ export function useExtractionWorkflow(tab: TabInfo) {
       try {
         const settings = await repositories.settings.getSettings();
         if (cancelled) return;
-        setPagination((prev) => ({
-          ...prev,
-          maxPages: settings.defaultMaxPages,
-          delayMs: settings.defaultDelayMs,
-          scrollCount: settings.defaultMaxScrolls,
-          scrollDelayMs: settings.defaultScrollDelayMs,
-        }));
+        setPagination((prev) => {
+          const chosen = setPaginationKeysRef.current;
+          return {
+            ...prev,
+            maxPages: chosen.has('maxPages') ? prev.maxPages : settings.defaultMaxPages,
+            delayMs: chosen.has('delayMs') ? prev.delayMs : settings.defaultDelayMs,
+            scrollCount: chosen.has('scrollCount') ? prev.scrollCount : settings.defaultMaxScrolls,
+            scrollDelayMs: chosen.has('scrollDelayMs') ? prev.scrollDelayMs : settings.defaultScrollDelayMs,
+          };
+        });
         setRecordWarningThreshold(settings.maxRecordsWarningThreshold);
       } catch (err) {
         console.warn('Could not load settings:', err);
@@ -289,21 +423,28 @@ export function useExtractionWorkflow(tab: TabInfo) {
 
   // Listen to incoming messages
   useEffect(() => {
-    const unsubscribe = messagingService.subscribe((message: ExtensionMessage) => {
+    const unsubscribe = messagingService.subscribe((message: ExtensionMessage, origin: MessageOrigin = {}) => {
+      // A page speaks for its own tab. What a page in any other tab reports, or a page
+      // when no list is being found, is not about this panel's list.
+      if (origin.tabId !== undefined && PAGE_REPORTS.has(message.type)) {
+        const source = listSourceRef.current;
+        if (!source || source.tabId !== origin.tabId) return;
+      }
       switch (message.type) {
         case 'ELEMENT_SELECTED': {
           const { selector, tagName, classList, textSnippet } = message.payload;
           setInspectedElement({ selector, tagName, classList, textSnippet });
 
           // Auto-trigger list detection using this selected element
-          messagingService.detectRepeatedElements(selector).catch((err: unknown) => {
-            setOperationError(errorText(err));
+          messagingService.detectRepeatedElements(selector, undefined, listTabId()).catch((err: unknown) => {
+            setOperationError({ message: errorText(err) });
           });
           break;
         }
 
         case 'SELECTION_CANCELLED': {
           pickerActiveRef.current = false;
+          releasePicker();
           setInspectedElement(null);
           setView((current) =>
             current === 'inspecting' || current === 'review_list' ? 'dashboard' : current
@@ -313,11 +454,12 @@ export function useExtractionWorkflow(tab: TabInfo) {
 
         case 'SELECTION_CONFIRMED': {
           pickerActiveRef.current = false;
+          releasePicker();
           break;
         }
 
         case 'REPEATED_ELEMENTS_DETECTED': {
-          const { containerSelector, containerAnchor, matchCount, sampleSnippets, candidates, credible } =
+          const { containerSelector, containerAnchor, matchCount, sampleSnippets, candidates, credible, moreItems } =
             message.payload;
           setOperationError(null);
           setDetectedList({
@@ -327,6 +469,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
             sampleSnippets,
             candidates,
             credible,
+            moreItems,
             kind: candidates?.[0]?.kind,
             dedupeFields: candidates?.[0]?.dedupeFields,
           });
@@ -355,7 +498,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         }
 
         case 'EXTRACTION_ERROR': {
-          setOperationError(message.payload.message);
+          setOperationError({ message: message.payload.message, code: message.payload.code });
           // Detection failed with no picker open, so there is nothing left to wait for.
           if (!pickerActiveRef.current) {
             setView((current) => (current === 'inspecting' ? 'dashboard' : current));
@@ -369,34 +512,48 @@ export function useExtractionWorkflow(tab: TabInfo) {
     });
 
     return () => unsubscribe();
-  }, [refreshFollowedJob, refreshRecoverableJobs]);
+  }, [refreshFollowedJob, refreshRecoverableJobs, releasePicker]);
+
+  // A panel that closes lets go of the picker, so the page stops it. Chrome closes the port
+  // too when the panel's document goes away; this covers an unmount without that.
+  useEffect(() => releasePicker, [releasePicker]);
 
   /**
    * Visual Element Picker
    */
   const startVisualPicker = useCallback(async () => {
     try {
+      // First await: activeTab injection (no prompt). Restricted pages throw
+      // TAB_DISCONNECTED-equivalent; missing grant throws SITE (see #5).
+      await ensureContentScriptForPicking(tab);
       setOperationError(null);
+      setNotice(null);
       setInspectedElement(null);
       setActiveRecipeId(undefined);
+      bindToTab(tab);
       setView('inspecting');
       pickerActiveRef.current = true;
-      await messagingService.startElementPicker();
+      releasePicker();
+      if (typeof tab.id === 'number') releasePickerRef.current = holdPickerOpen(tab.id);
+      await messagingService.startElementPicker(tab.id);
     } catch (err) {
       pickerActiveRef.current = false;
+      releasePicker();
       handleOperationError(err, 'dashboard');
     }
-  }, [handleOperationError]);
+  }, [bindToTab, handleOperationError, releasePicker, tab]);
 
   const stopPickerQuietly = useCallback(async () => {
     if (!pickerActiveRef.current) return;
     pickerActiveRef.current = false;
+    const tabId = listTabId();
+    releasePicker();
     try {
-      await messagingService.stopElementPicker();
+      await messagingService.stopElementPicker(tabId);
     } catch (err) {
       console.warn('Could not cleanly stop element picker:', err);
     }
-  }, []);
+  }, [releasePicker]);
 
   const cancelVisualPicker = useCallback(async () => {
     await stopPickerQuietly();
@@ -408,14 +565,17 @@ export function useExtractionWorkflow(tab: TabInfo) {
    */
   const autoDetectLists = useCallback(async () => {
     try {
+      await ensureContentScriptForPicking(tab);
       setOperationError(null);
+      setNotice(null);
       setActiveRecipeId(undefined);
+      bindToTab(tab);
       setView('inspecting');
-      await messagingService.detectRepeatedElements();
+      await messagingService.detectRepeatedElements(undefined, undefined, tab.id);
     } catch (err) {
       handleOperationError(err, 'dashboard');
     }
-  }, [handleOperationError]);
+  }, [bindToTab, handleOperationError, tab]);
 
   const selectListCandidate = useCallback((candidate: ListCandidate) => {
     setDetectedList((current) => ({
@@ -432,15 +592,18 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const startPresetDetection = useCallback(
     async (mode: 'table' | 'links') => {
       try {
+        await ensureContentScriptForPicking(tab);
         setOperationError(null);
+        setNotice(null);
         setActiveRecipeId(undefined);
+        bindToTab(tab);
         setView('inspecting');
-        await messagingService.detectRepeatedElements(undefined, mode);
+        await messagingService.detectRepeatedElements(undefined, mode, tab.id);
       } catch (err) {
         handleOperationError(err, 'dashboard');
       }
     },
-    [handleOperationError]
+    [bindToTab, handleOperationError, tab]
   );
 
   const loadProjects = useCallback(async () => {
@@ -459,7 +622,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       void loadProjects();
 
       try {
-        await messagingService.detectFields(candidate.containerSelector, candidate.kind);
+        await messagingService.detectFields(candidate.containerSelector, candidate.kind, listTabId());
       } catch (err) {
         setFields([]);
         setSelectedFieldIds(new Set());
@@ -492,6 +655,56 @@ export function useExtractionWorkflow(tab: TabInfo) {
     setFields((prev) => [...prev, newField]);
     setSelectedFieldIds((prev) => new Set(prev).add(newField.id));
   }, []);
+
+  /** Swaps a column with its neighbour. The recipe keeps this order, so the export does too. */
+  const moveField = useCallback((id: string, direction: -1 | 1) => {
+    setFields((prev) => {
+      const from = prev.findIndex((f) => f.id === id);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+  }, []);
+
+  /**
+   * Reads real rows for these columns from the page (PREVIEW_FIELDS, ADR-030). Read-only:
+   * nothing is stored and no job changes. Refused while this panel follows a job in this tab.
+   */
+  const previewFields = useCallback(
+    async (columns: FieldDefinition[]): Promise<FieldPreviewResult> => {
+      if (!detectedList) {
+        return { ok: false, code: 'CONTAINER_NOT_FOUND', message: 'Choose a list on the page first.' };
+      }
+      const source = listSourceRef.current;
+      if (source && source.tabId !== tab.id) {
+        return { ok: false, code: 'VALIDATION_ERROR', message: 'This list is on another tab.' };
+      }
+      if (activeJob && isActiveJobStatus(activeJob.status) && activeJob.tabId === tab.id) {
+        return {
+          ok: false,
+          code: 'VALIDATION_ERROR',
+          message: 'An extraction is running in this tab. The preview is available again when it finishes.',
+        };
+      }
+      // First await: activeTab injection (ADR-037). Missing grant is SITE, not TAB.
+      try {
+        await ensureContentScriptForPicking(tab);
+      } catch (err) {
+        if (isSitePermissionError(err)) {
+          return { ok: false, code: 'SITE_PERMISSION_REQUIRED', message: SITE_PERMISSION_MESSAGE };
+        }
+        throw err;
+      }
+      // The backup anchor is sent only so the page can say the list moved; nothing is written back.
+      return messagingService.previewFields(detectedList.containerSelector, columns, {
+        containerAnchor: detectedList.containerAnchor,
+        tabId: source?.tabId ?? tab.id,
+      });
+    },
+    [activeJob, detectedList, tab]
+  );
 
   const removeField = useCallback((id: string) => {
     setFields((prev) => prev.filter((f) => f.id !== id));
@@ -531,11 +744,25 @@ export function useExtractionWorkflow(tab: TabInfo) {
     if (!recipe) return;
 
     if (recipe.fields.length === 0) {
-      setOperationError('Select at least one field to extract.');
+      setOperationError({ message: 'Select at least one column to collect.', code: 'VALIDATION_ERROR' });
       return;
     }
     if (typeof tab.id !== 'number') {
-      setOperationError('There is no active tab to extract from.');
+      setOperationError({ message: 'There is no open page to collect from.', code: 'VALIDATION_ERROR' });
+      return;
+    }
+    const source = listSourceRef.current;
+    if (source && (source.tabId !== tab.id || (source.url && tab.url && !sameDocument(source.url, tab.url)))) {
+      setOperationError({ message: LIST_ELSEWHERE_ERROR, code: 'VALIDATION_ERROR' });
+      return;
+    }
+
+    // First await: persistent site grant from the Start click gesture
+    // (ADR-037). Chrome no-ops when already granted; no messaging round trip
+    // precedes it. Background re-checks with contains before starting.
+    const siteGranted = await requestSiteOrigin(tab.url);
+    if (!siteGranted) {
+      setOperationError(SITE_PERMISSION_ERROR);
       return;
     }
 
@@ -553,6 +780,9 @@ export function useExtractionWorkflow(tab: TabInfo) {
     });
     setView('extracting');
 
+    // Background and panel share this machine's clock, so a job started by this click has
+    // startedAt at or after it.
+    const clickedAt = Date.now();
     try {
       const identity = await messagingService.startJob({
         recipe,
@@ -567,8 +797,17 @@ export function useExtractionWorkflow(tab: TabInfo) {
         await followJob(job);
       }
     } catch (err) {
+      // The request can fail while the job runs: the reply timed out, or a retry was refused
+      // because the first attempt had already started it. Storage decides, not the reply.
+      const started = await repositories.jobs.findJobStartedInTabSince(tab.id, clickedAt).catch(() => undefined);
+      if (started && started.status !== 'FAILED') {
+        await followJob(started);
+        return;
+      }
       setStats(IDLE_STATS);
-      handleOperationError(err, 'config_fields');
+      // A grant revoked between the panel's request and START_JOB comes back as the
+      // background's SITE message; operationErrorFrom keeps the typed code.
+      handleOperationError(started?.errorMessage ? new Error(started.errorMessage) : err, 'config_fields');
     }
   }, [
     activeRecipeId,
@@ -590,7 +829,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       await messagingService.pauseJob(jobId);
       await refreshFollowedJob();
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [refreshFollowedJob]);
 
@@ -601,7 +840,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
       await messagingService.resumeJob(jobId);
       await refreshFollowedJob();
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [refreshFollowedJob]);
 
@@ -621,13 +860,14 @@ export function useExtractionWorkflow(tab: TabInfo) {
       }
       setView('results');
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
     }
   }, [loadDataset, repositories]);
 
   /** Cancels the job. Records already committed stay in the dataset. */
   const cancelExtraction = useCallback(async () => {
     const jobId = followedJobIdRef.current;
+    endingJobIdRef.current = jobId;
     try {
       if (jobId) {
         const job = await repositories.jobs.getJob(jobId);
@@ -640,16 +880,21 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setStats(IDLE_STATS);
       setInspectedElement(null);
       setDetectedList(null);
+      setListSource(null);
       setCurrentDataset(null);
       setRecords([]);
       setView('dashboard');
     } catch (err) {
-      setOperationError(errorText(err));
+      setOperationError({ message: errorText(err) });
+    } finally {
+      endingJobIdRef.current = null;
     }
-  }, [repositories]);
+  }, [repositories, setListSource]);
 
   const recoverJob = useCallback(
     async (jobId: string) => {
+      if (resumingJobIdsRef.current.has(jobId)) return;
+      resumingJobIdsRef.current.add(jobId);
       try {
         setOperationError(null);
         await messagingService.recoverJob(jobId);
@@ -659,8 +904,10 @@ export function useExtractionWorkflow(tab: TabInfo) {
           await followJob(job);
         }
       } catch (err) {
-        setOperationError(errorText(err));
+        setOperationError(operationErrorFrom(err));
         await refreshRecoverableJobs();
+      } finally {
+        resumingJobIdsRef.current.delete(jobId);
       }
     },
     [followJob, refreshRecoverableJobs, repositories]
@@ -673,7 +920,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         await messagingService.discardJob(jobId);
         await refreshRecoverableJobs();
       } catch (err) {
-        setOperationError(errorText(err));
+        setOperationError({ message: errorText(err) });
       }
     },
     [refreshRecoverableJobs]
@@ -688,7 +935,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
         await loadDataset(dataset.id);
         setView('results');
       } catch (err) {
-        setOperationError(errorText(err));
+        setOperationError({ message: errorText(err) });
       }
     },
     [loadDataset]
@@ -703,41 +950,42 @@ export function useExtractionWorkflow(tab: TabInfo) {
     setView('dashboard');
     setInspectedElement(null);
     setDetectedList(null);
+    setListSource(null);
     setCurrentDataset(null);
     setRecords([]);
-  }, []);
+  }, [setListSource]);
 
   const updateRecordCell = useCallback(
     async (recordId: string, fieldName: string, value: string | number | null) => {
-      await repositories.records.updateCell(recordId, fieldName, value);
+      await messagingService.updateRecordCell(recordId, fieldName, value);
       setRecords((prev) =>
         prev.map((r) => (r._id === recordId ? { ...r, [fieldName]: value } : r))
       );
     },
-    [repositories]
+    []
   );
 
   const deleteRecord = useCallback(
     async (recordId: string) => {
       const datasetId = currentDataset?.id;
       if (!datasetId) return;
-      await repositories.records.deleteRecord(recordId, datasetId);
+      await messagingService.deleteRecords(datasetId, [recordId]);
       setRecords((prev) => prev.filter((r) => r._id !== recordId));
     },
-    [currentDataset?.id, repositories]
+    [currentDataset?.id]
   );
 
-  /** Persists a grid edit as one transaction. Rejects if nothing was saved. */
+  /** Persists a grid edit as one transaction through the background writer. */
   const applyDatasetEdit = useCallback(
     async (nextRecords: ExtractedRecord[], nextFields?: FieldDefinition[]) => {
       const datasetId = currentDataset?.id;
       if (!datasetId) return;
       const nextColumns = nextFields ?? fields;
-      await repositories.datasets.applyEdit(datasetId, nextRecords, nextColumns);
+      await messagingService.applyDatasetEdit(datasetId, nextRecords, nextColumns);
       setRecords(nextRecords);
       setFields(nextColumns);
     },
-    [currentDataset?.id, fields, repositories]
+    [currentDataset?.id, fields]
   );
 
   /** Saves the current configuration as a reusable recipe. Rejects if it was not saved. */
@@ -759,6 +1007,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
   const applyConfiguration = useCallback(
     (config: {
       containerSelector: string;
+      containerAnchor?: MultiAnchorSelector;
       fields: FieldDefinition[];
       pagination?: ExtractionPaginationConfig;
       projectId?: string;
@@ -767,6 +1016,8 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setOperationError(null);
       setDetectedList({
         containerSelector: config.containerSelector,
+        // Kept so a run, a preview and a re-saved recipe still have the list's backup ladder.
+        containerAnchor: config.containerAnchor,
         matchCount: 0,
         sampleSnippets: [],
         dedupeFields: config.dedupeFields,
@@ -774,14 +1025,29 @@ export function useExtractionWorkflow(tab: TabInfo) {
       setFields(config.fields);
       setSelectedFieldIds(new Set(config.fields.map((f) => f.id)));
       if (config.pagination) {
-        setPagination(config.pagination);
+        const loaded = config.pagination;
+        (Object.keys(loaded) as (keyof ExtractionPaginationConfig)[]).forEach((key) =>
+          setPaginationKeysRef.current.add(key)
+        );
+        setPagination(loaded);
       }
       setSelectedProjectId(config.projectId);
       void loadProjects();
+      // A saved setup runs on the page it is opened on, like a list found there.
+      bindToTab(tab);
+      setNotice(null);
       setView('config_fields');
     },
-    [loadProjects]
+    [bindToTab, loadProjects, tab]
   );
+
+  /** A change made on the Pagination step. What it sets is kept over the saved defaults. */
+  const updatePagination = useCallback((updates: Partial<ExtractionPaginationConfig>) => {
+    (Object.keys(updates) as (keyof ExtractionPaginationConfig)[]).forEach((key) =>
+      setPaginationKeysRef.current.add(key)
+    );
+    setPagination((prev) => ({ ...prev, ...updates }));
+  }, []);
 
   const loadRecipe = useCallback(
     (recipe: ExtractionRecipe) => {
@@ -799,15 +1065,75 @@ export function useExtractionWorkflow(tab: TabInfo) {
     [applyConfiguration]
   );
 
+  /** The found list's page is gone: drop the list and say so on the start screen. */
+  const dropList = useCallback(() => {
+    if (!LIST_VIEWS.includes(viewRef.current)) return;
+    if (pickerActiveRef.current) {
+      void stopPickerQuietly();
+    }
+    resetToDashboard();
+    setNotice(LIST_GONE_NOTICE);
+  }, [resetToDashboard, stopPickerQuietly]);
+
+  // The list's own tab navigated or closed, whether or not it is in front.
+  useEffect(() => {
+    if (!listSource || typeof chrome === 'undefined' || !chrome.tabs?.onUpdated) return undefined;
+    const onUpdated = (tabId: number, changeInfo: { url?: string }) => {
+      if (tabId !== listSource.tabId || !changeInfo.url || !listSource.url) return;
+      if (!sameDocument(changeInfo.url, listSource.url)) dropList();
+    };
+    const onRemoved = (tabId: number) => {
+      if (tabId === listSource.tabId) dropList();
+    };
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.onRemoved?.addListener(onRemoved);
+    return () => {
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      chrome.tabs.onRemoved?.removeListener(onRemoved);
+    };
+  }, [dropList, listSource]);
+
+  // The same, seen through the active tab: it is the list's tab, on another page.
+  useEffect(() => {
+    if (!listSource || tab.id !== listSource.tabId || !tab.url || !listSource.url) return;
+    if (!sameDocument(tab.url, listSource.url)) dropList();
+  }, [dropList, listSource, tab.id, tab.url]);
+
+  useEffect(() => {
+    if (view !== 'inspecting' || !pickerActiveRef.current || !listSource) return;
+    if (typeof tab.id !== 'number' || tab.id === listSource.tabId) return;
+    void stopPickerQuietly();
+    resetToDashboard();
+    setNotice(PICKER_LEFT_NOTICE);
+  }, [listSource, resetToDashboard, stopPickerQuietly, tab.id, view]);
+
+  const listElsewhere =
+    listSource !== null && LIST_VIEWS.includes(view) && typeof tab.id === 'number' && tab.id !== listSource.tabId;
+
+  const goBackToListTab = useCallback(async () => {
+    const source = listSourceRef.current;
+    if (!source) return;
+    try {
+      await activateTab(source.tabId);
+    } catch {
+      dropList();
+    }
+  }, [dropList]);
+
   return {
     view,
     setView,
+    listSource,
+    listElsewhere,
+    goBackToListTab,
+    notice,
+    clearNotice: useCallback(() => setNotice(null), []),
     inspectedElement,
     detectedList,
     fields,
     selectedFieldIds,
     pagination,
-    setPagination,
+    updatePagination,
     records,
     recordsRevision,
     currentDataset,
@@ -829,6 +1155,8 @@ export function useExtractionWorkflow(tab: TabInfo) {
     toggleFieldSelection,
     updateField,
     addField,
+    moveField,
+    previewFields,
     removeField,
     startExtraction,
     pauseExtraction,

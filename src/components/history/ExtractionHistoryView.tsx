@@ -9,12 +9,13 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
-import { Badge } from '@/components/common/Badge';
 import { Input } from '@/components/common/Input';
-import { Modal } from '@/components/common/Modal';
+import { Dialog } from '@/components/common/Dialog';
 import { EmptyState } from '@/components/common/EmptyState';
-import { Alert } from '@/components/common/Alert';
+import { Banner } from '@/components/common/Banner';
+import { SavedFileNotice } from '@/components/common/SavedFileNotice';
 import { Dataset, ExtractedRecord } from '@/types';
+import { relativeTime } from '@/utils/relative-time';
 import {
   recordsToCsv,
   recordsToJson,
@@ -31,6 +32,14 @@ export interface ExtractionHistoryViewProps {
   onNewExtraction: () => void;
 }
 
+function siteOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
 export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
   datasets,
   isLoading = false,
@@ -43,6 +52,8 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // The download last started here, so the list can say where the file went (ADR-042).
+  const [downloadId, setDownloadId] = useState<number | null>(null);
 
   const filtered = datasets.filter((ds) => {
     const q = search.toLowerCase();
@@ -51,10 +62,13 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
 
   const runExport = async (build: () => Promise<DownloadOptions>) => {
     setActionError(null);
+    setDownloadId(null);
     try {
       const result = await triggerDownload(await build());
       if (!result.success) {
         setActionError(`Export failed: ${result.error ?? 'the download did not start.'}`);
+      } else if (typeof result.downloadId === 'number') {
+        setDownloadId(result.downloadId);
       }
     } catch (error: unknown) {
       setActionError(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -115,10 +129,10 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-bold text-slate-900 leading-tight">
+          <h2 className="text-sm font-bold text-fg leading-tight">
             Saved Extractions
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-fg-subtle mt-0.5">
             Locally stored in IndexedDB on this browser
           </p>
         </div>
@@ -133,10 +147,12 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
       </div>
 
       {actionError && (
-        <Alert variant="error" onDismiss={() => setActionError(null)}>
+        <Banner tone="danger" onDismiss={() => setActionError(null)}>
           {actionError}
-        </Alert>
+        </Banner>
       )}
+
+      {downloadId !== null && <SavedFileNotice downloadId={downloadId} onDismiss={() => setDownloadId(null)} />}
 
       {/* Search Input */}
       {datasets.length > 0 && (
@@ -151,24 +167,22 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
 
       {/* Dataset List */}
       {isLoading ? (
-        <div className="p-8 text-center text-xs text-slate-400">
+        <div className="p-8 text-center text-xs text-fg-subtle">
           Loading extraction history...
         </div>
       ) : datasets.length === 0 ? (
         <EmptyState
           icon={<Database className="w-6 h-6" />}
           title="No saved datasets yet"
-          description="Harvest websites to build and store clean spreadsheets entirely offline."
-          action={
-            <Button variant="primary" size="sm" onClick={onNewExtraction}>
-              Start First Extraction
-            </Button>
-          }
+          description="Every extraction you run is saved here, on this computer, ready to view or export."
+          action={{ label: 'Start an extraction', onClick: onNewExtraction }}
         />
       ) : filtered.length === 0 ? (
-        <div className="p-6 text-center text-xs text-slate-400">
-          No datasets matching "{search}".
-        </div>
+        <EmptyState
+          title={`No datasets match "${search}"`}
+          description="Try another word from the dataset's name or website."
+          action={{ label: 'Clear search', onClick: () => setSearch('') }}
+        />
       ) : (
         <div className="flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-170px)]">
           {filtered.map((dataset) => (
@@ -180,7 +194,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="text-xs font-semibold text-slate-900 truncate">
+                  <h3 className="text-xs font-semibold text-fg truncate">
                     {dataset.name}
                   </h3>
                   <a
@@ -188,22 +202,22 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="text-[11px] text-slate-400 hover:text-emerald-700 truncate block mt-0.5 max-w-[240px]"
+                    className="text-2xs text-fg-subtle hover:text-brand-fg truncate block mt-0.5 max-w-[240px]"
                     title={dataset.url}
                   >
-                    {dataset.url}
+                    {siteOf(dataset.url) || dataset.url}
                   </a>
                 </div>
 
-                <Badge variant="brand" size="sm">
+                <span className="shrink-0 rounded-full border border-line/80 bg-surface-muted px-2 py-0.5 text-right text-2xs font-semibold tabular-nums text-fg-muted">
                   {dataset.recordsCount} rows
-                </Badge>
+                </span>
               </div>
 
-              <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="flex items-center justify-between pt-1 border-t border-line-subtle text-2xs text-fg-subtle">
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-3 h-3" />
-                  <span>{new Date(dataset.createdAt).toLocaleDateString()}</span>
+                  <span>{relativeTime(dataset.createdAt)}</span>
                   <span>•</span>
                   <span>{dataset.fields.length} columns</span>
                 </div>
@@ -213,7 +227,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                     onClick={(e) => handleExportCsv(dataset, e)}
                     title="Export as CSV"
                     aria-label={`Export ${dataset.name} as CSV`}
-                    className="p-1 text-slate-400 hover:text-emerald-700 rounded hover:bg-slate-100 transition-colors"
+                    className="p-1 text-fg-subtle hover:text-brand-fg rounded hover:bg-surface-muted transition-colors"
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
                   </button>
@@ -222,7 +236,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                     onClick={(e) => handleExportJson(dataset, e)}
                     title="Export as JSON"
                     aria-label={`Export ${dataset.name} as JSON`}
-                    className="p-1 text-slate-400 hover:text-emerald-700 rounded hover:bg-slate-100 transition-colors"
+                    className="p-1 text-fg-subtle hover:text-brand-fg rounded hover:bg-surface-muted transition-colors"
                   >
                     <FileJson className="w-3.5 h-3.5" />
                   </button>
@@ -234,7 +248,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                     }}
                     title="Delete dataset"
                     aria-label={`Delete dataset ${dataset.name}`}
-                    className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 transition-colors"
+                    className="p-1 text-fg-subtle hover:text-danger-fg rounded hover:bg-danger-soft transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -246,7 +260,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
       )}
 
       {/* Delete Confirmation Modal */}
-      <Modal
+      <Dialog
         isOpen={deleteTargetId !== null}
         onClose={() => setDeleteTargetId(null)}
         title="Delete Dataset?"
@@ -271,10 +285,10 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
           </>
         }
       >
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-fg-muted">
           Are you sure you want to proceed? This action cannot be undone.
         </p>
-      </Modal>
+      </Dialog>
     </div>
   );
 };

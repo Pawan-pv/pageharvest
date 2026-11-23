@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { DetectedListPreview } from '@/components/picker/DetectedListPreview';
 import { FieldEditorRow } from '@/components/picker/FieldEditorRow';
 import { AddFieldModal } from '@/components/picker/AddFieldModal';
@@ -56,11 +57,15 @@ describe('choosing a list', () => {
     expect(options).toHaveLength(2);
     const second = options[1].closest('label') as HTMLElement;
     expect(second).toHaveTextContent('Tiles');
-    expect(second).toHaveTextContent('24 items');
-    expect(second).toHaveTextContent('40% confidence');
-    expect(second).toHaveTextContent('Image');
+    expect(second).toHaveTextContent('24 similar items found');
+    expect(second).toHaveTextContent('Low · 40% confidence');
+    expect(second).toHaveTextContent('1 column: Image');
     expect(second).toHaveTextContent('Rec 0');
-    expect(second).toHaveTextContent('labelled as recommendations or promotions');
+    // Evidence is for checking, so it sits under each card's Technical details.
+    const card = second.parentElement as HTMLElement;
+    expect(card).not.toHaveTextContent('labelled as recommendations or promotions');
+    fireEvent.click(within(card).getByText('Technical details'));
+    expect(card).toHaveTextContent('labelled as recommendations or promotions');
   });
 
   it('marks the list in use, and lets the user choose another', () => {
@@ -77,15 +82,16 @@ describe('choosing a list', () => {
     preview({ candidates: [RESULTS], credible: true });
 
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    expect(screen.getByText('10 items detected')).toBeInTheDocument();
+    expect(screen.getByText('10 similar items found')).toBeInTheDocument();
   });
 
   it('says plainly when nothing looks like data, and does not proceed on its own', () => {
     const navigation = candidate({ credible: false, name: 'Menu items', confidence: 0.05, evidence: ['inside navigation, a sidebar or a footer'] });
     const { onConfirm } = preview({ candidates: [navigation], credible: false, containerSelector: navigation.containerSelector });
 
-    expect(screen.getByRole('alert')).toHaveTextContent('No data list was found');
-    const next = screen.getByRole('button', { name: /Next: Choose Fields/ });
+    // Not an error, so it is a polite status rather than an alert.
+    expect(screen.getByRole('status')).toHaveTextContent('No data list was found');
+    const next = screen.getByRole('button', { name: 'Use this list' });
     expect(next).toBeDisabled();
 
     fireEvent.click(next);
@@ -97,15 +103,47 @@ describe('choosing a list', () => {
     const { onConfirm } = preview({ candidates: [navigation], credible: false });
 
     fireEvent.click(screen.getByRole('button', { name: /Use this list anyway/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Next: Choose Fields/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use this list' }));
 
+    expect(onConfirm).toHaveBeenCalled();
+  });
+
+  it('treats choosing a weak list from the alternatives as the deliberate click', () => {
+    const footer = candidate({ containerSelector: 'footer a', credible: false, name: 'Links in the footer', confidence: 0.1 });
+    const onConfirm = vi.fn();
+    // Like the real hook: choosing a candidate makes it the list in use.
+    function Harness() {
+      const [selector, setSelector] = useState(RESULTS.containerSelector);
+      const current = selector === footer.containerSelector ? footer : RESULTS;
+      return (
+        <DetectedListPreview
+          detectedList={{
+            containerSelector: current.containerSelector,
+            matchCount: current.matchCount,
+            sampleSnippets: current.sampleSnippets,
+            candidates: [RESULTS, footer],
+            credible: true,
+          }}
+          onSelectCandidate={(chosen) => setSelector(chosen.containerSelector)}
+          onConfirm={onConfirm}
+          onPickAgain={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      );
+    }
+    render(<Harness />);
+
+    fireEvent.click(screen.getAllByRole('radio')[1]);
+    expect(screen.getAllByRole('radio')[1]).toBeChecked();
+    expect(screen.queryByRole('button', { name: 'Use this list anyway' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Use this list' }));
     expect(onConfirm).toHaveBeenCalled();
   });
 
   it('does not ask for confirmation for a credible list chosen by the user', () => {
     const { onConfirm } = preview({ candidates: [RESULTS, RECOMMENDED], credible: true });
 
-    fireEvent.click(screen.getByRole('button', { name: /Next: Choose Fields/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use this list' }));
 
     expect(onConfirm).toHaveBeenCalled();
   });
@@ -151,9 +189,9 @@ describe('regex fields can actually be configured', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit field Code' }));
-    fireEvent.change(screen.getByLabelText('Data Type'), { target: { value: 'regex' } });
-    fireEvent.change(screen.getByLabelText('Regex Pattern'), { target: { value: 'SKU-(\\d+)' } });
-    fireEvent.change(screen.getByLabelText('Capture Group'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('What to collect'), { target: { value: 'regex' } });
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'SKU-(\\d+)' } });
+    fireEvent.change(screen.getByLabelText('Part to keep'), { target: { value: '1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save field edits' }));
 
     expect(onUpdate).toHaveBeenCalledWith(
@@ -174,22 +212,22 @@ describe('regex fields can actually be configured', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit field Code' }));
-    fireEvent.change(screen.getByLabelText('Regex Pattern'), { target: { value: '(' } });
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: '(' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save field edits' }));
 
     expect(onUpdate).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent('not a valid');
+    expect(screen.getByLabelText('Pattern')).toHaveAccessibleDescription(/not a valid/);
   });
 
   it('Add Column saves a pattern and group', () => {
     const onAdd = vi.fn();
     render(<AddFieldModal isOpen onClose={vi.fn()} onAdd={onAdd} />);
 
-    fireEvent.change(screen.getByLabelText(/Column Name/), { target: { value: 'Code' } });
-    fireEvent.change(screen.getByLabelText(/Relative CSS Selector/), { target: { value: '.sku' } });
-    fireEvent.change(screen.getByLabelText('Extractor Type'), { target: { value: 'regex' } });
-    fireEvent.change(screen.getByLabelText(/Regex Pattern/), { target: { value: 'SKU-(\\d+)' } });
-    fireEvent.change(screen.getByLabelText(/Capture Group/), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('Column name'), { target: { value: 'Code' } });
+    fireEvent.change(screen.getByLabelText('CSS selector inside each item'), { target: { value: '.sku' } });
+    fireEvent.change(screen.getByLabelText('What to collect'), { target: { value: 'regex' } });
+    fireEvent.change(screen.getByLabelText('Pattern'), { target: { value: 'SKU-(\\d+)' } });
+    fireEvent.change(screen.getByLabelText('Part to keep'), { target: { value: '1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add Column' }));
 
     expect(onAdd).toHaveBeenCalledWith(
@@ -201,9 +239,9 @@ describe('regex fields can actually be configured', () => {
     const onAdd = vi.fn();
     render(<AddFieldModal isOpen onClose={vi.fn()} onAdd={onAdd} />);
 
-    fireEvent.change(screen.getByLabelText(/Column Name/), { target: { value: 'Code' } });
-    fireEvent.change(screen.getByLabelText(/Relative CSS Selector/), { target: { value: '.sku' } });
-    fireEvent.change(screen.getByLabelText('Extractor Type'), { target: { value: 'regex' } });
+    fireEvent.change(screen.getByLabelText('Column name'), { target: { value: 'Code' } });
+    fireEvent.change(screen.getByLabelText('CSS selector inside each item'), { target: { value: '.sku' } });
+    fireEvent.change(screen.getByLabelText('What to collect'), { target: { value: 'regex' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add Column' }));
 
     expect(onAdd).not.toHaveBeenCalled();

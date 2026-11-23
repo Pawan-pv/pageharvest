@@ -4,8 +4,9 @@ import App from '../../../entrypoints/sidepanel/App';
 import { JobCoordinator, JobTransport } from '@/background/job-coordinator';
 import { PaginationConfigPanel } from '@/components/picker/PaginationConfigPanel';
 import { recordsToCsv } from '@/core/export/exporter';
+import { messagingService } from '@/services/messaging';
 import { db } from '@/storage/db';
-import { RecipeRepository, SettingsRepository } from '@/storage/repositories';
+import { JobRepository, RecipeRepository, SettingsRepository } from '@/storage/repositories';
 import { ExtractionPaginationConfig } from '@/types';
 import { installBackground, makeBatch, makeRecipe } from '../../utils/job-harness';
 
@@ -26,8 +27,10 @@ async function saveRecipe(overrides = {}) {
 }
 
 async function openLibraryTab(name: string) {
-  fireEvent.click(await screen.findByRole('button', { name: 'Datasets' }));
-  fireEvent.click(await screen.findByRole('button', { name }));
+  const mainNav = await screen.findByRole('navigation', { name: 'Main' });
+  fireEvent.click(within(mainNav).getByRole('button', { name: 'Data' }));
+  const libraryNav = await screen.findByRole('navigation', { name: 'Library sections' });
+  fireEvent.click(within(libraryNav).getByRole('button', { name }));
 }
 
 describe('Side panel as a view of stored state', () => {
@@ -48,8 +51,8 @@ describe('Side panel as a view of stored state', () => {
   async function runSavedRecipe() {
     await openLibraryTab('Recipes');
     fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Start Extraction/ }));
-    await screen.findByText('Harvesting in Progress...');
+    fireEvent.click(await screen.findByRole('button', { name: /Start extraction/i }));
+    await screen.findByText('Collecting rows…');
     await waitFor(async () => expect(await db.jobs.count()).toBe(1));
   }
 
@@ -73,9 +76,9 @@ describe('Side panel as a view of stored state', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('Harvesting in Progress...')).toBeInTheDocument();
+    expect(await screen.findByText('Collecting rows…')).toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByText('Records Harvested').parentElement?.parentElement).toHaveTextContent('1')
+      expect(screen.getByText('Rows saved').nextSibling).toHaveTextContent('1')
     );
     expect(await db.jobs.count()).toBe(1);
   });
@@ -97,15 +100,51 @@ describe('Side panel as a view of stored state', () => {
     await chromeMock.sendFromContentScript(101, makeBatch(identity, 1, ['Row one']));
     await coordinator.finishJob(job.id);
 
+    // The second open re-runs the panel's background reconciliation. Wait for it
+    // (and the active-job scan after it) to return, so no state update lands
+    // while the test clicks through to the results view.
+    let reconciled = false;
+    const originalReconcile = messagingService.reconcileJobs.bind(messagingService);
+    vi.spyOn(messagingService, 'reconcileJobs').mockImplementation(async () => {
+      await originalReconcile();
+      reconciled = true;
+    });
+    let activeScanned = false;
+    const originalFindActive = JobRepository.prototype.findActiveJobs;
+    vi.spyOn(JobRepository.prototype, 'findActiveJobs').mockImplementation(async function (this: JobRepository) {
+      const result = await originalFindActive.call(this);
+      activeScanned = true;
+      return result;
+    });
     render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Datasets' }));
-    fireEvent.click(await screen.findByText(/Simple Product Grid/));
+    await screen.findByText('List Extractor');
+    await waitFor(() => expect(screen.queryByText('Loading your data…')).not.toBeInTheDocument());
+    await waitFor(() => expect(reconciled).toBe(true));
+    await waitFor(() => expect(activeScanned).toBe(true));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    const datasetsButton = await screen.findByRole('button', { name: 'Data' });
+    await act(async () => {
+      fireEvent.click(datasetsButton);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
+    await screen.findByText('Saved Extractions');
+    await waitFor(() => expect(screen.queryByText('Loading extraction history...')).not.toBeInTheDocument());
+    const datasetRow = await screen.findByRole('heading', { name: /Simple Product Grid/ });
+    await act(async () => {
+      fireEvent.click(datasetRow);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    });
 
     // DataTable is loaded through React.lazy. The production contract is that the
     // saved row appears after the panel reopens, not that its module resolves within
     // Testing Library's one-second default while the full suite is under load.
     expect(await screen.findByText('Row one', {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(await screen.findByLabelText('Extraction summary')).toHaveTextContent('1 detected, 1 kept');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
   });
 
   it('pauses through the background, and resumes from what storage says', async () => {
@@ -114,11 +153,11 @@ describe('Side panel as a view of stored state', () => {
     await runSavedRecipe();
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
-    expect(await screen.findByText('Extraction Paused')).toBeInTheDocument();
+    expect(await screen.findByText('Extraction paused')).toBeInTheDocument();
     expect((await db.jobs.get(await jobId()))?.status).toBe('PAUSED');
 
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
-    expect(await screen.findByText('Harvesting in Progress...')).toBeInTheDocument();
+    expect(await screen.findByText('Collecting rows…')).toBeInTheDocument();
     expect((await db.jobs.get(await jobId()))?.status).toBe('RUNNING');
   });
 
@@ -127,9 +166,10 @@ describe('Side panel as a view of stored state', () => {
     render(<App />);
     await runSavedRecipe();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel Job' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel job' }));
 
-    expect(await screen.findByText('Quick Actions')).toBeInTheDocument();
+    expect(await screen.findByText('List Extractor')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Loading your data…')).not.toBeInTheDocument());
     expect((await db.jobs.get(await jobId()))?.status).toBe('CANCELLED');
     expect(await db.history.count()).toBe(1);
   });
@@ -139,7 +179,7 @@ describe('Side panel as a view of stored state', () => {
     render(<App />);
     await runSavedRecipe();
 
-    fireEvent.click(screen.getByRole('button', { name: /Finish & View Results/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Finish and view rows/ }));
 
     await waitFor(async () => {
       expect((await db.jobs.get(await jobId()))?.status).toBe('COMPLETED');
@@ -150,15 +190,20 @@ describe('Side panel as a view of stored state', () => {
   it('shows a clear error when a job cannot start, and stays on the configuration', async () => {
     await saveRecipe();
     vi.spyOn(transport, 'sendToTab').mockRejectedValue(new Error('Receiving end does not exist.'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     render(<App />);
 
     await openLibraryTab('Recipes');
     fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Start Extraction/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Start extraction/i }));
 
     expect(await screen.findByText(/could not start extraction/)).toBeInTheDocument();
-    expect(screen.getByText('Columns to Extract')).toBeInTheDocument();
+    expect(screen.getByText('Choose your columns')).toBeInTheDocument();
     expect((await db.jobs.toArray())[0].status).toBe('FAILED');
+    expect(warnSpy).toHaveBeenCalledWith(
+      'PageHarvest operation failed:',
+      expect.stringContaining('The page could not start extraction')
+    );
   });
 
   it('applies saved defaults to a new extraction', async () => {
@@ -167,15 +212,17 @@ describe('Side panel as a view of stored state', () => {
     render(<App />);
 
     await waitFor(async () => expect(await db.settings.count()).toBe(1));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await screen.findByText('List Extractor');
     await openLibraryTab('Recipes');
     fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
 
-    fireEvent.click(await screen.findByRole('button', { name: /Infinite Scroll/ }));
-    expect(screen.getByLabelText('Max Scrolls')).toHaveValue(17);
+    fireEvent.click(await screen.findByRole('button', { name: 'Next: Pagination' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Scroll to load more' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+    expect(screen.getByLabelText('Most scrolls')).toHaveValue(17);
 
-    fireEvent.click(screen.getByRole('button', { name: /Next Button/ }));
-    expect(screen.getByLabelText('Max Pages to Crawl')).toHaveValue(33);
+    fireEvent.click(screen.getByRole('radio', { name: 'Click a Next button' }));
+    expect(screen.getByLabelText('Most pages')).toHaveValue(33);
   });
 
   describe('Library', () => {
@@ -185,6 +232,7 @@ describe('Side panel as a view of stored state', () => {
 
       await openLibraryTab('Recipes');
       fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Base recipe' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Next: Pagination' }));
       fireEvent.change(await screen.findByLabelText('Recipe Name'), { target: { value: 'My new recipe' } });
       fireEvent.click(screen.getByRole('button', { name: 'Save Recipe' }));
 
@@ -197,7 +245,7 @@ describe('Side panel as a view of stored state', () => {
       render(<App />);
       await openLibraryTab('Recipes');
       fireEvent.click(await screen.findByRole('button', { name: 'Run recipe My new recipe' }));
-      fireEvent.click(await screen.findByRole('button', { name: /Start Extraction/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /Start extraction/i }));
 
       await waitFor(async () => {
         expect((await db.jobs.toArray())[0]?.recipeId).toBe(saved?.id);
@@ -209,6 +257,7 @@ describe('Side panel as a view of stored state', () => {
       render(<App />);
       await openLibraryTab('Recipes');
       fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Next: Pagination' }));
       fireEvent.change(await screen.findByLabelText('Recipe Name'), { target: { value: 'Will fail' } });
 
       vi.spyOn(db.recipes, 'put').mockRejectedValueOnce(new Error('disk full'));
@@ -272,7 +321,7 @@ describe('Side panel as a view of stored state', () => {
       render(<App />);
       await openLibraryTab('Recipes');
       fireEvent.click(await screen.findByRole('button', { name: 'Run recipe Saved catalog' }));
-      fireEvent.click(await screen.findByRole('button', { name: /Start Extraction/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /Start extraction/i }));
       await waitFor(async () => expect(await db.schemas.count()).toBe(1));
       const [schema] = await db.schemas.toArray();
       await new RecipeRepository().updateRecipe('recipe_saved', { schemaId: schema.id });
@@ -290,7 +339,7 @@ describe('Side panel as a view of stored state', () => {
       await screen.findByText('Card list');
 
       fireEvent.click(screen.getByRole('button', { name: 'Use schema Card list' }));
-      expect(await screen.findByText('Columns to Extract')).toBeInTheDocument();
+      expect(await screen.findByText('Choose your columns')).toBeInTheDocument();
     });
 
     it('shows real run history for finished, failed and cancelled runs', async () => {
@@ -325,7 +374,7 @@ describe('Side panel as a view of stored state', () => {
       fireEvent.click(choice);
       fireEvent.click(screen.getByRole('button', { name: 'Save field edits' }));
 
-      expect(await screen.findByText('filters rows')).toBeInTheDocument();
+      expect(await screen.findByText('Required')).toBeInTheDocument();
     });
   });
 });
@@ -364,7 +413,7 @@ describe('URL template configuration', () => {
 
   it('explains the supported placeholders', () => {
     render(<PaginationConfigPanel config={base} onChange={vi.fn()} />);
-    expect(screen.getByText(/\{page\} becomes the page number/)).toBeInTheDocument();
+    expect(screen.getByText(/Write \{page\} where the page number goes/)).toBeInTheDocument();
     expect(screen.getByText(/\{offset\} starts at 0/)).toBeInTheDocument();
   });
 
@@ -394,13 +443,14 @@ describe('URL template configuration', () => {
     const onChange = vi.fn();
     render(<PaginationConfigPanel config={base} onChange={onChange} />);
 
-    fireEvent.change(screen.getByLabelText('Page URL Template'), { target: { value: 'https://a.test/{page}' } });
+    fireEvent.change(screen.getByLabelText('Page address'), { target: { value: 'https://a.test/{page}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
     expect(onChange).toHaveBeenLastCalledWith({ urlTemplate: 'https://a.test/{page}' });
 
-    fireEvent.change(screen.getByLabelText('Page Increment'), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('Count up by'), { target: { value: '5' } });
     expect(onChange).toHaveBeenLastCalledWith({ pageIncrement: 5 });
 
-    fireEvent.change(screen.getByLabelText('Maximum Pages'), { target: { value: '9' } });
+    fireEvent.change(screen.getByLabelText('Most pages'), { target: { value: '9' } });
     expect(onChange).toHaveBeenLastCalledWith({ maxPages: 9 });
   });
 });

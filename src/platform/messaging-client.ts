@@ -32,7 +32,8 @@ export class MessagingClient {
     const parseResult = extensionMessageSchema.safeParse(message);
     if (!parseResult.success) {
       throw new Error(
-        `Invalid message: ${parseResult.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')}`
+        // Zod 4 paths can hold symbols, which Array.join cannot convert.
+        `Invalid message: ${parseResult.error.issues.map((e) => `${e.path.map(String).join('.')}: ${e.message}`).join(', ')}`
       );
     }
     return parseResult.data;

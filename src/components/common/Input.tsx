@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -19,43 +19,48 @@ export const Input: React.FC<InputProps> = ({
   disabled,
   ...props
 }) => {
-  const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
+  const messageId = `${inputId}-message`;
+  const hasMessage = Boolean(error || helperText);
 
   return (
     <div className="w-full flex flex-col gap-1 text-left">
       {label && (
-        <label htmlFor={inputId} className="text-xs font-semibold text-slate-700 tracking-tight">
+        <label htmlFor={inputId} className="text-xs font-semibold text-fg-muted tracking-tight">
           {label}
         </label>
       )}
       <div className="relative flex items-center">
         {iconLeft && (
-          <div className="absolute left-3 flex items-center pointer-events-none text-slate-400">
+          <div className="absolute left-3 flex items-center pointer-events-none text-fg-subtle">
             {iconLeft}
           </div>
         )}
         <input
           id={inputId}
           disabled={disabled}
-          className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed ${
+          aria-invalid={error ? true : undefined}
+          aria-describedby={hasMessage ? messageId : undefined}
+          className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-subtle transition-colors focus:outline-none focus:ring-1 focus:ring-offset-0 disabled:bg-surface-sunken disabled:text-fg-subtle disabled:cursor-not-allowed ${
             iconLeft ? 'pl-9' : ''
           } ${iconRight ? 'pr-9' : ''} ${
             error
-              ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-200'
-              : 'border-slate-300 focus:border-emerald-500 focus:ring-emerald-200'
+              ? 'border-danger focus:border-danger focus:ring-danger'
+              : 'border-line-strong focus:border-focus focus:ring-focus'
           } ${className}`}
           {...props}
         />
         {iconRight && (
-          <div className="absolute right-3 flex items-center text-slate-400">
+          <div className="absolute right-3 flex items-center text-fg-subtle">
             {iconRight}
           </div>
         )}
       </div>
       {error ? (
-        <span className="text-xs text-rose-600 font-medium">{error}</span>
+        <span id={messageId} className="text-xs text-danger-fg font-medium">{error}</span>
       ) : helperText ? (
-        <span className="text-xs text-slate-500">{helperText}</span>
+        <span id={messageId} className="text-xs text-fg-subtle">{helperText}</span>
       ) : null}
     </div>
   );

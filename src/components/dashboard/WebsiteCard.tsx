@@ -1,85 +1,143 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Globe, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { Card } from '@/components/common/Card';
 import { Badge } from '@/components/common/Badge';
+import { Banner } from '@/components/common/Banner';
 import { TabInfo } from '@/services/messaging';
+import { detectShopifyStore } from '@/core/shopify/detector';
 
 export interface WebsiteCardProps {
   tab: TabInfo;
   isLoading?: boolean;
+  /** Advanced options is on: the manual "check again" button is shown (ADR-039). */
+  advanced?: boolean;
   onRefresh: () => void;
+  onOpenShopify?: (url: string) => void;
 }
 
+/**
+ * Which page PageHarvest is looking at, and whether it can read it. This is the compact
+ * strip under the command dock, not a card: it must never clip behind the panel header.
+ * The site's own icon is not shown: loading it would be a network request from the panel,
+ * and the panel makes none.
+ */
 export const WebsiteCard: React.FC<WebsiteCardProps> = ({
   tab,
   isLoading = false,
+  advanced = false,
   onRefresh,
+  onOpenShopify,
 }) => {
-  let hostname = 'Unknown page';
+  const [isShopify, setIsShopify] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    if (!tab.url || !tab.isInjectable) {
+      setIsShopify(false);
+      return;
+    }
+    // Only probe non-local web origins to avoid triggering background network traffic on local fixture pages or loopback
+    const isLoopback = tab.url.includes('127.0.0.1') || tab.url.includes('localhost');
+    if (isLoopback) {
+      setIsShopify(false);
+      return;
+    }
+    void detectShopifyStore(tab.url).then((detected) => {
+      if (live) setIsShopify(detected);
+    });
+    return () => {
+      live = false;
+    };
+  }, [tab.url, tab.isInjectable]);
+
+  let hostname = tab.needsAccess ? 'Page not shared yet' : 'This page';
   try {
     if (tab.url) {
-      hostname = new URL(tab.url).hostname;
+      hostname = new URL(tab.url).hostname || tab.url;
     }
   } catch {
     hostname = tab.url || 'Web page';
   }
 
   return (
-    <Card variant="default" className="text-left bg-gradient-to-b from-white to-slate-50/50">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 text-emerald-700 shadow-xs">
-            {tab.favIconUrl ? (
-              <img
-                src={tab.favIconUrl}
-                alt=""
-                className="w-5 h-5 object-contain rounded-xs"
-                onError={(e) => {
-                  // Fallback to Globe icon if image fails to load
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
+    <div className="flex flex-col gap-2 text-left">
+      <div className="flex items-center gap-2 rounded-2xl border border-line/80 bg-surface px-2.5 py-2">
+        <div
+          aria-hidden="true"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-brand-line bg-brand-soft text-brand-fg"
+        >
+          <Globe className="h-3.5 w-3.5" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-xs font-semibold tracking-tight text-fg" title={hostname}>
+              {hostname}
+            </span>
+            {tab.isInjectable ? (
+              <Badge variant="success" size="sm" icon={<CheckCircle2 className="w-2.5 h-2.5" />}>
+                Ready
+              </Badge>
+            ) : tab.needsAccess ? (
+              <Badge variant="warning" size="sm" icon={<AlertCircle className="w-2.5 h-2.5" />}>
+                Access needed
+              </Badge>
             ) : (
-              <Globe className="w-5 h-5" />
+              <Badge variant="warning" size="sm" icon={<AlertCircle className="w-2.5 h-2.5" />}>
+                Can&apos;t read this page
+              </Badge>
+            )}
+            {isShopify && (
+              <button
+                type="button"
+                onClick={() => onOpenShopify?.(tab.url)}
+                className="inline-flex items-center gap-1 rounded-full border border-tool-lime/30 bg-tool-lime/10 px-2 py-0.5 text-3xs font-semibold text-tool-lime transition-colors hover:bg-tool-lime/20 cursor-pointer"
+                title="Open Shopify Extractor for this store"
+              >
+                Shopify store detected →
+              </button>
             )}
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-semibold text-slate-900 tracking-tight truncate max-w-[200px]">
-                {hostname}
-              </span>
-              {tab.isInjectable ? (
-                <Badge variant="success" size="sm" icon={<CheckCircle2 className="w-2.5 h-2.5" />}>
-                  Ready
-                </Badge>
-              ) : (
-                <Badge variant="warning" size="sm" icon={<AlertCircle className="w-2.5 h-2.5" />}>
-                  Restricted
-                </Badge>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-500 truncate max-w-[260px] mt-0.5" title={tab.title}>
+          {tab.url && (
+            <p className="truncate text-2xs text-fg-subtle" title={tab.title}>
               {tab.title || 'No title'}
             </p>
-          </div>
+          )}
         </div>
 
-        <button
-          onClick={onRefresh}
-          disabled={isLoading}
-          title="Refresh active tab connection"
-          aria-label="Refresh active tab connection"
-          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors shrink-0 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
+        {/* The panel follows the tab by itself; the button is for people who want to be sure. */}
+        {advanced && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isLoading}
+            title="Check this page again"
+            aria-label="Check this page again"
+            className="shrink-0 rounded-lg p-1.5 text-fg-subtle transition-colors hover:bg-surface-muted hover:text-fg-muted disabled:opacity-50"
+          >
+            <RefreshCw aria-hidden="true" className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+        )}
       </div>
 
-      {!tab.isInjectable && (
-        <div className="mt-3 p-2 rounded-lg bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-800 leading-snug">
-          Chrome extensions cannot inspect browser internal pages. Please switch to any regular website (e.g. e-commerce, blog, or search results) to begin harvesting.
-        </div>
+      {!tab.isInjectable && tab.needsAccess && (
+        <Banner
+          tone="warning"
+          nextStep="Click the PageHarvest button in the Chrome toolbar while this page is open. The panel updates by itself."
+        >
+          PageHarvest cannot see this page yet. Its access to websites has been limited in Chrome&apos;s settings, so it
+          reads a site only after you click its button there.
+        </Banner>
       )}
-    </Card>
+
+      {!tab.isInjectable && !tab.needsAccess && (
+        <Banner
+          tone="warning"
+          nextStep="Switch to a tab with a website, such as a shop or a list of articles. This panel follows the tab you are on."
+        >
+          PageHarvest cannot read browser pages like this one, such as settings, the new tab page or the Chrome Web
+          Store.
+        </Banner>
+      )}
+    </div>
   );
 };

@@ -17,7 +17,8 @@ export const ExtractionSchemaSchema = z.object({
   /** Multi-anchor fallback ladder for the repeating container. Optional for legacy recipes. */
   containerAnchor: MultiAnchorSelectorSchema.optional(),
   fields: z.array(ExtractionFieldSchema).min(1, 'At least one field is required'),
-  pagination: PaginationConfigSchema.default({
+  // prefault, not default: the value is parsed, so the schema's own defaults fill the rest (ADR-035).
+  pagination: PaginationConfigSchema.prefault({
     type: 'none',
     maxPages: 20,
     delayMs: 1500,

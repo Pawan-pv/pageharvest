@@ -1,14 +1,63 @@
 import { CandidateKind } from '@/shared/contracts/message';
+import type { MultiAnchorSelector } from '@/shared/contracts/selector';
 import {
   ExtensionMessage,
+  DataCommandResult,
+  DataCommandResultSchema,
+  FieldPreviewResult,
+  FieldPreviewResultSchema,
   JobCommandResult,
   JobCommandResultSchema,
+  PREVIEW_ROW_LIMIT,
   extensionMessageSchema,
 } from '@/contracts/messages';
 import { MessagingClient } from '@/platform/messaging-client';
+import { injectContentScript } from '@/platform/content-script';
+import { hasAllSitesAccess, requestSiteOrigin, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import { isHarvestableUrl } from '@/platform/tab-manager';
 import { JobIdentity } from '@/shared/contracts/job';
-import { ExtractionRecipe } from '@/types';
+import { recipeToSchema } from '@/core/library/recipe-file';
+import { ExtractedRecord, ExtractionRecipe, FieldDefinition } from '@/types';
+
+export { SITE_PERMISSION_MESSAGE };
+
+export class SitePermissionError extends Error {
+  code = 'SITE_PERMISSION_REQUIRED' as const;
+  constructor(message = SITE_PERMISSION_MESSAGE) {
+    super(message);
+    this.name = 'SitePermissionError';
+  }
+}
+
+export function isSitePermissionError(error: unknown): error is SitePermissionError {
+  if (error instanceof SitePermissionError) return true;
+  if (typeof error !== 'object' || error === null) return false;
+  return (error as { code?: unknown }).code === 'SITE_PERMISSION_REQUIRED';
+}
+
+export async function injectContentScriptIntoTab(tabId: number): Promise<void> {
+  await injectContentScript(tabId);
+}
+
+/**
+ * Ensures the content script is present for picking / preview / detection.
+ * Uses the activeTab grant (no prompt) when the toolbar click gave one; falls
+ * back to a site-origin request. Restricted pages keep TAB_DISCONNECTED.
+ */
+export async function ensureContentScriptForPicking(tab: { id?: number; url: string }): Promise<void> {
+  if (typeof tab.id !== 'number') throw new SitePermissionError();
+  if (!isHarvestableUrl(tab.url)) {
+    throw new Error(`Cannot harvest restricted URL "${tab.url || 'unknown'}". Extensions cannot run on internal or web store pages.`);
+  }
+  if (!tab.url) throw new SitePermissionError();
+  try {
+    await injectContentScriptIntoTab(tab.id);
+  } catch {
+    const granted = await requestSiteOrigin(tab.url);
+    if (!granted) throw new SitePermissionError();
+    await injectContentScriptIntoTab(tab.id);
+  }
+}
 
 function generateId(): string {
   return 'msg_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
@@ -16,13 +65,21 @@ function generateId(): string {
 
 const TAB_MESSAGE_TIMEOUT_MS = 15_000;
 const JOB_COMMAND_TIMEOUT_MS = 20_000;
+/** A preview is a convenience: it gives up quickly rather than hold the panel. */
+const PREVIEW_TIMEOUT_MS = 4_000;
 
 export interface TabInfo {
   id?: number;
   url: string;
   title: string;
-  favIconUrl?: string;
   isInjectable: boolean;
+  /**
+   * Chrome hides the page's address because the user has limited PageHarvest's site access
+   * in Chrome's settings. A click on the toolbar button grants it for the page. While every
+   * website is allowed (the installed state, ADR-040) a hidden address is a browser page,
+   * which no click can open up, so this stays false.
+   */
+  needsAccess?: boolean;
 }
 
 export interface StartJobRequest {
@@ -34,7 +91,12 @@ export interface StartJobRequest {
   recipeId?: string;
 }
 
-export type MessageListener = (message: ExtensionMessage) => void;
+/** Where a message came from. `tabId` is set for a page's content script, unset for extension pages. */
+export interface MessageOrigin {
+  tabId?: number;
+}
+
+export type MessageListener = (message: ExtensionMessage, origin?: MessageOrigin) => void;
 
 /**
  * The side panel's connection to the rest of the extension. Delivery, validation and
@@ -50,10 +112,10 @@ class ExtensionMessagingService {
 
   private initRuntimeListener() {
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-      chrome.runtime.onMessage.addListener((message: unknown) => {
+      chrome.runtime.onMessage.addListener((message: unknown, sender?: chrome.runtime.MessageSender) => {
         const parsed = extensionMessageSchema.safeParse(message);
         if (parsed.success) {
-          this.notifyListeners(parsed.data);
+          this.notifyListeners(parsed.data, { tabId: sender?.tab?.id });
         }
       });
     }
@@ -66,10 +128,10 @@ class ExtensionMessagingService {
     };
   }
 
-  private notifyListeners(message: ExtensionMessage) {
+  private notifyListeners(message: ExtensionMessage, origin: MessageOrigin) {
     this.listeners.forEach((listener) => {
       try {
-        listener(message);
+        listener(message, origin);
       } catch (err) {
         console.error('Error in message listener:', err);
       }
@@ -118,9 +180,11 @@ class ExtensionMessagingService {
           return {
             id: tab.id,
             url,
-            title,
-            favIconUrl: tab.favIconUrl,
+            title: url ? title : 'This page',
             isInjectable: isHarvestableUrl(url),
+            // Asked only for a hidden address: every website's address is visible while
+            // PageHarvest holds the access it was installed with.
+            needsAccess: !url && typeof tab.id === 'number' && !(await hasAllSitesAccess()),
           };
         }
       } catch (err) {
@@ -133,22 +197,28 @@ class ExtensionMessagingService {
   }
 
   /**
-   * Sends a typed message to the content script of the active tab.
+   * Sends a typed message to the content script of a tab: the one named, or else the active
+   * tab. A message about a list the user found names the tab it was found in, so it never
+   * reaches a page the user switched to afterwards.
    */
-  public async sendToActiveTab(message: ExtensionMessage): Promise<unknown> {
+  public async sendToActiveTab(message: ExtensionMessage, tabId?: number): Promise<unknown> {
     const validated = extensionMessageSchema.parse(message);
 
     if (typeof chrome === 'undefined' || !chrome.tabs?.sendMessage) {
       throw new Error('Chrome tab messaging is unavailable in this runtime.');
     }
 
-    const tab = await this.getActiveTab();
-    if (!tab.id || !tab.isInjectable) {
-      throw new Error(`Cannot communicate with tab ${tab.url}. Extraction is only available on web pages.`);
+    let targetTabId = tabId;
+    if (targetTabId === undefined) {
+      const tab = await this.getActiveTab();
+      if (!tab.id || !tab.isInjectable) {
+        throw new Error(`Cannot communicate with tab ${tab.url}. Extraction is only available on web pages.`);
+      }
+      targetTabId = tab.id;
     }
 
     try {
-      return await this.client.sendToTab<unknown>(tab.id, validated, {
+      return await this.client.sendToTab<unknown>(targetTabId, validated, {
         timeoutMs: TAB_MESSAGE_TIMEOUT_MS,
       });
     } catch (err) {
@@ -160,40 +230,127 @@ class ExtensionMessagingService {
     }
   }
 
-  public async startElementPicker(): Promise<void> {
-    await this.sendToActiveTab({
-      id: generateId(),
-      timestamp: Date.now(),
-      type: 'START_PICKER',
-      payload: { highlightColor: '#16a34a' },
-    });
+  public async startElementPicker(tabId?: number): Promise<void> {
+    await this.sendToActiveTab(
+      {
+        id: generateId(),
+        timestamp: Date.now(),
+        type: 'START_PICKER',
+        payload: { highlightColor: '#16a34a' },
+      },
+      tabId
+    );
   }
 
-  public async stopElementPicker(): Promise<void> {
-    await this.sendToActiveTab({
-      id: generateId(),
-      timestamp: Date.now(),
-      type: 'STOP_PICKER',
-      payload: {},
-    });
+  public async stopElementPicker(tabId?: number): Promise<void> {
+    await this.sendToActiveTab(
+      {
+        id: generateId(),
+        timestamp: Date.now(),
+        type: 'STOP_PICKER',
+        payload: {},
+      },
+      tabId
+    );
   }
 
-  public async detectRepeatedElements(targetSelector?: string, mode?: 'table' | 'links'): Promise<void> {
-    await this.sendToActiveTab({
-      id: generateId(),
-      timestamp: Date.now(),
-      type: 'DETECT_REPEATED_ELEMENTS',
-      payload: { targetSelector, mode },
-    });
+  public async detectRepeatedElements(
+    targetSelector?: string,
+    mode?: 'table' | 'links',
+    tabId?: number
+  ): Promise<void> {
+    await this.sendToActiveTab(
+      {
+        id: generateId(),
+        timestamp: Date.now(),
+        type: 'DETECT_REPEATED_ELEMENTS',
+        payload: { targetSelector, mode },
+      },
+      tabId
+    );
   }
 
-  public async detectFields(containerSelector: string, kind?: CandidateKind): Promise<void> {
-    await this.sendToActiveTab({
+  /**
+   * Asks the page for the first rows with these fields (ADR-030). Read-only on the page side.
+   * Never throws: every failure comes back as a coded result the panel can explain.
+   */
+  public async previewFields(
+    containerSelector: string,
+    fields: FieldDefinition[],
+    options: { limit?: number; timeoutMs?: number; containerAnchor?: MultiAnchorSelector; tabId?: number } = {}
+  ): Promise<FieldPreviewResult> {
+    const message = extensionMessageSchema.safeParse({
       id: generateId(),
       timestamp: Date.now(),
-      type: 'DETECT_FIELDS',
-      payload: { containerSelector, kind },
+      type: 'PREVIEW_FIELDS',
+      payload: {
+        containerSelector,
+        containerAnchor: options.containerAnchor,
+        fields,
+        limit: options.limit ?? PREVIEW_ROW_LIMIT,
+      },
     });
+    if (!message.success) {
+      return {
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        message: 'These columns cannot be previewed yet. Check that each Pattern and Attribute column is filled in.',
+      };
+    }
+
+    let tabId = options.tabId;
+    if (tabId === undefined) {
+      let tab: TabInfo;
+      try {
+        tab = await this.getActiveTab();
+      } catch {
+        return { ok: false, code: 'TAB_DISCONNECTED', message: 'There is no page to preview.' };
+      }
+      if (!tab.id || !tab.isInjectable) {
+        return { ok: false, code: 'TAB_DISCONNECTED', message: 'PageHarvest cannot read this tab.' };
+      }
+      tabId = tab.id;
+    }
+
+    // On-demand injection (ADR-037): ensure the document has a content script.
+    // TAB_DISCONNECTED keeps its meaning (timeout after injection); a missing
+    // grant is SITE_PERMISSION_REQUIRED only.
+    try {
+      await injectContentScriptIntoTab(tabId);
+    } catch {
+      return {
+        ok: false,
+        code: 'SITE_PERMISSION_REQUIRED',
+        message: SITE_PERMISSION_MESSAGE,
+      };
+    }
+
+    let reply: unknown;
+    try {
+      reply = await this.client.sendToTab<unknown>(tabId, message.data, {
+        timeoutMs: options.timeoutMs ?? PREVIEW_TIMEOUT_MS,
+        retries: 0,
+      });
+    } catch {
+      return { ok: false, code: 'TAB_DISCONNECTED', message: 'The page did not answer in time.' };
+    }
+
+    const parsed = FieldPreviewResultSchema.safeParse(reply);
+    return parsed.success
+      ? parsed.data
+      : { ok: false, code: 'UNKNOWN_ERROR', message: 'The page sent a preview PageHarvest could not read.' };
+  }
+
+  public async detectFields(containerSelector: string, kind?: CandidateKind, tabId?: number): Promise<void> {
+    await this.sendToActiveTab(
+      {
+        id: generateId(),
+        timestamp: Date.now(),
+        type: 'DETECT_FIELDS',
+        payload: { containerSelector, kind },
+      },
+      tabId
+    );
   }
 
   /**
@@ -237,6 +394,137 @@ class ExtensionMessagingService {
 
   public async discardJob(jobId: string): Promise<void> {
     await this.sendSimpleJobCommand('DISCARD_JOB', jobId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Data commands: the side panel never writes IndexedDB itself.
+  // -------------------------------------------------------------------------
+
+  public async clearUserData(): Promise<void> {
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'CLEAR_USER_DATA',
+      payload: {},
+    });
+  }
+
+  public async updateRecordCell(
+    recordId: string,
+    field: string,
+    value: string | number | null
+  ): Promise<void> {
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'UPDATE_RECORD_CELL',
+      payload: { recordId, field, value },
+    });
+  }
+
+  public async deleteRecords(datasetId: string, recordIds: string[]): Promise<number> {
+    const result = await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'DELETE_RECORDS',
+      payload: { datasetId, recordIds },
+    });
+    return result.deleted ?? recordIds.length;
+  }
+
+  public async applyDatasetEdit(
+    datasetId: string,
+    records: ExtractedRecord[],
+    fields: FieldDefinition[]
+  ): Promise<void> {
+    const normalizedFields = fields.map((f) => ({
+      ...f,
+      required: f.required ?? false,
+      transform: f.transform ?? 'trim',
+    }));
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'APPLY_DATASET_EDIT',
+      payload: { datasetId, records, fields: normalizedFields },
+    });
+  }
+
+  /** Renames a saved list through the background, the only writer. */
+  public async renameDataset(datasetId: string, name: string): Promise<void> {
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'RENAME_DATASET',
+      payload: { datasetId, name },
+    });
+  }
+
+  /** Deletes a saved list and its rows through the background. */
+  public async deleteDataset(datasetId: string): Promise<void> {
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'DELETE_DATASET',
+      payload: { datasetId },
+    });
+  }
+
+  /**
+   * Creates a dataset and its initial records atomically through the background (single-writer rule N5).
+   */
+  public async createDataset(
+    name: string,
+    url: string,
+    fields: FieldDefinition[],
+    records: ExtractedRecord[]
+  ): Promise<string> {
+    const normalizedFields = fields.map((f) => ({
+      ...f,
+      required: f.required ?? false,
+      transform: f.transform ?? 'trim',
+    }));
+    const result = await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'CREATE_DATASET',
+      payload: { name, url, fields: normalizedFields, records },
+    });
+    if (!result.datasetId) {
+      throw new Error(result.error ?? 'Dataset could not be created.');
+    }
+    return result.datasetId;
+  }
+
+  /** Stores one recipe imported from a validated file. */
+  public async importRecipe(recipe: ExtractionRecipe): Promise<void> {
+    await this.sendDataCommand({
+      id: generateId(),
+      timestamp: Date.now(),
+      type: 'IMPORT_RECIPE',
+      payload: { recipe: recipeToSchema(recipe) },
+    });
+  }
+
+  private async sendDataCommand(message: ExtensionMessage): Promise<DataCommandResult> {
+    const validated = extensionMessageSchema.parse(message);
+    const reply = await this.client.sendToBackground<unknown>(validated, {
+      timeoutMs: JOB_COMMAND_TIMEOUT_MS,
+      retries: 1,
+      retryDelayMs: 300,
+    });
+    const parsed = DataCommandResultSchema.safeParse(reply);
+    if (!parsed.success) {
+      throw new Error('The background worker did not confirm the change.');
+    }
+    if (!parsed.data.ok) {
+      const failure = new Error(parsed.data.error ?? 'The change could not be saved.');
+      // The panel recognises this storage error by name, so a refused delete keeps its own
+      // banner and wording instead of reading like an unexplained failure.
+      if (parsed.data.code === 'DATASET_IN_USE') failure.name = 'DatasetInUseError';
+      throw failure;
+    }
+    return parsed.data;
   }
 
   /** Asks the background to re-check running jobs against their tabs. */

@@ -8,7 +8,6 @@ export const ExportFormatSchema = z.enum([
   'json',       // Formatted JSON array
   'ndjson',     // Newline-delimited JSON
   'xlsx',       // Office Open XML spreadsheet (.xlsx)
-  'html_table', // Standalone styled HTML table
 ]);
 
 export type ExportFormat = z.infer<typeof ExportFormatSchema>;

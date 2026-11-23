@@ -53,9 +53,10 @@ describe('UI: App Container & Navigation Lifecycle', () => {
 
     await waitFor(() => {
       expect(screen.getByText('PageHarvest')).toBeInTheDocument();
-      expect(screen.getByText('v1.0')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Harvest' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Datasets' })).toBeInTheDocument();
+      // The version is in Help, not in the header every screen shows.
+      expect(screen.queryByText(/^v\d+\.\d+\.\d+/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Tools' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Data' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
     });
   });
@@ -63,10 +64,8 @@ describe('UI: App Container & Navigation Lifecycle', () => {
   it('shows no recovery banner when nothing can be recovered', async () => {
     render(<App />);
 
-    await screen.findByText('Quick Actions');
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    expect(screen.queryByText('Interrupted Session Detected')).not.toBeInTheDocument();
+    await screen.findByText('List Extractor');
+    await waitFor(() => expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument());
   });
 
   it('displays the recovery banner for a stored recoverable job, with its real progress', async () => {
@@ -74,28 +73,31 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('Interrupted Session Detected')).toBeInTheDocument();
-      expect(screen.getByText(/3 pages \/ 45 rows/)).toBeInTheDocument();
+      expect(screen.getByText('Extraction interrupted')).toBeInTheDocument();
+      expect(screen.getByText(/stopped at page 3 of 10/)).toBeInTheDocument();
+      expect(screen.getByText(/45 rows saved and safe/)).toBeInTheDocument();
       expect(screen.getByText(/tab running this extraction was closed/)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: 'Resume Session' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
   });
 
   it('reports scroll jobs in scrolls on the banner', async () => {
     await storeRecoverableJob({ progressKind: 'scrolls', scrollsCompleted: 6, pagesVisited: 7 });
     render(<App />);
 
-    expect(await screen.findByText(/6 scrolls \/ 45 rows/)).toBeInTheDocument();
+    expect(await screen.findByText(/stopped at scroll 6 of 10/)).toBeInTheDocument();
   });
 
   it('discards the session through the background, ending the job for good', async () => {
     await storeRecoverableJob();
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Discard Session' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    // Discarding asks first, and says the saved rows are kept.
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard job' }));
 
     await waitFor(() => {
-      expect(screen.queryByText('Interrupted Session Detected')).not.toBeInTheDocument();
+      expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument();
     });
     expect((await db.jobs.get(JOB_ID))?.status).toBe('CANCELLED');
     expect(await db.checkpoints.get(JOB_ID)).toBeUndefined();
@@ -106,30 +108,30 @@ describe('UI: App Container & Navigation Lifecycle', () => {
     await storeRecoverableJob();
     render(<App />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Resume Session' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume' }));
 
     await waitFor(async () => {
       expect((await db.jobs.get(JOB_ID))?.status).toBe('RUNNING');
     });
-    expect(await screen.findByText('Harvesting in Progress...')).toBeInTheDocument();
+    expect(await screen.findByText('Collecting rows…')).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByText('Interrupted Session Detected')).not.toBeInTheDocument();
+      expect(screen.queryByText('Extraction interrupted')).not.toBeInTheDocument();
     });
   });
 
-  it('switches views when clicking Datasets and Settings navigation tabs', async () => {
+  it('switches views when clicking Data and Settings navigation tabs', async () => {
     render(<App />);
 
-    // Click Datasets
-    fireEvent.click(screen.getByRole('button', { name: 'Datasets' }));
+    // Click Data
+    fireEvent.click(await screen.findByRole('button', { name: 'Data' }));
     await waitFor(() => expect(screen.getByText('Saved Extractions')).toBeInTheDocument());
 
     // Click Settings
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     await waitFor(() => expect(screen.getByText('Settings & Preferences')).toBeInTheDocument());
 
-    // Return to Harvest
-    fireEvent.click(screen.getByRole('button', { name: 'Harvest' }));
-    await waitFor(() => expect(screen.getByText('Quick Actions')).toBeInTheDocument());
+    // Return to Tools
+    fireEvent.click(screen.getByRole('button', { name: 'Tools' }));
+    await waitFor(() => expect(screen.getByText('List Extractor')).toBeInTheDocument());
   });
 });

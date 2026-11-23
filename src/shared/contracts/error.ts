@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 /**
- * Known error taxonomy codes for PageHarvest.
+ * Known error taxonomy codes for PageHarvest. The side panel chooses its explanation by
+ * code only (ADR-031). VALIDATION_ERROR means the user's own setup is invalid, and its
+ * message is written for the user; internal data that fails validation is UNKNOWN_ERROR.
  */
 export const ExtractionErrorCodeSchema = z.enum([
   'CONTAINER_NOT_FOUND',
@@ -14,6 +16,7 @@ export const ExtractionErrorCodeSchema = z.enum([
   'STORAGE_ERROR',
   'VALIDATION_ERROR',
   'ABORTED_BY_USER',
+  'SITE_PERMISSION_REQUIRED',
   'UNKNOWN_ERROR',
 ]);
 
@@ -29,7 +32,7 @@ export const ExtractionErrorSchema = z.object({
   jobId: z.string().optional(),
   pageNumber: z.number().int().optional(),
   selector: z.string().optional(),
-  details: z.record(z.unknown()).optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
   recoverable: z.boolean().default(false),
   timestamp: z.number().int().default(() => Date.now()),
 });
@@ -52,9 +55,11 @@ export const HarvestErrorSchema = z.object({
     'UNKNOWN',
   ]),
   severity: z.enum(['WARN', 'ERROR', 'FATAL']),
+  /** What the panel tells the user. Optional, so errors stored before ADR-031 still parse. */
+  code: ExtractionErrorCodeSchema.optional(),
   message: z.string().min(1),
   timestamp: z.number(),
-  context: z.record(z.unknown()).optional(),
+  context: z.record(z.string(), z.unknown()).optional(),
   stack: z.string().optional(),
 });
 

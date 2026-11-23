@@ -64,6 +64,15 @@ export class JobRepository {
     return jobs.find((job) => job.tabId === tabId);
   }
 
+  /**
+   * The newest job started in this tab at or after `since`. The panel asks after a start
+   * request failed, because the background may have started the job anyway.
+   */
+  public async findJobStartedInTabSince(tabId: number, since: number): Promise<ExtractionJob | undefined> {
+    const jobs = await this.db.jobs.where('tabId').equals(tabId).toArray();
+    return jobs.filter((job) => job.startedAt >= since).sort((a, b) => b.startedAt - a.startedAt)[0];
+  }
+
   /** Jobs the user can still resume or discard, newest first. */
   public async findRecoverableJobs(): Promise<ExtractionJob[]> {
     const jobs = await this.db.jobs.where('status').equals('RECOVERABLE').toArray();

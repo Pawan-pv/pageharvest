@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Indie Gear Catalog — Curated Essentials for Creators</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-hover: #334155;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --tag-bg: #0369a1;
+      --tag-text: #e0f2fe;
+      --star: #fbbf24;
+      --success: #34d399;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 32px 24px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 32px;
+      border-b: 1px solid var(--border);
+      padding-bottom: 24px;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .brand-logo svg {
+      width: 32px;
+      height: 32px;
+      color: var(--accent);
+    }
+
+    .catalog-tagline {
+      color: var(--text-muted);
+      font-size: 14px;
+      max-width: 600px;
+    }
+
+    .filters-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .filter-pill {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .filter-pill.active, .filter-pill:hover {
+      background: var(--accent);
+      color: #0f172a;
+      border-color: var(--accent);
+    }
+
+    .catalog-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .gear-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .gear-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+    }
+
+    .gear-thumb {
+      background: #182234;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .gear-thumb svg {
+      width: 100%;
+      height: 100%;
+      max-height: 140px;
+    }
+
+    .gear-info {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
+    }
+
+    .gear-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .gear-category {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .gear-stock {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--success);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .gear-stock::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+
+    .gear-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+
+    .gear-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .gear-rating {
+      color: var(--star);
+      font-weight: 600;
+    }
+
+    .gear-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid #2d3748;
+    }
+
+    .gear-price {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .gear-btn {
+      background: var(--accent);
+      color: #0f172a;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: background 0.15s ease;
+    }
+
+    .gear-btn:hover {
+      background: var(--accent-hover);
+    }
+
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 24px;
+    }
+
+    .page-link {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      min-width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .page-link.active, .page-link:hover {
+      background: var(--accent);
+      color: #0f172a;
+      border-color: var(--accent);
+    }
+
+    .page-link.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand-row">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+          <span>Indie Gear Co.</span>
+        </div>
+        <span style="font-size: 13px; color: var(--text-muted);">Spring 2026 Collection</span>
+      </div>
+      <p class="catalog-tagline">
+        Precision tools, rugged trail hardware, and minimalist studio instruments designed for independent creators.
+      </p>
+      <div class="filters-row">
+        <a href="#all" class="filter-pill active">All Gear (8)</a>
+        <a href="#camp" class="filter-pill">Camp & Trail</a>
+        <a href="#studio" class="filter-pill">Studio & Tech</a>
+        <a href="#apparel" class="filter-pill">Apparel</a>
+      </div>
+    </header>
+
+    <main>
+      <div class="catalog-grid" id="product-list">
+        <!-- Item 1 -->
+        <article class="gear-card">
+          <div class="gear-thumb">
+            <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="40" y="30" width="80" height="60" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
+              <circle cx="80" cy="60" r="18" stroke="#38bdf8" stroke-width="3" stroke-dasharray="4 4"/>
+              <path d="M75 52L85 60L75 68" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+              <path d="M50 90L40 105M110 90L120 105" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="gear-info">
+            <div class="gear-header">
+              <span class="gear-category">Camp & Trail</span>
+              <span class="gear-stock">In Stock</span>
+            </div>
+            <h3 class="gear-title">Titanium Ultralight Micro-Stove</h3>
+            <div class="gear-meta">
+              <span class="gear-rating">★ 4.9</span>
+              <span>(142 reviews)</span>
+            </div>
+            <div class="gear-footer">
+              <span class="gear-price">$64.00</span>
+              <a href="product/titanium-stove" class="gear-btn">View Details</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Item 2 -->
+        <article class="gear-card">
+          <div class="gear-thumb">
+            <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M45 40C45 35 50 30 56 30H104C110 30 115 35 115 40V90C115 95 110 100 104 100H56C50 100 45 95 45 90V40Z" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
+              <path d="M60 30V22C60 18 64 15 68 15H92C96 15 100 18 100 22V30" stroke="#38bdf8" stroke-width="3"/>
+              <line x1="45" y1="55" x2="115" y2="55" stroke="#94a3b8" stroke-width="2"/>
+              <rect x="72" y="50" width="16" height="12" rx="2" fill="#38bdf8"/>
+            </svg>
+          </div>
+          <div class="gear-info">
+            <div class="gear-header">
+              <span class="gear-category">Carry</span>
+              <span class="gear-stock">In Stock</span>
+            </div>
+            <h3 class="gear-title">Waxed Canvas Expedition Field Bag</h3>
+            <div class="gear-meta">
+              <span class="gear-rating">★ 4.8</span>
+              <span>(96 reviews)</span>
+            </div>
+            <div class="gear-footer">
+              <span class="gear-price">$128.00</span>
+              <a href="product/field-bag" class="gear-btn">View Details</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Item 3 -->
+        <article class="gear-card">
+          <div class="gear-thumb">
+            <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="50" y="25" width="60" height="75" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
+              <path d="M80 38L72 54H86L78 70" stroke="#fbbf24" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="80" cy="85" r="4" fill="#34d399"/>
+            </svg>
+          </div>
+          <div class="gear-info">
+            <div class="gear-header">
+              <span class="gear-category">Studio & Tech</span>
+              <span class="gear-stock">In Stock</span>
+            </div>
+            <h3 class="gear-title">Solar Anodized 20k Power Cell</h3>
+            <div class="gear-meta">
+              <span class="gear-rating">★ 4.7</span>
+              <span>(210 reviews)</span>
+            </div>
+            <div class="gear-footer">
+              <span class="gear-price">$79.00</span>
+              <a href="product/power-cell" class="gear-btn">View Details</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Item 4 -->
+        <article class="gear-card">
+          <div class="gear-thumb">
+            <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="35" y="40" width="90" height="45" rx="5" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
+              <circle cx="50" cy="52" r="4" fill="#38bdf8"/>
+              <circle cx="65" cy="52" r="4" fill="#38bdf8"/>
+              <circle cx="80" cy="52" r="4" fill="#38bdf8"/>
+              <circle cx="95" cy="52" r="4" fill="#38bdf8"/>
+              <circle cx="110" cy="52" r="4" fill="#38bdf8"/>
+              <rect x="55" y="66" width="50" height="8" rx="2" fill="#94a3b8"/>
+            </svg>
+          </div>
+          <div class="gear-info">
+            <div class="gear-header">
+              <span class="gear-category">Studio & Tech</span>
+              <span class="gear-stock">In Stock</span>
+            </div>
+            <h3 class="gear-title">Mechanical 60% Travel Deck</h3>
+            <div class="gear-meta">
+              <span class="gear-rating">★ 4.9</span>
+              <span>(318 reviews)</span>
+            </div>
+            <div class="gear-footer">
+              <span class="gear-price">$145.00</span>
+              <a href="product/travel-deck" class="gear-btn">View Details</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Item 5 -->
+        <article class="gear-card">
+          <div class="gear-thumb">
+            <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="62" y="35" width="36" height="65" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
+              <rect x="68" y="20" width="24" height="15" rx="3" fill="#38bdf8"/>
+              <line x1="62" y1="55" x2="98" y2="55" stroke="#94a3b8" stroke-width="2"/>
+            </svg>
+          </div>
+          <div class="gear-info">
+            <div class="gear-header">
+              <span class="gear-category">Camp & Trail</span>
+              <span class="gear-stock">In Stock</span>
+            </div>
+            <h3 class="gear-title">Insulated Double-Wall Trail Flask</h3>
+            <div class="gear-meta">
+              <span class="gear-rating">★ 4.9</span>
+              <span>(524 reviews)</span>
+            </div>
+            <div class="gear-footer">
+              <span class="gear-price">$38.00</span>
+              <a href="product/trail-flask" class="gear-btn">View Details</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Item 6 -->
+        <article class="gear-card">
+          <div class="gear-thumb">
+            <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="50,30 110,30 95,85 65,85" fill="#1e293b" stroke="#38bdf8" stroke-width="3"/>
+              <ellipse cx="80" cy="88" rx="25" ry="5" fill="#38bdf8"/>
+              <path d="M72 45C76 48 84 48 88 45" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="gear-info">
+            <div class="gear-header">
+              <span class="gear-category">Camp & Trail</span>
+              <span class="gear-stock">In Stock</span>
+            </div>
+            <h3 class="gear-title">Ceramic Slow Pour-Over Cone</h3>
+            <div class="gear-meta">
+              <span class="gear-rating">★ 4.6</span>
+              <span>(88 reviews)</span>
+            </div>
+            <div class="gear-footer">
+              <span class="gear-price">$32.00</span>
+              <a href="product/pour-over" class="gear-btn">View Details</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Item 7 -->
+        <article class="gear-card">
+          <div class="gear-thumb">
+            <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M60 25L40 45L55 55L65 42V95H95V42L105 55L120 45L100 25C90 32 70 32 60 25Z" fill="#1e293b" stroke="#38bdf8" stroke-width="3" stroke-linejoin="round"/>
+              <circle cx="80" cy="50" r="6" fill="#fbbf24"/>
+            </svg>
+          </div>
+          <div class="gear-info">
+            <div class="gear-header">
+              <span class="gear-category">Apparel</span>
+              <span class="gear-stock">In Stock</span>
+            </div>
+            <h3 class="gear-title">Merino Thermal Mountain Hoodie</h3>
+            <div class="gear-meta">
+              <span class="gear-rating">★ 4.8</span>
+              <span>(175 reviews)</span>
+            </div>
+            <div class="gear-footer">
+              <span class="gear-price">$110.00</span>
+              <a href="product/merino-hoodie" class="gear-btn">View Details</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Item 8 -->
+        <article class="gear-card">
+          <div class="gear-thumb">
+            <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <line x1="80" y1="20" x2="80" y2="95" stroke="#38bdf8" stroke-width="5" stroke-linecap="round"/>
+              <circle cx="80" cy="20" r="8" fill="#38bdf8"/>
+              <rect x="74" y="40" width="12" height="6" rx="2" fill="#94a3b8"/>
+              <rect x="74" y="65" width="12" height="6" rx="2" fill="#94a3b8"/>
+              <path d="M68 95L80 105L92 95" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="gear-info">
+            <div class="gear-header">
+              <span class="gear-category">Studio & Tech</span>
+              <span class="gear-stock">In Stock</span>
+            </div>
+            <h3 class="gear-title">Modular Carbon Quick-Monopod</h3>
+            <div class="gear-meta">
+              <span class="gear-rating">★ 4.7</span>
+              <span>(63 reviews)</span>
+            </div>
+            <div class="gear-footer">
+              <span class="gear-price">$95.00</span>
+              <a href="product/carbon-monopod" class="gear-btn">View Details</a>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <!-- Pagination -->
+      <nav class="pagination-bar" aria-label="Page navigation">
+        <a href="#prev" class="page-link disabled" aria-disabled="true">&larr;</a>
+        <a href="#page1" class="page-link active" aria-current="page">1</a>
+        <a href="#page2" class="page-link">2</a>
+        <a href="#page3" class="page-link">3</a>
+        <a href="#next" class="page-link" rel="next">Next &rarr;</a>
+      </nav>
+    </main>
+  </div>
+</body>
+</html>

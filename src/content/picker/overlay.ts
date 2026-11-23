@@ -188,14 +188,17 @@ export class PickerOverlay {
 
     // 2. Position selection badge
     const badgeTop = rect.top > 32 ? rect.top - 28 : rect.top + rect.height + 6;
-    this.selectionBadge.textContent = `SELECTED: ${tagName} (${matchCount} ${matchCount === 1 ? 'match' : 'matches'})`;
+    const matchLabel = info.isSingleOverride
+      ? 'Single element (Alt)'
+      : `${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`;
+    this.selectionBadge.textContent = `SELECTED: ${tagName} (${matchLabel})`;
     this.selectionBadge.style.top = `${badgeTop}px`;
     this.selectionBadge.style.left = `${Math.max(8, rect.left)}px`;
     this.selectionBadge.classList.remove('ph-hidden');
 
-    // 3. Highlight similar elements if requested
+    // 3. Highlight similar elements if requested (disabled when Alt single override is active)
     const similarSel = info.similarSelector || selector;
-    if (this.options.showSimilar !== false && similarSel) {
+    if (!info.isSingleOverride && this.options.showSimilar !== false && similarSel) {
       this.highlightSimilarElements(similarSel, info.element);
     } else {
       this.clearSimilarHighlights();
@@ -296,7 +299,9 @@ export class PickerOverlay {
 
     const matchBadge = document.createElement('span');
     matchBadge.className = 'ph-match-badge';
-    matchBadge.textContent = `${info.matchCount} ${info.matchCount === 1 ? 'match' : 'matches'}`;
+    matchBadge.textContent = info.isSingleOverride
+      ? 'Single element (Alt)'
+      : `${info.matchCount} ${info.matchCount === 1 ? 'match' : 'matches'}`;
     detailsRow.appendChild(matchBadge);
 
     this.toolbar.appendChild(detailsRow);
@@ -504,6 +509,9 @@ export class PickerOverlay {
       .ph-hover-box {
         position: fixed !important;
         border: 2px solid #00f5d4 !important;
+        /* Dark ring: keeps the neon outline visible (3:1) on light pages too. */
+        outline: 1px solid rgba(2, 6, 23, 0.85) !important;
+        outline-offset: 0 !important;
         background: linear-gradient(135deg, rgba(0, 245, 212, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%) !important;
         border-radius: 4px !important;
         pointer-events: none !important;
@@ -535,6 +543,8 @@ export class PickerOverlay {
       .ph-selection-box {
         position: fixed !important;
         border: 2.5px solid #10b981 !important;
+        outline: 1px solid rgba(2, 6, 23, 0.85) !important;
+        outline-offset: 0 !important;
         background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(168, 85, 247, 0.12) 100%) !important;
         border-radius: 4px !important;
         pointer-events: none !important;
@@ -579,6 +589,8 @@ export class PickerOverlay {
       .ph-similar-box {
         position: fixed !important;
         border: 1.5px dashed rgba(168, 85, 247, 0.75) !important;
+        outline: 1px solid rgba(2, 6, 23, 0.85) !important;
+        outline-offset: 0 !important;
         background-color: rgba(168, 85, 247, 0.06) !important;
         border-radius: 3px !important;
         pointer-events: none !important;
@@ -755,13 +767,14 @@ export class PickerOverlay {
         transition: all 0.15s ease !important;
       }
 
+      /* The side panel's brand colour: white text on it meets WCAG AA (5.5:1). */
       .ph-btn-primary {
-        background-color: #10b981 !important;
+        background-color: #047857 !important;
         color: #ffffff !important;
       }
 
       .ph-btn-primary:hover {
-        background-color: #059669 !important;
+        background-color: #065f46 !important;
       }
 
       .ph-btn-secondary {
@@ -780,13 +793,31 @@ export class PickerOverlay {
 
       .ph-btn-cancel {
         background-color: transparent !important;
-        color: #ef4444 !important;
-        border: 1px solid rgba(239, 68, 68, 0.4) !important;
+        color: #f87171 !important;
+        border: 1px solid rgba(248, 113, 113, 0.5) !important;
       }
 
       .ph-btn-cancel:hover {
-        background-color: rgba(239, 68, 68, 0.1) !important;
-        border-color: #ef4444 !important;
+        background-color: rgba(248, 113, 113, 0.12) !important;
+        border-color: #f87171 !important;
+      }
+
+      /* Keyboard users see where they are; a mouse click shows no ring. */
+      .ph-btn:focus-visible {
+        outline: 2px solid #93c5fd !important;
+        outline-offset: 2px !important;
+      }
+
+      .ph-breadcrumb-item:focus-visible {
+        outline: 2px solid #93c5fd !important;
+        outline-offset: 1px !important;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        :host, *, *::before, *::after {
+          animation: none !important;
+          transition: none !important;
+        }
       }
     `;
   }

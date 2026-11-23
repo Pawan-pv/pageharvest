@@ -306,6 +306,39 @@ describe('field discovery offers what a record actually holds', () => {
   });
 });
 
+describe('a button on each item is offered, but not ticked', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('offers the label of an "Add to basket" button without ticking it', () => {
+    document.body.innerHTML = repeat(
+      4,
+      (i) =>
+        `<article class="card"><h3>Book ${i}</h3><p class="price">£${i + 10}.00</p><button type="button">Add to basket</button></article>`
+    );
+
+    const action = named('Action');
+    // The same words on every row are not data about the item, so the column starts unticked.
+    expect(action).toBeDefined();
+    expect(action?.coverage).toBe(1);
+    expect(action?.suggested).toBe(false);
+    // The real columns are still ticked.
+    expect(named('Title')?.suggested).toBe(true);
+    expect(named('Price')?.suggested).toBe(true);
+  });
+
+  it('still collects the button label when the user ticks it', () => {
+    document.body.innerHTML = repeat(
+      3,
+      (i) => `<article class="card"><h3>Place ${i}</h3><button type="button">Book a table ${i}</button></article>`
+    );
+
+    // Extraction reads every column it is given: unticked is a starting choice, not a filter.
+    expect(extract().map((row) => row.Action)).toEqual(['Book a table 0', 'Book a table 1', 'Book a table 2']);
+  });
+});
+
 describe('the content script uses multi-record discovery', () => {
   it('reports columns found after the first record, with their evidence', async () => {
     document.body.innerHTML = repeat(

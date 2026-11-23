@@ -123,7 +123,7 @@ describe('UI: Data Table & Spreadsheet Management', () => {
     expect(onUpdateCell).toHaveBeenCalledWith('rec_1', 'Title', 'Ergonomic Wireless Mouse');
   });
 
-  it('deletes a record when trash button is clicked', () => {
+  it('deletes a record when trash button is clicked', async () => {
     const onDeleteRecord = vi.fn();
     render(
       <DataTable
@@ -136,6 +136,8 @@ describe('UI: Data Table & Spreadsheet Management', () => {
 
     const deleteButtons = screen.getAllByLabelText('Delete row');
     fireEvent.click(deleteButtons[0]);
+    // Said once the deletion is stored, and it names the way back.
+    expect(await screen.findByText('Row deleted. Undo brings it back.')).toBeInTheDocument();
 
     expect(onDeleteRecord).toHaveBeenCalledWith('rec_1');
   });
@@ -170,7 +172,7 @@ describe('UI: Data Table & Spreadsheet Management', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Export' }));
-    fireEvent.click(screen.getByRole('button', { name: /^CSV/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'CSV' }));
     fireEvent.click(screen.getByRole('button', { name: 'Download File' }));
     await waitFor(() => expect(triggerDownload).toHaveBeenNthCalledWith(
       1,
@@ -182,7 +184,7 @@ describe('UI: Data Table & Spreadsheet Management', () => {
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Export' }));
-    fireEvent.click(screen.getByRole('button', { name: /^JSON/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'JSON' }));
     fireEvent.click(screen.getByRole('button', { name: 'Download File' }));
     await waitFor(() => expect(triggerDownload).toHaveBeenNthCalledWith(
       2,
@@ -203,6 +205,6 @@ describe('UI: Data Table & Spreadsheet Management', () => {
       />
     );
 
-    expect(screen.getByText(/No records extracted/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No rows yet' })).toBeInTheDocument();
   });
 });

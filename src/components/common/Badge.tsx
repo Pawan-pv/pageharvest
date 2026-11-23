@@ -19,17 +19,17 @@ export const Badge: React.FC<BadgeProps> = ({
   className = '',
 }) => {
   const sizeClasses: Record<BadgeSize, string> = {
-    sm: 'text-[10px] font-medium px-1.5 py-0.5 gap-1',
+    sm: 'text-2xs font-medium px-1.5 py-0.5 gap-1',
     md: 'text-xs font-medium px-2 py-0.5 gap-1.5',
   };
 
   const variantClasses: Record<BadgeVariant, string> = {
-    neutral: 'bg-slate-100 text-slate-700 border border-slate-200/80',
-    brand: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
-    success: 'bg-green-50 text-green-800 border border-green-200',
-    warning: 'bg-amber-50 text-amber-800 border border-amber-200',
-    danger: 'bg-rose-50 text-rose-800 border border-rose-200',
-    info: 'bg-sky-50 text-sky-800 border border-sky-200',
+    neutral: 'bg-surface-muted text-fg-muted border border-line/80',
+    brand: 'bg-brand-soft text-brand-emphasis border border-brand-line',
+    success: 'bg-brand-soft text-brand-emphasis border border-brand-line',
+    warning: 'bg-warning-soft text-warning-emphasis border border-warning-line',
+    danger: 'bg-danger-soft text-danger-emphasis border border-danger-line',
+    info: 'bg-info-soft text-info-emphasis border border-info-line',
   };
 
   return (

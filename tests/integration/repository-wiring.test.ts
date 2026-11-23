@@ -429,7 +429,7 @@ describe('Database migrations', () => {
     const upgraded = new PageHarvestDB(dbName);
     await upgraded.open();
 
-    expect(upgraded.verno).toBe(3);
+    expect(upgraded.verno).toBe(4);
     expect((await upgraded.projects.get('p1'))?.name).toBe('Kept');
     expect((await upgraded.datasets.get('d1'))?.name).toBe('Kept dataset');
 

@@ -1,66 +1,67 @@
 import React from 'react';
-import { WebsiteCard } from './WebsiteCard';
-import { QuickActions } from './QuickActions';
-import { ExtractionInsights } from './ExtractionInsights';
-import { RecentProjectsCard } from './RecentProjectsCard';
-import { TabInfo } from '@/services/messaging';
+import { ShieldCheck } from 'lucide-react';
+import { ToolHub } from './ToolHub';
 import { Dataset } from '@/types';
 
 export interface MainDashboardProps {
-  tab: TabInfo;
-  isTabLoading?: boolean;
-  onRefreshTab: () => void;
   datasets: Dataset[];
-  isDatasetsLoading?: boolean;
-  onSelectElements: () => void;
+  /** The active page cannot be read, so every tool that needs it is switched off. */
+  disabled?: boolean;
   onAutoDetectLists: () => void;
   onExtractTable: () => void;
   onExtractLinks: () => void;
-  onViewDataset: (dataset: Dataset) => void;
+  onOpenPageExtractor?: () => void;
+  onOpenSitemapExplorer?: () => void;
+  onOpenShopifyExtractor?: () => void;
+  onOpenEmailExtractor?: () => void;
+  onOpenSocialExtractor?: () => void;
+  onOpenPageTextExtractor?: () => void;
+  onOpenImageDownloader?: () => void;
   onViewAllHistory: () => void;
 }
 
+/**
+ * The home screen. The active page and the command dock live in the panel shell, so this
+ * view is the tool hub itself: all 10 live extractors across in-page, multi-URL, and asset tools.
+ */
 export const MainDashboard: React.FC<MainDashboardProps> = ({
-  tab,
-  isTabLoading = false,
-  onRefreshTab,
   datasets,
-  isDatasetsLoading = false,
-  onSelectElements,
+  disabled = false,
   onAutoDetectLists,
   onExtractTable,
   onExtractLinks,
-  onViewDataset,
+  onOpenPageExtractor,
+  onOpenSitemapExplorer,
+  onOpenShopifyExtractor,
+  onOpenEmailExtractor,
+  onOpenSocialExtractor,
+  onOpenPageTextExtractor,
+  onOpenImageDownloader,
   onViewAllHistory,
 }) => {
   return (
-    <div className="flex flex-col gap-4 p-4 max-w-full">
-      {/* 1. Website Status */}
-      <WebsiteCard
-        tab={tab}
-        isLoading={isTabLoading}
-        onRefresh={onRefreshTab}
-      />
-
-      {/* 2. Quick Actions */}
-      <QuickActions
-        disabled={!tab.isInjectable}
-        onSelectElements={onSelectElements}
+    <div className="flex max-w-full flex-col gap-4 py-3">
+      <ToolHub
+        datasetsCount={datasets.length}
+        disabled={disabled}
         onAutoDetectLists={onAutoDetectLists}
         onExtractTable={onExtractTable}
         onExtractLinks={onExtractLinks}
-      />
-
-      {/* 3. Extraction Insights */}
-      <ExtractionInsights />
-
-      {/* 4. Recent Projects */}
-      <RecentProjectsCard
-        datasets={datasets}
-        isLoading={isDatasetsLoading}
-        onViewDataset={onViewDataset}
+        onOpenPageExtractor={onOpenPageExtractor}
+        onOpenSitemapExplorer={onOpenSitemapExplorer}
+        onOpenShopifyExtractor={onOpenShopifyExtractor}
+        onOpenEmailExtractor={onOpenEmailExtractor}
+        onOpenSocialExtractor={onOpenSocialExtractor}
+        onOpenPageTextExtractor={onOpenPageTextExtractor}
+        onOpenImageDownloader={onOpenImageDownloader}
         onViewAllHistory={onViewAllHistory}
       />
+
+      <p className="flex items-center gap-1.5 text-2xs text-fg-subtle">
+        <ShieldCheck aria-hidden="true" className="w-3.5 h-3.5 shrink-0" />
+        PageHarvest reads only the page you ask it to: its text, links, image addresses and page address. Everything it
+        collects stays on this computer, and nothing is sent anywhere.
+      </p>
     </div>
   );
 };

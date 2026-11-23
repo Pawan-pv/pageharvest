@@ -3,8 +3,9 @@ import { MessageRouter } from '@/platform/message-router';
 import { MessagingClient } from '@/platform/messaging-client';
 import { ExtensionMessage } from '@/contracts/messages';
 import { PickerMessenger } from '@/content/picker';
-import { createContentWorkflowCoordinator } from '@/content/workflow-coordinator';
+import { createContentWorkflowCoordinator, DetectionError } from '@/content/workflow-coordinator';
 import { errorReporter } from '@/core/resilience/error-reporter';
+import { stopPickerWhenPanelGoes } from '@/platform/picker-lifetime';
 
 interface PageHarvestWindow extends Window {
   __PAGEHARVEST_INJECTED__?: boolean;
@@ -17,11 +18,15 @@ type DetectRepeatedElementsMessage = Extract<
 type DetectFieldsMessage = Extract<ExtensionMessage, { type: 'DETECT_FIELDS' }>;
 type ExtractRecordsMessage = Extract<ExtensionMessage, { type: 'EXTRACT_RECORDS' }>;
 type ControlJobMessage = Extract<ExtensionMessage, { type: 'CONTROL_JOB' }>;
+type PreviewFieldsMessage = Extract<ExtensionMessage, { type: 'PREVIEW_FIELDS' }>;
 
 const BATCH_DELIVERY_TIMEOUT_MS = 30_000;
 
 export default defineContentScript({
-  matches: ['<all_urls>'],
+  // Injected on demand via chrome.scripting.executeScript (ADR-037). Declared
+  // with runtime registration so no static content script entry appears in the
+  // manifest: the script runs only on a page the user works on, never on every page.
+  registration: 'runtime',
   runAt: 'document_idle',
   main() {
     // Prevent double injection in the same document
@@ -34,6 +39,8 @@ export default defineContentScript({
     const router = new MessageRouter();
     const client = new MessagingClient();
     const pickerMessenger = new PickerMessenger();
+    // The picker ends with the panel that started it: closed, reloaded or gone.
+    stopPickerWhenPanelGoes(() => pickerMessenger.stopPicker());
 
     const emitToExtension = async (message: ExtensionMessage): Promise<void> => {
       // One-way notification. With no panel open there is simply nobody listening.
@@ -54,6 +61,7 @@ export default defineContentScript({
       } catch (error: unknown) {
         const reported = errorReporter.report('DOM_PARSING', error, {
           context: { originalMessageType: sourceType },
+          code: error instanceof DetectionError ? error.code : undefined,
         });
         await emitToExtension({
           id: reported.id,
@@ -62,6 +70,7 @@ export default defineContentScript({
           payload: {
             id: reported.id,
             category: reported.category,
+            code: reported.code,
             severity: reported.severity,
             message: reported.message,
             timestamp: reported.timestamp,
@@ -126,14 +135,12 @@ export default defineContentScript({
     });
     router.on('CONTROL_JOB', (msg: ControlJobMessage) => coordinator.controlJob(msg));
     router.on('QUERY_JOB_RUN', () => coordinator.queryJobRun());
+    // Read-only: replies with preview rows and changes nothing (ADR-030).
+    router.on('PREVIEW_FIELDS', (msg: PreviewFieldsMessage) => coordinator.previewFields(msg));
 
+    // No load announcement: the script is injected on demand (ADR-037), often into a
+    // page a job is already running on, so the background decides when a document is
+    // new (JobCoordinator.handleTabLoaded) instead of this script reporting itself.
     router.listen();
-
-    void emitToExtension({
-      id: `content-ready_${Date.now()}`,
-      type: 'CONTENT_READY',
-      timestamp: Date.now(),
-      payload: { url: window.location.href, title: document.title },
-    });
   }
 });

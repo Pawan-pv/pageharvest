@@ -25,6 +25,70 @@ const server = http.createServer((req, res) => {
     pathname = '/simple-grid.html';
   }
 
+  // Shopify /products.json endpoint simulation
+  if (pathname === '/products.json') {
+    const page = parseInt(reqUrl.searchParams.get('page') || '1', 10);
+    if (page > 1) {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ products: [] }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({
+      products: [
+        {
+          id: 101,
+          title: 'Mechanical Keyboard v2',
+          handle: 'mechanical-keyboard-v2',
+          body_html: '<p>Ergonomic wireless keyboard</p>',
+          vendor: 'KeyCorp',
+          product_type: 'Electronics',
+          tags: ['keyboard', 'wireless'],
+          variants: [
+            { id: 1001, title: 'Black / Linear', price: '129.99', sku: 'KB-BLK-LIN', available: true },
+            { id: 1002, title: 'White / Tactile', price: '139.99', sku: 'KB-WHT-TAC', available: true }
+          ],
+          images: [{ src: 'http://127.0.0.1:3456/sample.png' }]
+        }
+      ]
+    }));
+    return;
+  }
+
+  // XML sitemap simulation endpoint
+  if (pathname === '/sitemap.xml') {
+    res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+    res.end(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>http://127.0.0.1:3456/simple-grid.html</loc>
+    <lastmod>2026-11-20</lastmod>
+  </url>
+  <url>
+    <loc>http://127.0.0.1:3456/store-showcase.html</loc>
+    <lastmod>2026-11-21</lastmod>
+  </url>
+</urlset>`);
+    return;
+  }
+
+  // Delayed contact page endpoint for running status assertion in smoke tests
+  if (pathname === '/slow-contact.html') {
+    setTimeout(() => {
+      const filePath = path.join(PAGES_DIR, 'v2-contact.html');
+      fs.readFile(filePath, (err, data) => {
+        if (err) {
+          res.writeHead(500);
+          res.end('Error loading contact page');
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(data);
+      });
+    }, 800);
+    return;
+  }
+
   // JSON API simulation endpoint for delayed or dynamic tests
   if (pathname === '/api/delayed-products') {
     setTimeout(() => {
@@ -58,7 +122,9 @@ const server = http.createServer((req, res) => {
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-    res.writeHead(200, {
+    // `?status=429` serves the page with that error status, as a site refusing requests does.
+    const forced = Number(reqUrl.searchParams.get('status'));
+    res.writeHead(forced >= 400 && forced < 600 ? forced : 200, {
       'Content-Type': contentType,
       'Access-Control-Allow-Origin': '*'
     });
