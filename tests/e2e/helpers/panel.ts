@@ -6,7 +6,7 @@
  * Specs call these helpers instead of repeating labels, so a copy change is fixed
  * in one place.
  */
-import type { Page, Worker } from '@playwright/test';
+import { expect, type Page, type Worker } from '@playwright/test';
 import { GUIDE_STORAGE_KEY } from '../../../src/components/guide/preferences';
 import { ADVANCED_STORAGE_KEY } from '../../../src/components/settings/advanced-preference';
 import { CONSENT_STORAGE_KEY } from '../../../src/components/consent/consent';
@@ -98,7 +98,11 @@ export const startExtraction = (panel: Page) => panel.getByRole('button', { name
 
 /** Pagination options are always visible in ListSetupView's second card once a list is found. */
 export async function goToPagination(panel: Page): Promise<void> {
-  await panel.getByText('② Load More Items').waitFor({ timeout: 15000 });
+  await panel
+    .getByText('② Load More Items')
+    .or(panel.getByRole('group', { name: /How does this site show more items/ }))
+    .first()
+    .waitFor({ timeout: 15000 });
 }
 
 /** Moves from Pagination back to the list setup, if the detailed flow is present. */
@@ -110,16 +114,27 @@ export async function goToFields(panel: Page): Promise<void> {
 
 export type PaginationMode = 'none' | 'next_button' | 'infinite_scroll' | 'url_template';
 
+/** The visible option label in ListSetupView, or the radio name in the detailed panel. */
 const MODE_LABEL: Record<PaginationMode, string> = {
   none: 'This Page Only',
   next_button: 'Pagination',
   infinite_scroll: 'Auto-Scroll',
-  url_template: 'Pagination',
+  url_template: 'Page numbers in the URL',
 };
 
 export async function choosePagination(panel: Page, mode: PaginationMode): Promise<void> {
   await goToPagination(panel);
-  await panel.getByRole('radio', { name: new RegExp(MODE_LABEL[mode], 'i') }).check();
+  const label = MODE_LABEL[mode];
+  const named = panel.getByRole('radio', { name: new RegExp(label, 'i') });
+  if (await named.count()) {
+    await named.first().check();
+    return;
+  }
+  // The setup screen's Pagination and Load More radios sit in a div, so they have no
+  // accessible name. Click the real option and prove its radio is now checked.
+  const option = panel.getByText(label, { exact: true }).first();
+  await option.click();
+  await expect(option.locator('xpath=../..').locator('input[type="radio"]')).toBeChecked();
 }
 
 async function openAdvanced(panel: Page): Promise<void> {

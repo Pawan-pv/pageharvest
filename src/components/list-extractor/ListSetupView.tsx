@@ -299,6 +299,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
               <input
                 type="radio"
                 name="pagination-mode"
+                aria-label="Pagination"
                 checked={currentMode === 'next_button' && !isLoadMoreMode}
                 onChange={() => handleSelectMode('next_button')}
                 className="mt-0.5 accent-brand"
@@ -348,6 +349,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
               <input
                 type="radio"
                 name="pagination-mode"
+                aria-label="Load More"
                 checked={isLoadMoreMode}
                 onChange={() => handleSelectMode('load_more')}
                 className="mt-0.5 accent-brand"
