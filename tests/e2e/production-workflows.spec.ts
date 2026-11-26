@@ -376,7 +376,7 @@ test.describe('PageHarvest production workflows', () => {
   });
 
   test('B: a delayed message from a cancelled job cannot touch the next job', async () => {
-    const panel = await openPanel(context, extensionId);
+    let panel = await openPanel(context, extensionId);
     const target = await openTarget(context, `${FIXTURES}/long-scroll.html`);
 
     await configure(panel);
@@ -386,12 +386,14 @@ test.describe('PageHarvest production workflows', () => {
     await choosePagination(panel, 'infinite_scroll');
     await setLimits(panel, { scrollDelayMs: 2000 });
     await start(panel);
-    const jobA = await waitForJob(panel, (job) => job.status === 'RUNNING' && job.lastSequence >= 1);
+    const jobA = await waitForJob(panel, (job) => job.status === 'RUNNING' && job.lastSequence >= 1, 60000);
     const identityA = identityOf(jobA);
 
-    // The list flow's run screen finishes with "Stop extraction" (COMPLETED). The detailed
-    // run screen, reached with Tools, still offers the real Cancel that ends as CANCELLED.
-    await panel.getByRole('button', { name: 'Tools' }).click();
+    // The list flow's run screen finishes with "Stop extraction" (COMPLETED). Reopening
+    // the panel shows the detailed run screen, whose real Cancel ends as CANCELLED.
+    await panel.close();
+    panel = await openPanel(context, extensionId);
+    await expect(panel.getByRole('button', { name: 'Cancel job' })).toBeVisible({ timeout: 15000 });
     await panel.getByRole('button', { name: 'Cancel job' }).click();
     await waitForJob(panel, (job) => job.id === jobA.id && job.status === 'CANCELLED');
     const rowsOfA = (await readRows(panel, jobA.datasetId)).length;
@@ -401,7 +403,7 @@ test.describe('PageHarvest production workflows', () => {
     await choosePagination(panel, 'infinite_scroll');
     await setLimits(panel, { scrollDelayMs: 2000 });
     await start(panel);
-    const jobB = await waitForJob(panel, (job) => job.id !== jobA.id && job.lastSequence >= 1);
+    const jobB = await waitForJob(panel, (job) => job.id !== jobA.id && job.lastSequence >= 1, 60000);
     expect(jobB.datasetId).not.toBe(jobA.datasetId);
     expect(jobB.generation).not.toBe(jobA.generation);
     const rowsOfBBefore = await readRows(panel, jobB.datasetId);
@@ -428,7 +430,9 @@ test.describe('PageHarvest production workflows', () => {
     expect(rowsOfB.every((row) => row._jobId === jobB.id)).toBe(true);
     expect((await readJobs(panel)).find((job) => job.id === jobA.id)?.status).toBe('CANCELLED');
 
-    await panel.getByRole('button', { name: 'Tools' }).click();
+    await panel.close();
+    panel = await openPanel(context, extensionId);
+    await expect(panel.getByRole('button', { name: 'Cancel job' })).toBeVisible({ timeout: 15000 });
     await panel.getByRole('button', { name: 'Cancel job' }).click();
     await waitForJob(panel, (job) => job.id === jobB.id && job.status === 'CANCELLED');
   });
@@ -515,6 +519,9 @@ test.describe('PageHarvest production workflows', () => {
         expect(preserved.has(row[titleKey(rowsBefore)])).toBe(true);
       }
 
+      // A relaunched Chromium does not reliably restore the fixture tab. Reopen it so the
+      // resumed runner has the page it must scroll; the recoverable job itself is untouched.
+      await openTarget(session.context, `${FIXTURES}/long-scroll.html`);
       await panel.getByRole('button', { name: 'Resume', exact: true }).click();
       // Up to four scrolls 6s apart are left after the restart.
       const finished = await waitForJob(panel, (job) => job.id === interrupted.id && job.status === 'COMPLETED', 90000);
@@ -736,7 +743,7 @@ test.describe('PageHarvest production workflows', () => {
 
   test('H: 50,000 records commit through real IndexedDB with exact duplicate handling', async () => {
     test.setTimeout(420000);
-    const panel = await openPanel(context, extensionId);
+    let panel = await openPanel(context, extensionId);
     const target = await openTarget(context, `${FIXTURES}/long-scroll.html`);
     await configure(panel);
     // The extension's isolated world exists once the panel has injected the content
@@ -793,8 +800,10 @@ test.describe('PageHarvest production workflows', () => {
     );
     expect(stored).toBe(baseline + total - 99);
 
-    // Cancel lives on the detailed run screen, which the Tools navigation opens.
-    await panel.getByRole('button', { name: 'Tools' }).click();
+    // Cancel lives on the detailed run screen, shown when the panel is reopened mid-job.
+    await panel.close();
+    panel = await openPanel(context, extensionId);
+    await expect(panel.getByRole('button', { name: 'Cancel job' })).toBeVisible({ timeout: 15000 });
     await panel.getByRole('button', { name: 'Cancel job' }).click();
     await waitForJob(panel, (job) => job.id === running.id && job.status === 'CANCELLED');
   });

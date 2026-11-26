@@ -62,28 +62,40 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
   const handleSelectMode = (mode: 'none' | 'infinite_scroll' | 'next_button' | 'load_more') => {
     if (mode === 'load_more') {
       const cfg: ExtendedPaginationConfig = {
+        ...pagination,
         type: 'next_button',
         maxPages: pagination.maxPages ?? 10,
         delayMs: Math.max(1000, pagination.delayMs ?? 1000),
         isLoadMore: true,
+        nextButtonSelector: pagination.nextButtonSelector,
+        maxRecords: pagination.maxRecords,
       };
       onPaginationChange(cfg);
     } else if (mode === 'next_button') {
       const cfg: ExtendedPaginationConfig = {
+        ...pagination,
         type: 'next_button',
         maxPages: pagination.maxPages ?? 10,
         delayMs: Math.max(1000, pagination.delayMs ?? 1000),
         isLoadMore: false,
+        nextButtonSelector: pagination.nextButtonSelector,
+        maxRecords: pagination.maxRecords,
       };
       onPaginationChange(cfg);
     } else if (mode === 'infinite_scroll') {
       onPaginationChange({
+        ...pagination,
         type: 'infinite_scroll',
         scrollCount: pagination.scrollCount ?? 10,
         scrollDelayMs: Math.max(1000, pagination.scrollDelayMs ?? 1000),
+        maxRecords: pagination.maxRecords,
       });
     } else {
-      onPaginationChange({ type: 'none' });
+      onPaginationChange({
+        ...pagination,
+        type: 'none',
+        maxRecords: pagination.maxRecords,
+      });
     }
   };
 

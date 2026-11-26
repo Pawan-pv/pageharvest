@@ -283,7 +283,7 @@ test.describe('PageHarvest release workflows', () => {
     await choosePagination(sidePanelPage, 'infinite_scroll');
     await setLimits(sidePanelPage, { maxScrolls: 8 });
     await setLimits(sidePanelPage, { scrollDelayMs: 400 });
-    await sidePanelPage.getByRole('button', { name: /Start extraction/ }).click();
+    await sidePanelPage.getByRole('button', { name: 'Start Extraction' }).click();
     await expect(sidePanelPage.getByRole('button', { name: 'View data & export' })).toBeVisible({ timeout: 45000 });
 
     const records = await readRecords(sidePanelPage);

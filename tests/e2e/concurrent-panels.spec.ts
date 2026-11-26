@@ -136,6 +136,13 @@ test.describe('Two panels on one job', () => {
   });
 
   test('a panel watching a job that another window cancelled stops showing it as running', async () => {
+    // Hold page 2 long enough that the pause always lands while the job is genuinely between
+    // pages. This route is registered after the shared one, so it takes precedence here.
+    test.setTimeout(90000);
+    await context.route('**/next-page-p2.html', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 30000));
+      await route.continue().catch(() => undefined);
+    });
     await enableAdvancedOptions(worker);
     const target = await context.newPage();
     await target.goto(`${FIXTURES}/next-page-pagination.html`);
@@ -149,13 +156,15 @@ test.describe('Two panels on one job', () => {
     await choosePagination(watching, 'next_button');
     await watching.getByRole('button', { name: 'Start Extraction' }).click();
     await expect(watching.getByText('Live Extraction Stage')).toBeVisible({ timeout: 20000 });
+    // Wait until the background really has a running job before pausing it: the run screen
+    // can appear a tick before START has been acknowledged, and a premature pause is ignored.
+    await expect.poll(async () => (await newestJob(watching)).status, { timeout: 20000 }).toBe('RUNNING');
     await watching.getByRole('button', { name: 'Pause' }).click();
-    await expect(watching.getByText('Paused', { exact: true })).toBeVisible({ timeout: 15000 });
+    await expect.poll(async () => (await newestJob(watching)).status, { timeout: 20000 }).toBe('PAUSED');
 
     // The other window's panel opens on the same job and cancels it.
     const other = await openPanel();
     await expect(other.getByText('Extraction paused')).toBeVisible({ timeout: 15000 });
-    await other.getByRole('button', { name: 'Cancel job' }).click();
     await other.getByRole('button', { name: 'Cancel job' }).click();
     await expect.poll(async () => (await newestJob(other)).status).toBe('CANCELLED');
 
