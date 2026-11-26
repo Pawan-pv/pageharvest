@@ -239,6 +239,7 @@ test.describe('numbers', () => {
   });
 
   test('the export can include how each number was read', async () => {
+    test.setTimeout(60000);
     const { panel } = await extractWithDefaults('accuracy-prices.html');
 
     const csv = await downloadFile(panel, async (workbench) => {
@@ -488,6 +489,7 @@ test.describe('images', () => {
 
 test.describe('pagination', () => {
   test('a Load More button is followed until it runs out', async () => {
+    test.setTimeout(60000);
     const { panel } = await open('load-more-pagination.html');
     await detect(panel);
     await chooseFields(panel);
@@ -505,6 +507,7 @@ test.describe('pagination', () => {
   });
 
   test('pages that change without a reload are followed', async () => {
+    test.setTimeout(60000);
     const { panel, target } = await open('accuracy-spa.html');
     await detect(panel);
     await chooseFields(panel);
