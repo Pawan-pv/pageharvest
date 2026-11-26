@@ -73,7 +73,7 @@ async function openPanel(context: BrowserContext, extensionId: string): Promise<
 async function openTarget(context: BrowserContext, url: string): Promise<Page> {
   const target = await context.newPage();
   await target.goto(url);
-  await target.waitForLoadState('domcontentloaded');
+  await target.waitForLoadState('load');
   await target.bringToFront();
   return target;
 }
