@@ -98,6 +98,8 @@ export const startExtraction = (panel: Page) => panel.getByRole('button', { name
 
 /** Pagination options are always visible in ListSetupView's second card once a list is found. */
 export async function goToPagination(panel: Page): Promise<void> {
+  const next = panel.getByRole('button', { name: 'Next: Pagination' });
+  if (await next.isVisible()) await next.click();
   await panel
     .getByText('② Load More Items')
     .or(panel.getByRole('group', { name: /How does this site show more items/ }))

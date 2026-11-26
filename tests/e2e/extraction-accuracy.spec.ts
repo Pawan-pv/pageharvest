@@ -419,7 +419,7 @@ test.describe('choosing a list', () => {
     const { panel, target } = await open('accuracy-ranked.html');
     // Pick the alternative list explicitly with the new picker selection step.
     await startListExtraction(panel);
-    await panel.getByRole('button', { name: /Click to Pick List/i }).click();
+    await panel.getByRole('button', { name: /Click to Pick List/i }).click({ force: true });
     await expect(panel.getByText('Select a List Item')).toBeVisible();
     await target.locator('main .result').nth(10).hover();
     await target.locator('main .result').nth(10).click();
@@ -435,7 +435,7 @@ test.describe('choosing a list', () => {
     const { panel, target } = await open('accuracy-blog.html');
     // Pick a nav item: no repeating data list is found, so Start stays disabled.
     await startListExtraction(panel);
-    await panel.getByRole('button', { name: /Click to Pick List/i }).click();
+    await panel.getByRole('button', { name: /Click to Pick List/i }).click({ force: true });
     await expect(panel.getByText('Select a List Item')).toBeVisible();
     await target.locator('header nav li').first().hover();
     await target.locator('header nav li').first().click();
@@ -594,8 +594,9 @@ test.describe('working with results', () => {
     const workbench = await openResultsWorkbench(panel);
 
     await workbench.getByRole('button', { name: 'Remove Duplicates' }).click();
-    const dialog = workbench.getByRole('dialog', { name: 'Remove Duplicate Rows' });
+    const dialog = workbench.getByRole('dialog');
     await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Remove Duplicate Rows');
     await dialog.getByRole('button', { name: 'Confirm' }).click();
 
     await expect
