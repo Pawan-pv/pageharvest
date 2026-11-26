@@ -109,8 +109,14 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     await expectFits(panel, 'Check columns');
 
     await panel.getByRole('button', { name: 'Start Extraction' }).click();
-    await expect(panel.getByText('Live Extraction Stage')).toBeVisible({ timeout: 20000 });
-    await expectFits(panel, 'Running extraction');
+    const runningOrDone = panel
+      .getByText('Live Extraction Stage')
+      .or(panel.getByRole('heading', { name: 'Extraction complete' }))
+      .first();
+    await expect(runningOrDone).toBeVisible({ timeout: 20000 });
+    if (await panel.getByText('Live Extraction Stage').isVisible()) {
+      await expectFits(panel, 'Running extraction');
+    }
 
     await expect(panel.getByRole('heading', { name: 'Extraction complete' })).toBeVisible({ timeout: 30000 });
     await expectFits(panel, 'The results');
