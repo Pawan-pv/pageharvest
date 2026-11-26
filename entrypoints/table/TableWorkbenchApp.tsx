@@ -4,7 +4,7 @@ import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
-import { DataTable } from '@/components/grid/DataTable';
+import { DataTable, type DataTableProps } from '@/components/grid/DataTable';
 import { TOOL_OPTIONS, isToolType, toolLabel } from '@/components/grid/tool-catalog';
 import { TabWorkerPool, createFetchRunner } from '@/background/tab-worker-pool';
 import { useDatasets } from '@/hooks/useDatasets';
@@ -199,6 +199,7 @@ const DatasetWorkbench: React.FC<{
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isActiveJob, setIsActiveJob] = useState(false);
+  const [runSummary, setRunSummary] = useState<DataTableProps['runSummary']>(null);
   const requestToken = useRef(0);
   const lastLoadedActiveIdRef = useRef<string | undefined>(undefined);
 
@@ -254,6 +255,7 @@ const DatasetWorkbench: React.FC<{
     const jobId = active?.jobId;
     if (!jobId) {
       setIsActiveJob(false);
+      setRunSummary(null);
       return undefined;
     }
     void jobRepository
@@ -261,10 +263,25 @@ const DatasetWorkbench: React.FC<{
       .then((job) => {
         if (live) {
           setIsActiveJob(Boolean(job && isActiveJobStatus(job.status)));
+          setRunSummary(
+            job
+              ? {
+                  recordsDetected: job.recordsDetected,
+                  totalExtracted: job.totalExtracted,
+                  recordsWithMissingFields: job.recordsWithMissingFields,
+                  recordsFiltered: job.recordsFiltered,
+                  recordsFailed: job.recordsFailed,
+                  duplicatesSkipped: job.duplicatesSkipped,
+                }
+              : null
+          );
         }
       })
       .catch(() => {
-        if (live) setIsActiveJob(false);
+        if (live) {
+          setIsActiveJob(false);
+          setRunSummary(null);
+        }
       });
     return () => {
       live = false;
@@ -383,6 +400,7 @@ const DatasetWorkbench: React.FC<{
           dataset={active ?? null}
           records={records}
           fields={fields}
+          runSummary={runSummary}
           isLoading={recordsLoading}
           datasets={datasets}
           onSelectDataset={selectDataset}

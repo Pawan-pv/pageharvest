@@ -680,6 +680,10 @@ test.describe('PageHarvest production workflows', () => {
     await choosePagination(panel, 'infinite_scroll');
     await start(panel);
     const cancelled = await waitForJob(panel, (job) => job.status === 'RUNNING');
+    // Cancel lives on the detailed run screen, shown when the panel is reopened mid-job.
+    await panel.close();
+    panel = await openPanel(context, extensionId);
+    await expect(panel.getByRole('button', { name: 'Cancel job' })).toBeVisible({ timeout: 15000 });
     await panel.getByRole('button', { name: 'Cancel job' }).click();
     await waitForJob(panel, (job) => job.id === cancelled.id && job.status === 'CANCELLED');
     await target.close();
@@ -716,7 +720,11 @@ test.describe('PageHarvest production workflows', () => {
     expect(job.recordsWithMissingFields).toBe(4);
     expect(rows.filter((row) => row._missingFields)).toHaveLength(4);
 
-    await expect(panel.getByLabel('Extraction summary')).toContainText('6 detected, 6 kept, 4 with missing fields');
+    const opened = context.waitForEvent('page', { timeout: 15000 });
+    await panel.getByRole('button', { name: 'View data & export' }).click();
+    const workbench = await opened;
+    await expect(workbench.getByLabel('Extraction summary')).toContainText('6 detected, 6 kept, 4 with missing fields', { timeout: 15000 });
+    await workbench.close();
   });
 
   test('H: a real hash collision keeps both records, across real page loads', async () => {
@@ -819,15 +827,19 @@ test.describe('PageHarvest production workflows', () => {
     await start(panel);
     await waitForJob(panel, (job) => job.status === 'COMPLETED');
 
-    await panel.getByRole('button', { name: /View data & export|Export/ }).click();
-    await expect(panel.getByRole('dialog', { name: 'Export data' })).toBeVisible();
-    const before = await panel.evaluate(async () => {
+    const opened = context.waitForEvent('page', { timeout: 15000 });
+    await panel.getByRole('button', { name: 'View data & export' }).click();
+    const workbench = await opened;
+    await workbench.getByRole('button', { name: 'Export', exact: true }).click();
+    await expect(workbench.getByRole('dialog', { name: 'Export data' })).toBeVisible();
+    const before = await workbench.evaluate(async () => {
       const items = await chrome.downloads.search({});
       return items.map((item) => item.id);
     });
-    await panel.getByRole('button', { name: 'Download File' }).click();
+    await workbench.getByRole('button', { name: 'Download File' }).click();
 
-    const { filename } = await waitForCompletedDownload(panel, before);
+    const { filename } = await waitForCompletedDownload(workbench, before);
+    await workbench.close();
 
     const csv = await fs.readFile(filename, 'utf8');
     const lines = csv.replace(/^\uFEFF/, '').split('\r\n');
@@ -987,22 +999,29 @@ test.describe('PageHarvest production workflows', () => {
     const target = await openTarget(context, `${FIXTURES}/twenty-cards.html`);
     await configure(panel);
     await start(panel);
-    await expect(panel.getByRole('button', { name: /View data & export|Export/ })).toBeVisible({ timeout: 15000 });
+    await expect(panel.getByRole('button', { name: 'View data & export' })).toBeVisible({ timeout: 15000 });
+    const opened = context.waitForEvent('page', { timeout: 15000 });
+    await panel.getByRole('button', { name: 'View data & export' }).click();
+    const workbench = await opened;
+    await expect(workbench.getByTitle('Delete column').first()).toBeVisible({ timeout: 15000 });
 
-    const columns = () => panel.getByTitle('Delete column').count();
-    const startingColumns = await columns();
-    await panel.getByTitle('Delete column').first().click({ force: true });
+    const workbenchColumns = () => workbench.getByTitle('Delete column').count();
+    const startingColumns = await workbenchColumns();
+    await workbench.getByTitle('Delete column').first().click({ force: true });
     // The grid asks in a dialog of its own, never with a browser confirm box.
-    await panel.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
-    await expect.poll(columns).toBe(startingColumns - 1);
+    await workbench.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect.poll(workbenchColumns).toBe(startingColumns - 1);
 
     // Editing a cell afterwards must not bring the deleted column back.
-    await panel.getByTitle('Double click to edit cell').nth(1).dblclick();
-    const input = panel.locator('input[type="text"]:focus');
+    await workbench.getByTitle('Double click to edit cell').nth(1).dblclick();
+    const input = workbench.locator('input[type="text"]:focus');
     await input.fill('Edited by test');
     await input.press('Enter');
-    await expect(panel.getByText('Edited by test')).toBeVisible();
-    expect(await columns()).toBe(startingColumns - 1);
+    await expect(workbench.getByText('Edited by test')).toBeVisible();
+    expect(await workbenchColumns()).toBe(startingColumns - 1);
+    await workbench.close();
+
+    const columns = () => panel.getByTitle('Delete column').count();
 
     await panel.close();
     await target.bringToFront();
