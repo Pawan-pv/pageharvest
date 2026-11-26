@@ -145,8 +145,8 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
           </div>
         ) : (
           <div className="flex flex-col gap-2.5 rounded-2xl border border-brand-line bg-brand-soft/60 p-3.5 shadow-glow-emerald transition-all">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand/20 text-brand-fg font-bold text-sm">
                   <Check className="h-4 w-4" aria-hidden="true" />
                 </span>
@@ -154,13 +154,13 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
                   <span className="text-xs font-bold text-fg">
                     Found {list?.matchCount} items · {activeFieldsCount} columns
                   </span>
-                  <span className="text-2xs text-fg-subtle truncate max-w-[180px]">
+                  <span className="text-2xs text-fg-subtle truncate">
                     {list?.containerSelector}
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
                   onClick={handleEditColumnsClick}

@@ -1,8 +1,10 @@
 /**
- * Side panel steps shared by the Playwright specs. They follow the redesigned flow
- * (ADR-032): start options, the result card, Review fields, Pagination with its
- * collapsed Advanced section, and the run screen. Specs call these instead of
- * repeating labels, so a copy change is fixed in one place.
+ * Side panel steps shared by the Playwright specs. The List Extractor now opens a
+ * 2-step setup screen (ADR-032, ADR-039): "Click to Pick List"/"Auto-detect on this
+ * page", then a found-list card with "Edit columns", "Re-pick" and the Load More
+ * options. Table and Links still show the detailed result card and column panel.
+ * Specs call these helpers instead of repeating labels, so a copy change is fixed
+ * in one place.
  */
 import type { Page, Worker } from '@playwright/test';
 import { GUIDE_STORAGE_KEY } from '../../../src/components/guide/preferences';
@@ -76,8 +78,16 @@ export async function startListExtraction(panel: Page): Promise<void> {
   await autoDetect.click();
 }
 
-/** The detected-list summary in ListSetupView; the new flow has no separate confirm card. */
-export const resultHeading = (panel: Page) => panel.getByText(/Found \d+ items/);
+/**
+ * The detected-list summary. The List Extractor shows "Found N items · M columns";
+ * Table/Links still show "N similar items found" on the result card. Both name the
+ * count, so either one proves that detection found a list.
+ */
+export const resultHeading = (panel: Page) =>
+  panel
+    .getByText(/Found \d[\d,]* items/)
+    .or(panel.getByText(/^\d[\d,]* similar items? found$/))
+    .first();
 
 /** The column controls heading in ListSetupView (inline editor) or the detailed flow. */
 export const reviewFieldsHeading = (panel: Page) =>
@@ -138,21 +148,24 @@ export async function setLimits(panel: Page, limits: PaginationLimits): Promise<
     await panel.getByLabel('Max pages').or(panel.getByLabel('Most pages')).first().fill(String(limits.maxPages));
   }
   if (limits.delayMs !== undefined) {
-    await panel
-      .getByLabel('Delay (min 1,000 ms)')
-      .or(panel.getByLabel('Wait between pages (seconds)'))
-      .first()
-      .fill(String(limits.delayMs >= 1000 ? limits.delayMs : limits.delayMs / 1000));
+    // ListSetupView takes milliseconds; the detailed panel takes seconds.
+    const msInput = panel.getByLabel('Delay (min 1,000 ms)');
+    if (await msInput.count()) {
+      await msInput.fill(String(Math.max(1000, limits.delayMs)));
+    } else {
+      await panel.getByLabel('Wait between pages (seconds)').fill(String(limits.delayMs / 1000));
+    }
   }
   if (limits.maxScrolls !== undefined) {
     await panel.getByLabel('Max scrolls').or(panel.getByLabel('Most scrolls')).first().fill(String(limits.maxScrolls));
   }
   if (limits.scrollDelayMs !== undefined) {
-    await panel
-      .getByLabel('Delay (min 1,000 ms)')
-      .or(panel.getByLabel('Wait between scrolls (seconds)'))
-      .first()
-      .fill(String(limits.scrollDelayMs >= 1000 ? limits.scrollDelayMs : limits.scrollDelayMs / 1000));
+    const msInput = panel.getByLabel('Delay (min 1,000 ms)');
+    if (await msInput.count()) {
+      await msInput.fill(String(Math.max(1000, limits.scrollDelayMs)));
+    } else {
+      await panel.getByLabel('Wait between scrolls (seconds)').fill(String(limits.scrollDelayMs / 1000));
+    }
   }
   if (limits.maxRecords !== undefined) await panel.getByLabel('Stop after this many rows').fill(String(limits.maxRecords));
   if (limits.nextButtonSelector !== undefined) {
@@ -193,9 +206,12 @@ export async function discardInterrupted(panel: Page): Promise<void> {
 /** The export dialog. */
 export const exportDialog = (panel: Page) => panel.getByRole('dialog', { name: 'Export data' });
 
-/** "N similar items found" on the result card. */
+/** "N similar items found" on the legacy result card, or "Found N items" in ListSetupView. */
 export const itemsFound = (panel: Page, count: number) =>
-  panel.getByText(`${count} similar ${count === 1 ? 'item' : 'items'} found`).first();
+  panel
+    .getByText(`${count} similar ${count === 1 ? 'item' : 'items'} found`)
+    .or(panel.getByText(new RegExp(`Found ${count} items`)))
+    .first();
 
 export interface DownloadSnapshot {
   id: number;

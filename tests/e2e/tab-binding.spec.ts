@@ -130,8 +130,8 @@ test.describe('A found list stays with its tab', () => {
 
     await tabA.goto(`${FIXTURES}/job-listings.html`);
     await expect(panel.getByText('The page changed, so the list you found is gone')).toBeVisible({ timeout: 10000 });
-    await expect(panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeVisible();
-    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: /Auto-detect on this page/i })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeDisabled();
 
     await tabA.close();
     await panel.close();

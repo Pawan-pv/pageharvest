@@ -178,8 +178,11 @@ test.describe('Simple mode', () => {
     await expect(panel.getByText(/Found 3 items/)).toBeVisible({ timeout: 20000 });
     await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeEnabled();
 
-    // Choose pagination across pages.
-    await panel.getByRole('radio', { name: /Pagination/ }).click();
+    // Choose pagination across pages in the setup screen's "Load More Items" card.
+    // That option's radio has no accessible name, so click its visible label text.
+    await panel.getByText('Pagination', { exact: true }).click();
+    // "Max pages" is inside the collapsed "Limits & timing" section.
+    await panel.getByRole('button', { name: /Limits & timing/i }).click();
     await panel.getByLabel('Max pages').fill('5');
     await panel.getByRole('button', { name: 'Start Extraction' }).click();
     // Three rows on each of the two pages; the second page's Next is switched off.

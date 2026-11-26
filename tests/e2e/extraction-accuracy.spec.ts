@@ -62,7 +62,13 @@ test.afterAll(async () => {
 
 test.beforeEach(async () => {
   for (const page of context.pages()) {
-    if (page.url().startsWith('http') || page.url().includes('sidepanel.html')) await page.close();
+    if (
+      page.url().startsWith('http') ||
+      page.url().includes('sidepanel.html') ||
+      page.url().includes('table.html')
+    ) {
+      await page.close();
+    }
   }
   const panel = await openPanel();
   await panel.evaluate(
@@ -148,6 +154,14 @@ const detect = async (panel: Page, tool: StartTool = 'auto') => {
   await expect(resultHeading(panel)).toBeVisible({ timeout: 10000 });
 };
 const chooseFields = async (panel: Page) => {
+  // Table/Links stop at the result card and need a deliberate "Use this list".
+  // The List Extractor has already accepted its list on the setup screen.
+  const useList = panel.getByRole('button', { name: 'Use this list', exact: true });
+  if (await useList.count()) {
+    await expect(useList).toBeEnabled({ timeout: 10000 });
+    await useList.click();
+    await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
+  }
   const edit = panel.getByRole('button', { name: 'Edit columns' });
   if (await edit.count()) {
     await expect(edit).toBeEnabled({ timeout: 10000 });
@@ -155,6 +169,15 @@ const chooseFields = async (panel: Page) => {
     await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
   }
   await expect(panel.getByRole('button', { name: /Start Extraction|Start extraction/ })).toBeEnabled({ timeout: 10000 });
+};
+/** Opens the detailed column editor from the new setup screen, when the test needs it. */
+const openDetailedFields = async (panel: Page) => {
+  const edit = panel.getByRole('button', { name: 'Edit columns' });
+  if (await edit.count()) {
+    await expect(edit).toBeEnabled({ timeout: 10000 });
+    await edit.click();
+  }
+  await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
 };
 const start = (panel: Page) => panel.getByRole('button', { name: /Start Extraction|Start extraction/ }).click();
 
@@ -166,13 +189,26 @@ async function extractWithDefaults(fixture: string) {
   return { panel, target, ...(await finishedRows(panel)) };
 }
 
-async function downloadFile(panel: Page, setup: () => Promise<void>): Promise<string> {
-  await panel.getByRole('button', { name: /View data & export|Export/ }).click();
-  await expect(panel.getByRole('dialog', { name: 'Export data' })).toBeVisible();
-  await setup();
-  const before = await panel.evaluate(async () => (await chrome.downloads.search({})).map((item) => item.id));
-  await panel.getByRole('button', { name: 'Download File' }).click();
-  const { filename } = await waitForCompletedDownload(panel, before);
+/** The completion screen's "View data & export" opens the full table in a browser tab. */
+async function openResultsWorkbench(panel: Page): Promise<Page> {
+  const opened = context.waitForEvent('page', { timeout: 15000 });
+  await panel.getByRole('button', { name: 'View data & export' }).click();
+  const workbench = await opened;
+  await workbench.waitForLoadState('domcontentloaded');
+  await expect(workbench.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });
+  return workbench;
+}
+
+async function downloadFile(panel: Page, setup: (workbench: Page) => Promise<void>): Promise<string> {
+  const workbench = await openResultsWorkbench(panel);
+  await workbench.getByRole('button', { name: 'Export', exact: true }).click();
+  const dialog = workbench.getByRole('dialog', { name: 'Export data' });
+  await expect(dialog).toBeVisible();
+  await setup(workbench);
+  const before = await workbench.evaluate(async () => (await chrome.downloads.search({})).map((item) => item.id));
+  await dialog.getByRole('button', { name: 'Download File' }).click();
+  const { filename } = await waitForCompletedDownload(workbench, before);
+  await workbench.close();
   return fs.readFile(filename, 'utf8');
 }
 
@@ -196,14 +232,17 @@ test.describe('numbers', () => {
     expect(note('Ambiguous amount')).toMatchObject({ status: 'ambiguous', candidates: [1.234, 1234] });
     expect(byTitle['Bundle offer'].Price).toBe('2 for $10');
 
-    await expect(panel.getByText(/2 values could not be read as one/)).toBeVisible();
+    // The ambiguous-count warning lives in the data table, opened from the completion screen.
+    const workbench = await openResultsWorkbench(panel);
+    await expect(workbench.getByText(/2 values could not be read as one/)).toBeVisible();
+    await workbench.close();
   });
 
   test('the export can include how each number was read', async () => {
     const { panel } = await extractWithDefaults('accuracy-prices.html');
 
-    const csv = await downloadFile(panel, async () => {
-      await panel.getByLabel(/Add columns showing how each number was read/).check();
+    const csv = await downloadFile(panel, async (workbench) => {
+      await workbench.getByLabel(/Add columns showing how each number was read/).check();
     });
     const lines = csv.replace(/^\uFEFF/, '').split('\r\n');
 
@@ -224,6 +263,7 @@ test.describe('the picker', () => {
 
     await expect(panel.getByText('6 similar items found').first()).toBeVisible();
     await chooseFields(panel);
+    await openDetailedFields(panel);
     await expect(panel.getByText('6 items on page')).toBeVisible();
     await start(panel);
 
@@ -238,6 +278,7 @@ test.describe('field discovery', () => {
     const { panel } = await open('accuracy-first-row.html');
     await detect(panel);
     await chooseFields(panel);
+    await openDetailedFields(panel);
 
     await expect(panel.getByRole('checkbox', { name: 'Include Price', exact: true })).toBeChecked();
     await expect(panel.getByRole('checkbox', { name: 'Include Link', exact: true })).toBeChecked();
@@ -257,6 +298,7 @@ test.describe('field discovery', () => {
     const { panel } = await open('accuracy-regex.html');
     await detect(panel);
     await chooseFields(panel);
+    await openDetailedFields(panel);
 
     await panel.getByRole('button', { name: 'Add Column' }).first().click();
     await panel.getByLabel('Column name', { exact: true }).fill('Reference');
@@ -272,6 +314,7 @@ test.describe('field discovery', () => {
     const { panel } = await open('accuracy-regex.html');
     await detect(panel);
     await chooseFields(panel);
+    await openDetailedFields(panel);
 
     await panel.getByRole('button', { name: 'Add Column' }).first().click();
     await panel.getByLabel('Column name', { exact: true }).fill('Code');
@@ -294,6 +337,7 @@ test.describe('Extract Tables', () => {
 
     await expect(panel.getByText('4 similar items found').first()).toBeVisible();
     await chooseFields(panel);
+    await openDetailedFields(panel);
     for (const name of ['Team', 'City', 'Score', 'Score 2']) {
       await expect(panel.getByRole('checkbox', { name: `Include ${name}`, exact: true })).toBeChecked();
     }
@@ -372,8 +416,13 @@ test.describe('Extract Links', () => {
 
 test.describe('choosing a list', () => {
   test('main results come first, and a larger recommendations block can be chosen instead', async () => {
-    const { panel } = await open('accuracy-ranked.html');
-    await detect(panel);
+    const { panel, target } = await open('accuracy-ranked.html');
+    // The ranked alternatives live on the detailed result card, reached by the dock's picker.
+    await startWith(panel, 'pick');
+    await expect(panel.getByText('Visual Element Picker Active')).toBeVisible();
+    await target.locator('main .result').first().hover();
+    await target.locator('main .result').first().click();
+    await expect(panel.getByRole('heading', { name: 'Is this the data you want?' })).toBeVisible();
 
     await expect(panel.getByText('10 similar items found').first()).toBeVisible();
     const options = panel.getByRole('radio');
@@ -395,8 +444,13 @@ test.describe('choosing a list', () => {
   });
 
   test('a page with no data list says so, and does not proceed on its own', async () => {
-    const { panel } = await open('accuracy-blog.html');
-    await detect(panel);
+    const { panel, target } = await open('accuracy-blog.html');
+    // The rejection warning is on the detailed result card; reach it with the dock's picker.
+    await startWith(panel, 'pick');
+    await expect(panel.getByText('Visual Element Picker Active')).toBeVisible();
+    await target.locator('header nav li').first().hover();
+    await target.locator('header nav li').first().click();
+    await expect(panel.getByRole('heading', { name: 'Is this the data you want?' })).toBeVisible();
 
     await expect(panel.getByRole('status').filter({ hasText: 'No data list was found' })).toBeVisible();
     await expect(panel.getByRole('button', { name: 'Use this list', exact: true })).toBeDisabled();
@@ -420,13 +474,15 @@ test.describe('images', () => {
     test.setTimeout(60000);
     const { panel } = await open('accuracy-lazy-scroll.html');
     await detect(panel);
-    await panel.getByRole('button', { name: 'Use this list', exact: true }).click();
-    await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
+    await chooseFields(panel);
+    await openDetailedFields(panel);
     await panel.getByRole('button', { name: 'Add Column' }).first().click();
     await panel.getByLabel('Column name', { exact: true }).fill('Picture');
     await panel.getByLabel('CSS selector inside each item', { exact: true }).fill('img');
     await panel.getByLabel('What to collect', { exact: true }).selectOption('src');
     await panel.getByRole('button', { name: 'Add Column' }).last().click();
+    // Load-more options live on the setup screen, one step back from the column editor.
+    await panel.getByRole('button', { name: 'Back to list' }).click();
     await choosePagination(panel, 'infinite_scroll');
     await setLimits(panel, { maxScrolls: 12, scrollDelayMs: 400 });
     await start(panel);
@@ -480,8 +536,8 @@ test.describe('working with results', () => {
   test('NDJSON export writes one JSON record per line', async () => {
     const { panel } = await extractWithDefaults('accuracy-clean.html');
 
-    const text = await downloadFile(panel, async () => {
-      await panel.getByRole('radio', { name: 'NDJSON', exact: true }).click();
+    const text = await downloadFile(panel, async (workbench) => {
+      await workbench.getByRole('radio', { name: 'NDJSON', exact: true }).click();
     });
     const lines = text.trim().split('\n').map((line) => JSON.parse(line));
 
@@ -491,10 +547,10 @@ test.describe('working with results', () => {
 
   test('Copy puts the table on the clipboard as CSV', async () => {
     const { panel, target } = await extractWithDefaults('accuracy-clean.html');
-    await panel.bringToFront();
+    const workbench = await openResultsWorkbench(panel);
 
-    await panel.getByRole('button', { name: 'Copy', exact: true }).click();
-    await expect(panel.getByRole('button', { name: 'Copied!' })).toBeVisible();
+    await workbench.getByRole('button', { name: 'Copy', exact: true }).click();
+    await expect(workbench.getByRole('button', { name: 'Copied!' })).toBeVisible();
 
     // The clipboard belongs to the system, so a web page can read what the panel wrote.
     await context.grantPermissions(['clipboard-read'], { origin: FIXTURES });
@@ -506,36 +562,36 @@ test.describe('working with results', () => {
 
   test('search narrows the rows shown without changing what is saved', async () => {
     const { panel, rows } = await extractWithDefaults('accuracy-clean.html');
-    await panel.bringToFront();
+    const workbench = await openResultsWorkbench(panel);
 
-    await panel.getByPlaceholder('Search across all columns...').fill('Carrot');
+    await workbench.getByPlaceholder('Search across all columns...').fill('Carrot');
 
-    await expect(panel.getByRole('cell', { name: 'Keep Carrot' })).toBeVisible();
-    await expect(panel.getByRole('cell', { name: 'Keep Pear' })).toHaveCount(0);
+    await expect(workbench.getByRole('cell', { name: 'Keep Carrot' })).toBeVisible();
+    await expect(workbench.getByRole('cell', { name: 'Keep Pear' })).toHaveCount(0);
     expect((await readTable<Row>(panel, 'records')).length).toBe(rows.length);
   });
 
   test('the column filter narrows the rows shown', async () => {
     const { panel } = await extractWithDefaults('accuracy-clean.html');
-    await panel.bringToFront();
+    const workbench = await openResultsWorkbench(panel);
 
-    await panel.getByRole('button', { name: 'Filters' }).click();
-    await panel.getByPlaceholder(/Filter/i).first().fill('Carrot');
+    await workbench.getByRole('button', { name: 'Filters' }).click();
+    await workbench.getByPlaceholder(/Filter/i).first().fill('Carrot');
 
-    await expect(panel.getByRole('cell', { name: 'Keep Carrot' })).toBeVisible();
-    await expect(panel.getByRole('cell', { name: 'Keep Pear' })).toHaveCount(0);
+    await expect(workbench.getByRole('cell', { name: 'Keep Carrot' })).toBeVisible();
+    await expect(workbench.getByRole('cell', { name: 'Keep Pear' })).toHaveCount(0);
   });
 
   test('Find & Replace changes saved data', async () => {
     const { panel, job } = await extractWithDefaults('accuracy-clean.html');
-    await panel.bringToFront();
+    const workbench = await openResultsWorkbench(panel);
 
-    await panel.getByRole('button', { name: 'Find & Replace' }).click();
-    await panel.getByPlaceholder('Text to find...').fill('Keep ');
-    await panel.getByPlaceholder('Replacement text...').fill('Saved ');
-    await panel.getByRole('button', { name: 'Replace All' }).click();
+    await workbench.getByRole('button', { name: 'Find & Replace' }).click();
+    await workbench.getByPlaceholder('Text to find...').fill('Keep ');
+    await workbench.getByPlaceholder('Replacement text...').fill('Saved ');
+    await workbench.getByRole('button', { name: 'Replace All' }).click();
 
-    await expect(panel.getByRole('cell', { name: 'Saved Carrot' })).toBeVisible();
+    await expect(workbench.getByRole('cell', { name: 'Saved Carrot' })).toBeVisible();
     await expect
       .poll(async () =>
         (await readTable<Row>(panel, 'records'))

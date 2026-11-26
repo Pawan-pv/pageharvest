@@ -165,7 +165,8 @@ test.describe('PageHarvest release workflows', () => {
     const startButton = sidePanelPage.getByRole('button', { name: 'Start Extraction' });
     await startButton.click();
     await expect(sidePanelPage.getByRole('heading', { name: 'Extraction complete' })).toBeVisible({ timeout: 30000 });
-    await expect(sidePanelPage.getByText(/20 items extracted/i)).toBeVisible();
+    // The count and label are separate elements; one regex matches their shared parent.
+    await expect(sidePanelPage.getByText(/20\s*items extracted/i)).toBeVisible();
 
     const records = await readRecords(sidePanelPage);
     expect(records).toHaveLength(20);
@@ -275,14 +276,15 @@ test.describe('PageHarvest release workflows', () => {
     await targetPage.bringToFront();
 
     await expect(sidePanelPage.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
-    await sidePanelPage.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
-    await sidePanelPage.getByRole('button', { name: 'Use this list', exact: true }).click();
-    await expect(sidePanelPage.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
+    // The card opens the two-step setup; auto-detect is the first step of it.
+    await startListExtraction(sidePanelPage);
+    await expect(sidePanelPage.getByText(/Found \d+ items/)).toBeVisible({ timeout: 20000 });
+    await expect(sidePanelPage.getByRole('button', { name: 'Start Extraction' })).toBeEnabled();
     await choosePagination(sidePanelPage, 'infinite_scroll');
     await setLimits(sidePanelPage, { maxScrolls: 8 });
     await setLimits(sidePanelPage, { scrollDelayMs: 400 });
     await sidePanelPage.getByRole('button', { name: /Start extraction/ }).click();
-    await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 45000 });
+    await expect(sidePanelPage.getByRole('button', { name: 'View data & export' })).toBeVisible({ timeout: 45000 });
 
     const records = await readRecords(sidePanelPage);
     const titles = records.flatMap((record) =>
