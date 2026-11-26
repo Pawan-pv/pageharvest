@@ -1,4 +1,4 @@
-/* global chrome, window, CustomEvent */
+/* global chrome */
 /**
  * Makes the Chrome Web Store screenshots from the built extension doing real work.
  *
@@ -163,13 +163,10 @@ async function main() {
 
     // 2. State A: Two-Step Setup (ListSetupView) with detected items & unlocked pagination
     await listBtn.click();
-    await panel.evaluate(() => {
-      window.dispatchEvent(new CustomEvent('pageharvest:open-tool', { detail: { tool: 'list' } }));
-    });
     const autoDetectBtn = panel.getByRole('button', { name: /Auto-detect on this page/i });
     await autoDetectBtn.waitFor({ state: 'visible', timeout: 15000 });
     await autoDetectBtn.click();
-    await panel.getByText(/✓ Found \d+ items/i).waitFor({ timeout: 30000 });
+    await panel.getByText(/Found \d+ items/i).waitFor({ timeout: 30000 });
     await panel.getByText('② Load More Items').waitFor({ timeout: 15000 });
     await captureDuo('emerald-pulse-setup');
 
@@ -183,9 +180,9 @@ async function main() {
     // Exit picker mode back to setup
     await panel.keyboard.press('Escape');
     await panel.getByRole('button', { name: 'Start Extraction' }).waitFor({ timeout: 15000 });
-    await panel.getByText(/✓ Found \d+ items · [1-9]\d* columns/i).waitFor({ timeout: 15000 });
+    await panel.getByText(/Found \d+ items · [1-9]\d* columns/i).waitFor({ timeout: 15000 });
 
-    // 4. State D: Extraction Complete Stage (ListCompleteView) with checkmark & visual mosaic
+    // 4. State D: Extraction Complete Stage (ListCompleteView) with checkmark & text preview
     await panel.getByRole('button', { name: 'Start Extraction' }).click();
     await panel.getByText('Extraction complete').waitFor({ timeout: 60000 });
     await panel.getByRole('button', { name: /View data & export/i }).waitFor({ timeout: 15000 });

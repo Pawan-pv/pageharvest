@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { expect, test } from './release-test';
-import { choosePagination, setLimits, markTourSeen, enableAdvancedOptions, waitForCompletedDownload } from './helpers/panel';
+import { choosePagination, setLimits, markTourSeen, enableAdvancedOptions, startListExtraction, waitForCompletedDownload } from './helpers/panel';
 
 const fixtureBaseUrl = 'http://127.0.0.1:3456';
 const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
@@ -158,16 +158,14 @@ test.describe('PageHarvest release workflows', () => {
 
     await expect(sidePanelPage.getByText('127.0.0.1')).toBeVisible();
     await expect(sidePanelPage.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
-    await sidePanelPage.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
-    await expect(sidePanelPage.getByText('20 similar items found').first()).toBeVisible();
-    await sidePanelPage.getByRole('button', { name: 'Use this list', exact: true }).click();
-    await expect(sidePanelPage.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
+    await startListExtraction(sidePanelPage);
+    await expect(sidePanelPage.getByText(/Found 20 items/)).toBeVisible({ timeout: 20000 });
+    await expect(sidePanelPage.getByRole('button', { name: 'Start Extraction' })).toBeEnabled();
 
-    const startButton = sidePanelPage.getByRole('button', { name: /Start extraction/ });
-    await expect(startButton).toBeEnabled();
+    const startButton = sidePanelPage.getByRole('button', { name: 'Start Extraction' });
     await startButton.click();
-    await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 30000 });
-    await expect(sidePanelPage.getByText('20 records')).toBeVisible();
+    await expect(sidePanelPage.getByRole('heading', { name: 'Extraction complete' })).toBeVisible({ timeout: 30000 });
+    await expect(sidePanelPage.getByText(/20 items extracted/i)).toBeVisible();
 
     const records = await readRecords(sidePanelPage);
     expect(records).toHaveLength(20);

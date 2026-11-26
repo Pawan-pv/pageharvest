@@ -70,10 +70,9 @@ test.describe('A site that answers 429', () => {
     await target.bringToFront();
 
     await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
-    await expect(panel.getByRole('heading', { name: 'We found 3 items on this page' })).toBeVisible({ timeout: 20000 });
-    await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
-    await expect(panel.getByRole('radio', { name: 'Yes, get more pages' })).toBeChecked();
-    await panel.getByRole('button', { name: 'Start collecting' }).click();
+    await panel.getByRole('button', { name: /Auto-detect on this page/i }).click();
+    await expect(panel.getByText(/Found 3 items/)).toBeVisible({ timeout: 20000 });
+    await panel.getByRole('button', { name: 'Start Extraction' }).click();
 
     await expect(panel.getByText('The site asked PageHarvest to slow down')).toBeVisible({ timeout: 45000 });
     await expect(panel.getByRole('button', { name: 'Continue' })).toBeVisible();

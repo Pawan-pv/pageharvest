@@ -34,6 +34,8 @@ describe('UI: Tool Hub Routing & Shopify Integration', () => {
   });
 
   it('wires all tool open callbacks from MainDashboard down to ToolHub', () => {
+    const onOpenList = vi.fn();
+    const onAutoDetectLists = vi.fn();
     const onOpenPage = vi.fn();
     const onOpenSitemap = vi.fn();
     const onOpenShopify = vi.fn();
@@ -45,7 +47,8 @@ describe('UI: Tool Hub Routing & Shopify Integration', () => {
     render(
       <MainDashboard
         datasets={[]}
-        onAutoDetectLists={vi.fn()}
+        onOpenListExtractor={onOpenList}
+        onAutoDetectLists={onAutoDetectLists}
         onExtractTable={vi.fn()}
         onExtractLinks={vi.fn()}
         onOpenPageExtractor={onOpenPage}
@@ -58,6 +61,10 @@ describe('UI: Tool Hub Routing & Shopify Integration', () => {
         onViewAllHistory={vi.fn()}
       />
     );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find Data on This Page' }));
+    expect(onOpenList).toHaveBeenCalledTimes(1);
+    expect(onAutoDetectLists).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Page Extractor' }));
     expect(onOpenPage).toHaveBeenCalledTimes(1);
@@ -79,6 +86,23 @@ describe('UI: Tool Hub Routing & Shopify Integration', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Image Downloader' }));
     expect(onOpenImages).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to onAutoDetectLists when onOpenListExtractor is omitted', () => {
+    const onAutoDetectLists = vi.fn();
+
+    render(
+      <MainDashboard
+        datasets={[]}
+        onAutoDetectLists={onAutoDetectLists}
+        onExtractTable={vi.fn()}
+        onExtractLinks={vi.fn()}
+        onViewAllHistory={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find Data on This Page' }));
+    expect(onAutoDetectLists).toHaveBeenCalledTimes(1);
   });
 
   it('provides Shopify Admin CSV export format in ExportDialog', () => {

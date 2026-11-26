@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import JSZip from 'jszip';
 import { expect, test } from './release-test';
-import { markTourSeen, waitForCompletedDownload } from './helpers/panel';
+import { markTourSeen, startListExtraction, waitForCompletedDownload } from './helpers/panel';
 
 /**
  * Simple mode, the mode a new user gets (ADR-039), in real Chromium with the built
@@ -114,17 +114,13 @@ test.describe('Simple mode', () => {
   test('collects a list and saves an Excel file that holds every row (T1)', async () => {
     const { target, panel } = await open(`${FIXTURES}/twenty-cards.html`);
 
-    await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
-    await expect(panel.getByRole('heading', { name: 'We found 20 items on this page' })).toBeVisible({ timeout: 20000 });
-    await expect(panel.getByRole('table', { name: 'The first rows' })).toContainText('Item 01 - Alpha Pro Headset');
+    await startListExtraction(panel);
+    // List is detected: "Found 20 items · N columns" shows, Start Extraction is enabled.
+    await expect(panel.getByText(/Found 20 items/)).toBeVisible({ timeout: 20000 });
+    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeEnabled();
 
-    await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
-    await expect(panel.getByRole('heading', { name: 'Check your columns' })).toBeVisible();
-    // The page has no Next button, so "just this page" is the answer already chosen.
-    await expect(panel.getByRole('radio', { name: 'No, just this page' })).toBeChecked();
-
-    await panel.getByRole('button', { name: 'Start collecting' }).click();
-    await expect(panel.getByRole('heading', { name: 'Done. 20 rows collected' })).toBeVisible({ timeout: 30000 });
+    await panel.getByRole('button', { name: 'Start Extraction' }).click();
+    await expect(panel.getByRole('heading', { name: 'Extraction complete' })).toBeVisible({ timeout: 30000 });
 
     const [job] = await readTable<StoredJob>(panel, 'jobs');
     expect(job).toMatchObject({ status: 'COMPLETED', totalExtracted: 20, pagesVisited: 1 });
@@ -177,17 +173,17 @@ test.describe('Simple mode', () => {
   test('offers more pages when the page has a Next link, and collects every page', async () => {
     const { target, panel } = await open(`${FIXTURES}/next-page-pagination.html`);
 
-    await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
-    await expect(panel.getByRole('heading', { name: 'We found 3 items on this page' })).toBeVisible({ timeout: 20000 });
-    await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
+    await startListExtraction(panel);
+    // List is detected: "Found 3 items · N columns" shows, Start Extraction is enabled.
+    await expect(panel.getByText(/Found 3 items/)).toBeVisible({ timeout: 20000 });
+    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeEnabled();
 
-    const question = panel.getByRole('group', { name: 'This list continues on more pages. Get them too?' });
-    await expect(question.getByRole('radio', { name: 'Yes, get more pages' })).toBeChecked();
-    await expect(question.getByRole('spinbutton', { name: 'Stop after this many pages:' })).toHaveValue('5');
-
-    await panel.getByRole('button', { name: 'Start collecting' }).click();
+    // Choose pagination across pages.
+    await panel.getByRole('radio', { name: /Pagination/ }).click();
+    await panel.getByLabel('Max pages').fill('5');
+    await panel.getByRole('button', { name: 'Start Extraction' }).click();
     // Three rows on each of the two pages; the second page's Next is switched off.
-    await expect(panel.getByRole('heading', { name: 'Done. 6 rows collected' })).toBeVisible({ timeout: 45000 });
+    await expect(panel.getByRole('heading', { name: 'Extraction complete' })).toBeVisible({ timeout: 45000 });
 
     const jobs = await readTable<StoredJob>(panel, 'jobs');
     const job = jobs[jobs.length - 1];

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { expect, test } from './release-test';
-import { enableAdvancedOptions, markTourSeen } from './helpers/panel';
+import { enableAdvancedOptions, markTourSeen, startListExtraction } from './helpers/panel';
 
 /**
  * Two side panels on one job, in real Chromium with the built extension. Chrome keeps one
@@ -97,13 +97,12 @@ test.describe('Two panels on one job', () => {
     const watching = await openPanel();
     await target.bringToFront();
 
-    await watching.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
-    await expect(watching.getByRole('heading', { name: 'We found 3 items on this page' })).toBeVisible({ timeout: 20000 });
-    await watching.getByRole('button', { name: 'Yes, this is my list' }).click();
-    await watching.getByRole('button', { name: 'Start collecting' }).click();
-    await expect(watching.getByRole('heading', { name: 'Collecting your rows…' })).toBeVisible({ timeout: 20000 });
+    await startListExtraction(watching);
+    await expect(watching.getByText(/Found 3 items/)).toBeVisible({ timeout: 20000 });
+    await watching.getByRole('button', { name: 'Start Extraction' }).click();
+    await expect(watching.getByText('Live Extraction Stage')).toBeVisible({ timeout: 20000 });
     await watching.getByRole('button', { name: 'Pause' }).click();
-    await expect(watching.getByRole('heading', { name: 'Paused' })).toBeVisible({ timeout: 15000 });
+    await expect(watching.getByText('Paused', { exact: true })).toBeVisible({ timeout: 15000 });
     const job = await newestJob(watching);
     expect(job.status).toBe('PAUSED');
 
@@ -121,8 +120,8 @@ test.describe('Two panels on one job', () => {
     expect((await newestJob(other)).status).toBe('PAUSED');
 
     // The first panel stops the job, keeping its rows. Now the list can go.
-    await watching.getByRole('button', { name: 'Stop here and keep my rows' }).click();
-    await expect(watching.getByRole('heading', { name: /^Done\. \d+ rows? collected/ })).toBeVisible({ timeout: 20000 });
+    await watching.getByRole('button', { name: 'Stop extraction' }).click();
+    await expect(watching.getByRole('heading', { name: 'Extraction complete' })).toBeVisible({ timeout: 20000 });
     expect((await newestJob(watching)).status).toBe('COMPLETED');
 
     await other.reload();
@@ -158,6 +157,7 @@ test.describe('Two panels on one job', () => {
     // The other window's panel opens on the same job and cancels it.
     const other = await openPanel();
     await expect(other.getByText('Extraction paused')).toBeVisible({ timeout: 15000 });
+    await other.getByRole('button', { name: 'Cancel job' }).click();
     await other.getByRole('button', { name: 'Cancel job' }).click();
     await expect.poll(async () => (await newestJob(other)).status).toBe('CANCELLED');
 

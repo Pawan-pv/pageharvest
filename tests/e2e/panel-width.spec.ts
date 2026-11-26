@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page } from '@playwright/test';
 import { expect, test } from './release-test';
-import { goToPagination, markTourSeen, enableAdvancedOptions, resultHeading, reviewFieldsHeading, startExtraction, startWith, useThisList } from './helpers/panel';
+import { markTourSeen, enableAdvancedOptions, startListExtraction } from './helpers/panel';
 
 /**
  * Chrome's side panel opens at about 360 CSS pixels and can be narrowed to 320. The other specs
@@ -101,26 +101,19 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     await expect(panel.getByRole('button', { name: 'Help', exact: true })).toBeVisible({ timeout: 10000 });
     await expectFits(panel, 'The start screen');
 
-    await startWith(panel, 'auto');
-    await expect(resultHeading(panel)).toBeVisible({ timeout: 20000 });
+    await startListExtraction(panel);
+    await expect(panel.getByText(/Found 20 items/)).toBeVisible({ timeout: 20000 });
     await expectFits(panel, 'The detected list');
 
-    await useThisList(panel).click();
-    await expect(reviewFieldsHeading(panel)).toBeVisible({ timeout: 10000 });
+    await panel.getByRole('button', { name: 'Edit columns' }).click();
     await expectFits(panel, 'Check columns');
 
-    await goToPagination(panel);
-    await panel.getByRole('button', { name: 'Advanced' }).click();
-    await expectFits(panel, 'Pagination');
+    await panel.getByRole('button', { name: 'Start Extraction' }).click();
+    await expect(panel.getByText('Live Extraction Stage')).toBeVisible({ timeout: 20000 });
+    await expectFits(panel, 'Running extraction');
 
-    await startExtraction(panel).click();
-    await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(panel.getByRole('heading', { name: 'Extraction complete' })).toBeVisible({ timeout: 30000 });
     await expectFits(panel, 'The results');
-
-    await panel.getByRole('button', { name: 'Export', exact: true }).click();
-    await expect(panel.getByRole('dialog', { name: 'Export data' })).toBeVisible();
-    await expectFits(panel, 'The export dialog');
-    await panel.keyboard.press('Escape');
   });
 
   test('Help, Settings and Data fit', async () => {

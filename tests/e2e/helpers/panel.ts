@@ -68,26 +68,30 @@ export async function startWith(panel: Page, tool: StartTool): Promise<void> {
   await button.click();
 }
 
-/** The result card's confirm button. */
-export const useThisList = (panel: Page) => panel.getByRole('button', { name: 'Use this list', exact: true });
-
-/** The heading of the result card. */
-export const resultHeading = (panel: Page) => panel.getByRole('heading', { name: 'Is this the data you want?' });
-
-/** The Review fields heading. */
-export const reviewFieldsHeading = (panel: Page) => panel.getByText('Choose your columns');
-
-/** "Start extraction (N columns)", on Review fields or Pagination. */
-export const startExtraction = (panel: Page) => panel.getByRole('button', { name: /Start extraction/ });
-
-/** Moves from Review fields to Pagination, if not there already. */
-export async function goToPagination(panel: Page): Promise<void> {
-  const next = panel.getByRole('button', { name: 'Next: Pagination' });
-  if (await next.isVisible()) await next.click();
-  await panel.getByRole('group', { name: /How does this site show more items/ }).waitFor();
+/** Clicks the List Extractor card, then Auto-detect, opening ListSetupView with detected items. */
+export async function startListExtraction(panel: Page): Promise<void> {
+  await startWith(panel, 'auto');
+  const autoDetect = panel.getByRole('button', { name: /Auto-detect on this page/i });
+  await autoDetect.waitFor({ state: 'visible', timeout: 15000 });
+  await autoDetect.click();
 }
 
-/** Moves from Pagination back to Review fields, if not there already. */
+/** The detected-list summary in ListSetupView; the new flow has no separate confirm card. */
+export const resultHeading = (panel: Page) => panel.getByText(/Found \d+ items/);
+
+/** The column controls heading in ListSetupView (inline editor) or the detailed flow. */
+export const reviewFieldsHeading = (panel: Page) =>
+  panel.getByText('Choose your columns').or(panel.getByRole('button', { name: 'Edit columns' })).first();
+
+/** "Start Extraction", on the new ListSetupView or the detailed flow. */
+export const startExtraction = (panel: Page) => panel.getByRole('button', { name: /Start Extraction|Start extraction/ });
+
+/** Pagination options are always visible in ListSetupView's second card once a list is found. */
+export async function goToPagination(panel: Page): Promise<void> {
+  await panel.getByText('② Load More Items').waitFor({ timeout: 15000 });
+}
+
+/** Moves from Pagination back to the list setup, if the detailed flow is present. */
 export async function goToFields(panel: Page): Promise<void> {
   const back = panel.getByRole('button', { name: 'Back to fields' });
   if (await back.isVisible()) await back.click();
@@ -97,20 +101,25 @@ export async function goToFields(panel: Page): Promise<void> {
 export type PaginationMode = 'none' | 'next_button' | 'infinite_scroll' | 'url_template';
 
 const MODE_LABEL: Record<PaginationMode, string> = {
-  none: 'Just this page',
-  next_button: 'Click a Next button',
-  infinite_scroll: 'Scroll to load more',
-  url_template: 'Page numbers in the URL',
+  none: 'This Page Only',
+  next_button: 'Pagination',
+  infinite_scroll: 'Auto-Scroll',
+  url_template: 'Pagination',
 };
 
 export async function choosePagination(panel: Page, mode: PaginationMode): Promise<void> {
   await goToPagination(panel);
-  await panel.getByRole('radio', { name: MODE_LABEL[mode] }).check();
+  await panel.getByRole('radio', { name: new RegExp(MODE_LABEL[mode], 'i') }).check();
 }
 
 async function openAdvanced(panel: Page): Promise<void> {
+  const toggle = panel.getByRole('button', { name: /Limits & timing/i });
+  if (await toggle.count()) {
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+    return;
+  }
   const advanced = panel.getByRole('button', { name: 'Advanced' });
-  if ((await advanced.getAttribute('aria-expanded')) !== 'true') await advanced.click();
+  if (await advanced.count() && (await advanced.getAttribute('aria-expanded')) !== 'true') await advanced.click();
 }
 
 export interface PaginationLimits {
@@ -122,16 +131,28 @@ export interface PaginationLimits {
   nextButtonSelector?: string;
 }
 
-/** Fills limits under Advanced. Waits are typed in seconds, as the panel shows them. */
+/** Fills limits. In the new flow waits are typed in milliseconds; in the detailed flow, seconds. */
 export async function setLimits(panel: Page, limits: PaginationLimits): Promise<void> {
   await openAdvanced(panel);
-  if (limits.maxPages !== undefined) await panel.getByLabel('Most pages').fill(String(limits.maxPages));
-  if (limits.delayMs !== undefined) {
-    await panel.getByLabel('Wait between pages (seconds)').fill(String(limits.delayMs / 1000));
+  if (limits.maxPages !== undefined) {
+    await panel.getByLabel('Max pages').or(panel.getByLabel('Most pages')).first().fill(String(limits.maxPages));
   }
-  if (limits.maxScrolls !== undefined) await panel.getByLabel('Most scrolls').fill(String(limits.maxScrolls));
+  if (limits.delayMs !== undefined) {
+    await panel
+      .getByLabel('Delay (min 1,000 ms)')
+      .or(panel.getByLabel('Wait between pages (seconds)'))
+      .first()
+      .fill(String(limits.delayMs >= 1000 ? limits.delayMs : limits.delayMs / 1000));
+  }
+  if (limits.maxScrolls !== undefined) {
+    await panel.getByLabel('Max scrolls').or(panel.getByLabel('Most scrolls')).first().fill(String(limits.maxScrolls));
+  }
   if (limits.scrollDelayMs !== undefined) {
-    await panel.getByLabel('Wait between scrolls (seconds)').fill(String(limits.scrollDelayMs / 1000));
+    await panel
+      .getByLabel('Delay (min 1,000 ms)')
+      .or(panel.getByLabel('Wait between scrolls (seconds)'))
+      .first()
+      .fill(String(limits.scrollDelayMs >= 1000 ? limits.scrollDelayMs : limits.scrollDelayMs / 1000));
   }
   if (limits.maxRecords !== undefined) await panel.getByLabel('Stop after this many rows').fill(String(limits.maxRecords));
   if (limits.nextButtonSelector !== undefined) {
@@ -142,7 +163,8 @@ export async function setLimits(panel: Page, limits: PaginationLimits): Promise<
 /** Reads a limit back, in the unit the contract stores (milliseconds for waits). */
 export async function readLimit(panel: Page, limit: 'maxPages' | 'maxScrolls'): Promise<string> {
   await openAdvanced(panel);
-  return panel.getByLabel(limit === 'maxPages' ? 'Most pages' : 'Most scrolls').inputValue();
+  const name = limit === 'maxPages' ? ['Max pages', 'Most pages'] : ['Max scrolls', 'Most scrolls'];
+  return panel.getByLabel(name[0]).or(panel.getByLabel(name[1])).first().inputValue();
 }
 
 /** The URL template field, after choosing "Page numbers in the URL". */
@@ -151,12 +173,12 @@ export async function setUrlTemplate(panel: Page, template: string): Promise<voi
   await panel.getByLabel('Page address').fill(template);
 }
 
-/** Run screen and recovery copy. */
+/** Run screen and recovery copy (new ListRunningView copy first, legacy copy as fallback). */
 export const RUN = {
-  running: 'Collecting rows…',
-  paused: 'Extraction paused',
-  cancel: 'Cancel job',
-  finish: /Finish and view rows/,
+  running: 'Live Extraction Stage',
+  paused: 'Paused',
+  cancel: 'Stop extraction',
+  finish: /Extraction complete/,
   interrupted: 'Extraction interrupted',
   resume: 'Resume',
 } as const;

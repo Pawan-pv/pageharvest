@@ -45,10 +45,9 @@ async function activate(tabId: number, url: string, title: string) {
 
 async function findTheListOnTabA(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
-  expect(await screen.findByRole('heading', { name: 'We found 20 items on this page' })).toBeInTheDocument();
-  await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
-  expect(await screen.findByRole('heading', { name: 'Check your columns' })).toBeInTheDocument();
-  await waitFor(() => expect(screen.getAllByRole('checkbox', { name: /^Keep the column / }).length).toBeGreaterThanOrEqual(2));
+  await user.click(await screen.findByRole('button', { name: /Auto-detect on this page/i }));
+  await screen.findByText(/Found 20 items/);
+  expect(screen.getByRole('button', { name: 'Start Extraction' })).not.toBeDisabled();
 }
 
 describe('A found list belongs to the tab and page it came from', () => {
@@ -76,18 +75,18 @@ describe('A found list belongs to the tab and page it came from', () => {
 
     await activate(TAB_B, URL_B, 'Jobs');
     expect(await screen.findByText('This list is on another tab')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Start collecting' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Check your columns' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start Extraction' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Found 20 items/)).not.toBeInTheDocument();
 
     // "Go back to that tab" brings tab A to the front.
     await user.click(screen.getByRole('button', { name: 'Go back to that tab' }));
     expect(tabsUpdate).toHaveBeenCalledWith(TAB_A, { active: true });
 
     await activate(TAB_A, URL_A, 'Books');
-    expect(await screen.findByRole('heading', { name: 'Check your columns' })).toBeInTheDocument();
+    await screen.findByText(/Found 20 items/);
     expect(screen.queryByText('This list is on another tab')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Start collecting' }));
-    expect(await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Start Extraction' }));
+    expect(await screen.findByRole('heading', { name: 'Extraction complete' }, { timeout: 20000 })).toBeInTheDocument();
 
     const jobs = await db.jobs.toArray();
     expect(jobs).toHaveLength(1);
@@ -122,8 +121,8 @@ describe('A found list belongs to the tab and page it came from', () => {
       chromeMock.triggerTabUpdated(TAB_A, { url: moved }, chromeMock.activeTab);
     });
     expect(await screen.findByText(/The page changed, so the list you found is gone/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Start collecting' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Auto-detect on this page/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start Extraction' })).toBeDisabled();
   });
 
   it('drops the list when its tab is closed while the user is on another tab', async () => {
@@ -139,7 +138,7 @@ describe('A found list belongs to the tab and page it came from', () => {
       chromeMock.triggerTabRemoved(TAB_A);
     });
     expect(await screen.findByText(/The page changed, so the list you found is gone/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Auto-detect on this page/i })).toBeInTheDocument();
   });
 
   it('ignores what a page in another tab reports', async () => {
@@ -157,7 +156,7 @@ describe('A found list belongs to the tab and page it came from', () => {
     await act(async () => {
       chromeMock.notifyFromContentScript(TAB_B, fromOtherTab);
     });
-    expect(screen.getByRole('heading', { name: 'Check your columns' })).toBeInTheDocument();
+    await screen.findByText(/Found 20 items/);
     expect(screen.queryByText(/We found 4 items/)).not.toBeInTheDocument();
   });
 });

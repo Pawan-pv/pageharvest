@@ -13,6 +13,7 @@ import {
   readLimit,
   setLimits,
   setUrlTemplate,
+  startListExtraction,
   waitForCompletedDownload,
 } from './helpers/panel';
 
@@ -135,14 +136,12 @@ async function clearData(panel: Page): Promise<void> {
 }
 
 async function configure(panel: Page): Promise<void> {
-  await expect(panel.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
-  await panel.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
-  await panel.getByRole('button', { name: 'Use this list', exact: true }).click({ timeout: 10000 });
-  await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
-  await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeEnabled({ timeout: 10000 });
+  await startListExtraction(panel);
+  await expect(panel.getByText(/Found \d+ items/)).toBeVisible({ timeout: 20000 });
+  await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeEnabled({ timeout: 10000 });
 }
 
-const start = (panel: Page) => panel.getByRole('button', { name: /Start extraction/ }).click();
+const start = (panel: Page) => panel.getByRole('button', { name: 'Start Extraction' }).click();
 
 async function waitForJob(
   panel: Page,
@@ -334,7 +333,7 @@ test.describe('PageHarvest production workflows', () => {
     expect(rows).toHaveLength(finished.totalExtracted);
     expect(rows.length).toBeGreaterThanOrEqual(30);
     expectNoDuplicates(rows);
-    await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(panel.getByRole('button', { name: /View data & export|Export/ })).toBeVisible({ timeout: 15000 });
   });
 
   test('A: the panel reopened during a job shows it running, without restarting it', async () => {
@@ -809,7 +808,7 @@ test.describe('PageHarvest production workflows', () => {
     await start(panel);
     await waitForJob(panel, (job) => job.status === 'COMPLETED');
 
-    await panel.getByRole('button', { name: 'Export', exact: true }).click();
+    await panel.getByRole('button', { name: /View data & export|Export/ }).click();
     await expect(panel.getByRole('dialog', { name: 'Export data' })).toBeVisible();
     const before = await panel.evaluate(async () => {
       const items = await chrome.downloads.search({});
@@ -925,7 +924,7 @@ test.describe('PageHarvest production workflows', () => {
     expect(target.url()).toContain('next-page-p2.html');
     expect(await readRows(panel, job.datasetId)).toHaveLength(6);
     expect(job.pagesVisited).toBe(2);
-    await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(panel.getByRole('button', { name: /View data & export|Export/ })).toBeVisible({ timeout: 15000 });
   });
 
   test('Pause, Finish and Cancel really stop the page', async () => {
@@ -955,7 +954,7 @@ test.describe('PageHarvest production workflows', () => {
 
     // Finish: the page stops and the results open.
     await panel.getByRole('button', { name: /Finish and view rows/ }).click();
-    await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(panel.getByRole('button', { name: /View data & export|Export/ })).toBeVisible({ timeout: 15000 });
     await target.waitForTimeout(2500);
     const cardsFinished = await cards();
     const rowsFinished = (await readRows(panel, running.datasetId)).length;
@@ -970,7 +969,7 @@ test.describe('PageHarvest production workflows', () => {
     const target = await openTarget(context, `${FIXTURES}/twenty-cards.html`);
     await configure(panel);
     await start(panel);
-    await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(panel.getByRole('button', { name: /View data & export|Export/ })).toBeVisible({ timeout: 15000 });
 
     const columns = () => panel.getByTitle('Delete column').count();
     const startingColumns = await columns();
@@ -992,7 +991,7 @@ test.describe('PageHarvest production workflows', () => {
     panel = await openPanel(context, extensionId);
     await panel.getByRole('button', { name: 'Data', exact: true }).click();
     await panel.getByText(/20 Product Listing/).last().click();
-    await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(panel.getByRole('button', { name: /View data & export|Export/ })).toBeVisible({ timeout: 15000 });
 
     await expect.poll(columns).toBe(startingColumns - 1);
     await expect(panel.getByText('Edited by test')).toBeVisible();

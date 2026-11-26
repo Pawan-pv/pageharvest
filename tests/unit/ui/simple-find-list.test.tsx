@@ -219,56 +219,51 @@ describe('App in simple mode: from the start button to the list (T1)', () => {
     await usePanelMode('simple');
   });
 
-  it('goes straight to "We found 20 items" with real columns and rows, in one click', async () => {
+  it('goes straight to detected items with real columns and rows, in two clicks', async () => {
     installFakePage(booksHtml(20));
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Auto-detect on this page/i }));
 
-    expect(await screen.findByRole('heading', { name: 'We found 20 items on this page' })).toBeInTheDocument();
-    const table = await screen.findByRole('table', { name: 'The first rows' });
-    await within(table).findByText('Book number 1');
-    expect(within(table).getAllByRole('columnheader').length).toBeGreaterThanOrEqual(2);
+    // List is detected: "Found 20 items · N columns" shows, Start Extraction is enabled.
+    expect(await screen.findByText(/Found 20 items/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start Extraction' })).not.toBeDisabled();
 
     // The user never saw the list of candidates, a score, or a selector.
     expect(screen.queryByText(/confidence/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Is this the data you want?')).not.toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Steps' })).toHaveTextContent('Step 1 of 4: Find the list');
   });
 
-  it('lets the user choose another list, then comes back to the check', async () => {
+  it('lets the user re-pick the list, then comes back to detected items', async () => {
     installFakePage(`${booksHtml(20)}${MENU_ONLY_HTML}`);
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
-    await screen.findByRole('heading', { name: /^We found \d+ items? on this page$/ });
+    await userEvent.click(await screen.findByRole('button', { name: /Auto-detect on this page/i }));
+    await screen.findByText(/Found 20 items/);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Not the right list?' }));
-    expect(await screen.findByRole('heading', { name: 'Which list do you want?' })).toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole('button', { name: /^Use this list/ })[0]);
-    expect(await screen.findByRole('heading', { name: /^We found \d+ items? on this page$/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Re-pick' }));
+    expect(await screen.findByText('Select a List Item')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await screen.findByText(/Found 20 items/);
   });
 
   it('does not accept a menu on its own: it asks instead', async () => {
     installFakePage(MENU_ONLY_HTML);
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
-    await waitFor(
-      () =>
-        expect(
-          screen.queryByRole('heading', { name: 'Which list do you want?' }) ??
-            screen.queryByText(/could not find those items|couldn't find a list/i)
-        ).toBeInTheDocument(),
-      { timeout: 10000 }
-    );
-    expect(screen.queryByRole('button', { name: 'Yes, this is my list' })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: /Auto-detect on this page/i }));
+    // A menu is never silently collected: no job is started until the user explicitly starts.
+    await waitFor(async () => expect(await db.jobs.count()).toBe(0), { timeout: 10000 });
+    expect(screen.queryByRole('heading', { name: 'Extraction complete' })).not.toBeInTheDocument();
   });
 
-  it('still shows the list of candidates with scores when Advanced options is on', async () => {
+  it('still shows column controls when Advanced options is on', async () => {
     await usePanelMode('advanced');
     installFakePage(booksHtml(20));
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: 'Find Data on This Page' }));
-    expect(await screen.findByRole('heading', { name: 'Is this the data you want?' })).toBeInTheDocument();
-    expect(screen.getAllByText(/confidence/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('navigation', { name: 'Steps' })).toHaveTextContent('of 5');
+    await userEvent.click(await screen.findByRole('button', { name: /Auto-detect on this page/i }));
+    expect(await screen.findByText(/Found 20 items/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit columns' })).toBeInTheDocument();
   });
 });

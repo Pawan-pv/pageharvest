@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import {
   Bookmark,
   Database,
@@ -10,7 +10,12 @@ import {
 } from 'lucide-react';
 import { useActiveTab } from '@/hooks/useActiveTab';
 import { useDatasets } from '@/hooks/useDatasets';
-import { useExtractionWorkflow, type DetectedList } from '@/hooks/useExtractionWorkflow';
+import { useExtractionWorkflow, type DetectedList, type ExtractionStats } from '@/hooks/useExtractionWorkflow';
+import { isActiveJobStatus } from '@/shared/contracts/job';
+
+function isRunningExtractionStatus(status: ExtractionStats['status']): boolean {
+  return status !== 'IDLE' && isActiveJobStatus(status);
+}
 import type { ListCandidate } from '@/shared/contracts/message';
 import { useOnboarding } from '@/components/guide/useOnboarding';
 import { useConsent } from '@/components/consent/useConsent';
@@ -174,19 +179,11 @@ export const App: React.FC = () => {
     'list' | 'page' | 'sitemap' | 'shopify' | 'email' | 'social' | 'page_text' | 'images' | null
   >(null);
 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const custom = e as CustomEvent<{ tool?: typeof activeToolView }>;
-      if (custom.detail?.tool !== undefined) {
-        setActiveToolView(custom.detail.tool);
-      }
-    };
-    window.addEventListener('pageharvest:open-tool', handler);
-    return () => window.removeEventListener('pageharvest:open-tool', handler);
-  }, []);
   const activeFlow = workflow.view === 'dashboard' ? null : flow;
   // Review fields and Pagination share one panel view; this says which half is showing.
   const [configStep, setConfigStep] = useState<ConfigStep>('fields');
+  // In Advanced mode, clicking "Edit columns" inside ListSetupView opens FieldSelectionPanel.
+  const [isEditingListColumns, setIsEditingListColumns] = useState(false);
   // Simple mode shows the columns view in two halves: "We found N items", then the columns.
   const [simpleStage, setSimpleStage] = useState<'check' | 'columns'>('check');
   // The user asked for the other lists, so the best match is not accepted for them.
@@ -207,7 +204,9 @@ export const App: React.FC = () => {
       : viewStep;
 
   const startFlow = (kind: FlowKind, start: () => void) => {
+    runningJobSourceRef.current = 'legacy';
     setActiveToolView(null);
+    setIsEditingListColumns(false);
     setFlow(kind);
     setConfigStep('fields');
     setSimpleStage('check');
@@ -229,20 +228,66 @@ export const App: React.FC = () => {
     detectedList.credible !== false &&
     detectedList.matchCount > 0 &&
     acceptedList !== detectedList;
+  const lastAutoConfirmedListRef = useRef<DetectedList | null>(null);
+  const runningJobSourceRef = useRef<'list' | 'legacy' | null>(null);
   useEffect(() => {
     if (!acceptsListForUser || !detectedList) return;
+    if (activeToolView === 'list') {
+      lastAutoConfirmedListRef.current = detectedList;
+    }
     setAcceptedList(detectedList);
     setSimpleStage('check');
     // Follow the list when the page shows a way to more of it; otherwise just this page.
     updatePagination(simpleStartingPagination(detectedList.moreItems));
     void confirmListCandidate(detectedList);
-  }, [acceptsListForUser, detectedList, confirmListCandidate, updatePagination]);
+  }, [acceptsListForUser, activeToolView, detectedList, confirmListCandidate, updatePagination]);
 
   useEffect(() => {
-    if (activeToolView === 'list' && detectedList && workflow.fields.length === 0) {
+    if (activeToolView !== 'list') {
+      lastAutoConfirmedListRef.current = null;
+      setIsEditingListColumns(false);
+    }
+  }, [activeToolView]);
+
+  useEffect(() => {
+    if (workflowView === 'inspecting' || workflowView === 'extracting' || workflowView === 'results') {
+      setIsEditingListColumns(false);
+    }
+  }, [workflowView]);
+
+  useEffect(() => {
+    if (workflowView === 'results' && runningJobSourceRef.current === 'list') {
+      if (activeToolView === null) {
+        runningJobSourceRef.current = null;
+        setActiveToolView('list');
+        setActiveTabNav('tools');
+      } else if (activeToolView === 'list') {
+        runningJobSourceRef.current = null;
+      }
+    } else if (
+      workflowView === 'dashboard' &&
+      workflow.stats.status !== 'COMPLETED' &&
+      !isRunningExtractionStatus(workflow.stats.status)
+    ) {
+      runningJobSourceRef.current = null;
+    }
+    if (workflowView === 'dashboard' && activeToolView === null && activeTabNav !== 'tools') {
+      setActiveTabNav('tools');
+    }
+  }, [activeTabNav, activeToolView, workflow.stats.status, workflowView]);
+
+  useEffect(() => {
+    if (
+      activeToolView === 'list' &&
+      workflowView === 'review_list' &&
+      detectedList &&
+      !acceptsListForUser &&
+      lastAutoConfirmedListRef.current !== detectedList
+    ) {
+      lastAutoConfirmedListRef.current = detectedList;
       void confirmListCandidate(detectedList);
     }
-  }, [activeToolView, detectedList, workflow.fields.length, confirmListCandidate]);
+  }, [activeToolView, workflowView, detectedList, acceptsListForUser, confirmListCandidate]);
 
   const handleUseCandidate = (candidate: ListCandidate) => {
     const chosen: DetectedList = {
@@ -289,27 +334,83 @@ export const App: React.FC = () => {
   }, [workflow.view, refreshDatasets]);
 
   const handleNavChange = (section: NavSection) => {
+    workflow.cancelDetection();
+    if (workflow.isVisualPicking) {
+      void workflow.cancelVisualPicker();
+    }
     setIsHelpOpen(false);
     setActiveToolView(null);
+    setIsEditingListColumns(false);
     setActiveTabNav(section);
     if (section === 'datasets' || section === 'recipes') {
+      if (!isRunningExtractionStatus(workflow.stats.status)) {
+        runningJobSourceRef.current = null;
+      }
+      if (workflow.view === 'results') {
+        lastAutoConfirmedListRef.current = null;
+        setFlow(null);
+        setShowAllRows(false);
+        setOpenedSavedData(false);
+        workflow.resetToDashboard();
+      }
       workflow.setView('history');
       void refreshDatasets();
+    } else if (workflow.view === 'results') {
+      runningJobSourceRef.current = null;
+      lastAutoConfirmedListRef.current = null;
+      setFlow(null);
+      setShowAllRows(false);
+      setOpenedSavedData(false);
+      workflow.resetToDashboard();
+    } else if (workflow.view === 'extracting') {
+      if (isRunningExtractionStatus(workflow.stats.status)) {
+        workflow.setView('dashboard');
+      } else {
+        runningJobSourceRef.current = null;
+        lastAutoConfirmedListRef.current = null;
+        setFlow(null);
+        workflow.resetToDashboard();
+      }
+    } else if (
+      workflow.view === 'inspecting' ||
+      workflow.view === 'review_list' ||
+      workflow.view === 'config_fields'
+    ) {
+      lastAutoConfirmedListRef.current = null;
+      setFlow(null);
+      workflow.resetToDashboard();
     } else if (workflow.view === 'history' || workflow.view === 'settings') {
       workflow.setView('dashboard');
     }
   };
 
   const handleOpenSettings = () => {
+    workflow.cancelDetection();
+    if (workflow.isVisualPicking) {
+      void workflow.cancelVisualPicker();
+    }
+    if (!isRunningExtractionStatus(workflow.stats.status)) {
+      runningJobSourceRef.current = null;
+    }
+    if (workflow.view === 'results') {
+      lastAutoConfirmedListRef.current = null;
+      setFlow(null);
+      setShowAllRows(false);
+      setOpenedSavedData(false);
+      workflow.resetToDashboard();
+    }
     setIsHelpOpen(false);
     setActiveToolView(null);
+    setIsEditingListColumns(false);
     setActiveTabNav('tools');
     workflow.setView('settings');
   };
 
   const handleViewDataset = (dataset: (typeof datasets)[0]) => {
+    runningJobSourceRef.current = null;
     setActiveTabNav('tools');
     setActiveToolView(null);
+    setIsEditingListColumns(false);
     setFlow(null);
     setShowAllRows(false);
     setOpenedSavedData(true);
@@ -317,16 +418,21 @@ export const App: React.FC = () => {
   };
 
   const handleNewExtraction = () => {
+    runningJobSourceRef.current = null;
     setActiveTabNav('tools');
     setActiveToolView(null);
+    setIsEditingListColumns(false);
     setShowAllRows(false);
+    setOpenedSavedData(false);
     workflow.resetToDashboard();
     void refreshDatasets();
   };
 
   const handleRunRecipe = (recipe: ExtractionRecipe) => {
+    runningJobSourceRef.current = 'legacy';
     setActiveTabNav('tools');
     setActiveToolView(null);
+    setIsEditingListColumns(false);
     setFlow('recipe');
     setConfigStep('fields');
     setSimpleStage('columns');
@@ -348,10 +454,14 @@ export const App: React.FC = () => {
   // site is already granted. If the user declines, the background refuses the resume
   // with SITE_PERMISSION_REQUIRED and the banner offers Allow access again.
   const handleResumeRecoverable = async (jobId: string) => {
+    runningJobSourceRef.current = null;
     setIsHelpOpen(false);
     setActiveTabNav('tools');
+    setActiveToolView(null);
+    setIsEditingListColumns(false);
     setFlow(null);
     setShowAllRows(false);
+    setOpenedSavedData(false);
     const job = workflow.recoverableJobs.find((candidate) => candidate.id === jobId);
     if (job) {
       await requestSiteOrigin(job.targetUrl);
@@ -530,7 +640,7 @@ export const App: React.FC = () => {
           {datasetsError && <ErrorBanner error={{ message: datasetsError }} className="mb-2" />}
         </Suspense>
 
-        {!isHelpOpen && activeFlow && currentStep && (
+        {!isHelpOpen && activeToolView !== 'list' && activeFlow && currentStep && (
           <Stepper
             steps={advanced ? flowSteps(activeFlow) : simpleFlowSteps(activeFlow)}
             currentId={currentStep}
@@ -615,11 +725,17 @@ export const App: React.FC = () => {
             </Suspense>
           ) : activeToolView === 'list' ? (
             <Suspense fallback={<ViewSkeleton label="Loading List Extractor…" />}>
-              {workflow.view === 'inspecting' ? (
+              {workflow.notice && (
+                <Banner tone="info" className="mb-2" onDismiss={workflow.clearNotice}>
+                  {workflow.notice}
+                </Banner>
+              )}
+              {workflow.view === 'inspecting' && workflow.isVisualPicking ? (
                 <PickerFocusView
                   inspectedElement={workflow.inspectedElement}
+                  pickTarget={workflow.pickTarget}
                   onCancel={() => {
-                    workflow.cancelVisualPicker();
+                    void workflow.cancelVisualPicker();
                     setActiveToolView('list');
                   }}
                 />
@@ -646,6 +762,44 @@ export const App: React.FC = () => {
                     workflow.saveCurrentAsRecipe(workflow.currentDataset?.name || 'My List Recipe')
                   }
                 />
+              ) : workflow.listElsewhere && workflow.listSource ? (
+                <ListOnAnotherTab
+                  source={workflow.listSource}
+                  onGoBack={() => void workflow.goBackToListTab()}
+                  onStartOver={handleNewExtraction}
+                />
+              ) : advanced && isEditingListColumns && workflow.detectedList ? (
+                <FieldSelectionPanel
+                  detectedList={workflow.detectedList}
+                  fields={workflow.fields}
+                  selectedFieldIds={workflow.selectedFieldIds}
+                  pagination={workflow.pagination}
+                  sourceUrl={tab.url}
+                  projects={workflow.projects}
+                  selectedProjectId={workflow.selectedProjectId}
+                  onSelectProject={workflow.setSelectedProjectId}
+                  onSaveRecipe={workflow.saveCurrentAsRecipe}
+                  onToggleField={workflow.toggleFieldSelection}
+                  onUpdateField={workflow.updateField}
+                  onAddField={workflow.addField}
+                  onMoveField={workflow.moveField}
+                  onPreviewFields={workflow.previewFields}
+                  onPickListAgain={() => {
+                    setIsEditingListColumns(false);
+                    setFlow('pick');
+                    void workflow.startVisualPicker();
+                  }}
+                  step={configStep}
+                  onStepChange={setConfigStep}
+                  onRemoveField={workflow.removeField}
+                  onPaginationChange={workflow.updatePagination}
+                  onBack={() => setIsEditingListColumns(false)}
+                  onStartHarvest={() => {
+                    runningJobSourceRef.current = 'list';
+                    setIsEditingListColumns(false);
+                    void workflow.startExtraction();
+                  }}
+                />
               ) : (
                 <ListSetupView
                   detectedList={workflow.detectedList}
@@ -653,26 +807,37 @@ export const App: React.FC = () => {
                   selectedFieldIds={workflow.selectedFieldIds}
                   pagination={workflow.pagination}
                   onPickList={() => {
+                    setIsEditingListColumns(false);
                     setFlow('pick');
-                    workflow.startVisualPicker();
+                    void workflow.startVisualPicker();
                   }}
                   onAutoDetect={() => {
+                    setIsEditingListColumns(false);
                     setFlow('auto');
-                    workflow.autoDetectLists();
+                    void workflow.autoDetectLists();
                   }}
                   onRepick={() => {
+                    setIsEditingListColumns(false);
                     setFlow('pick');
-                    workflow.startVisualPicker();
+                    void workflow.startVisualPicker();
                   }}
+                  onEditColumns={
+                    advanced
+                      ? () => {
+                          setConfigStep('fields');
+                          setIsEditingListColumns(true);
+                        }
+                      : undefined
+                  }
                   onToggleField={workflow.toggleFieldSelection}
                   onRenameField={(id, name) => workflow.updateField(id, { name })}
-                  onPickNextButton={() => {
-                    setFlow('pick');
-                    workflow.startVisualPicker();
-                  }}
+                  onPickNextButton={() => void workflow.startNextButtonPicker()}
                   onPaginationChange={workflow.updatePagination}
-                  onStartExtraction={workflow.startExtraction}
-                  isDetecting={isTabLoading}
+                  onStartExtraction={() => {
+                    runningJobSourceRef.current = 'list';
+                    void workflow.startExtraction();
+                  }}
+                  isDetecting={workflow.isAutoDetecting}
                 />
               )}
             </Suspense>
@@ -688,7 +853,19 @@ export const App: React.FC = () => {
                 <MainDashboard
                   datasets={datasets}
                   disabled={!tab.isInjectable}
-                  onOpenListExtractor={() => setActiveToolView('list')}
+                  onOpenListExtractor={() => {
+                    if (isRunningExtractionStatus(workflow.stats.status)) {
+                      if (runningJobSourceRef.current === 'list') {
+                        setActiveToolView('list');
+                      }
+                      workflow.setView('extracting');
+                    } else {
+                      setActiveToolView('list');
+                      if (workflow.detectedList) {
+                        workflow.setView('config_fields');
+                      }
+                    }
+                  }}
                   onAutoDetectLists={() => startFlow('auto', workflow.autoDetectLists)}
                   onExtractTable={() => startFlow('table', () => workflow.startPresetDetection('table'))}
                   onExtractLinks={() => startFlow('links', () => workflow.startPresetDetection('links'))}
@@ -937,7 +1114,10 @@ export const App: React.FC = () => {
                     onNewExtraction={handleNewExtraction}
                     onRunRecipe={handleRunRecipe}
                     onUseSchema={(schema) => {
+                      runningJobSourceRef.current = 'legacy';
                       setActiveTabNav('tools');
+                      setActiveToolView(null);
+                      setIsEditingListColumns(false);
                       setFlow('recipe');
                       setConfigStep('fields');
                       setSimpleStage('columns');

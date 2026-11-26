@@ -181,12 +181,7 @@ export default {
   darkMode: 'media',
   theme: {
     extend: {
-      colors: {
-        ...tailwindColors(Object.keys(designTokens.colors.light)),
-        'emerald-pulse': '#00E599',
-        'mint-teal': '#14B8A6',
-        obsidian: '#080B10',
-      },
+      colors: tailwindColors(Object.keys(designTokens.colors.light)),
       borderRadius: designTokens.radius,
       spacing: designTokens.spacing,
       fontSize: designTokens.fontSize,

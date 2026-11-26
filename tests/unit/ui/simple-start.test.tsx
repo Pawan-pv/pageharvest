@@ -82,7 +82,9 @@ describe('App: the start screen follows the Advanced options switch', () => {
     await usePanelMode('simple');
     render(<App />);
     await userEvent.click(await screen.findByRole('button', { name: 'Find Data on This Page' }));
-    expect(await screen.findByRole('navigation', { name: 'Steps' })).toBeInTheDocument();
+    // The List Extractor card opens ListSetupView; the user then chooses Auto-detect or Pick.
+    expect(await screen.findByRole('button', { name: /Auto-detect on this page/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Click to Pick List/i })).toBeInTheDocument();
   });
 
   it('shows the same tool hub when Advanced options is on', async () => {

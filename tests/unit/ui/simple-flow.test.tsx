@@ -7,6 +7,7 @@ import { db } from '@/storage/db';
 import { installBackground } from '../../utils/job-harness';
 import { booksHtml, installFakePage, NEXT_LINK } from '../../utils/fake-page';
 import { usePanelMode } from '../../utils/panel-mode';
+import * as workbench from '@/platform/workbench';
 
 const PAGE_URL = 'http://127.0.0.1:3456/simple-grid.html';
 
@@ -63,24 +64,21 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
       await user.click(await screen.findByRole('button', { name }));
     };
 
-    // 1. One button on the start screen.
+    // 1. One button on the start screen opens List Setup.
     await click(/Find Data on This Page|Get the list on this page/i);
-    expect(await screen.findByRole('heading', { name: 'We found 20 items on this page' })).toBeInTheDocument();
+    await click(/Auto-detect on this page/i);
 
-    // 2. Is this it?
-    await click('Yes, this is my list');
-    expect(await screen.findByRole('heading', { name: 'Check your columns' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Steps' })).toHaveTextContent('Step 2 of 4: Check columns');
-    await waitFor(() => expect(screen.getAllByRole('checkbox', { name: /^Keep the column / }).length).toBeGreaterThanOrEqual(2));
-    // The page has no Next button, so the question is asked with "just this page" chosen.
-    expect(screen.getByRole('radio', { name: 'No, just this page' })).toBeChecked();
+    // List is detected; "Found 20 items · N columns" shows and Start Extraction is enabled.
+    await screen.findByText(/Found 20 items/);
+    expect(
+      screen.getByRole('button', { name: 'Start Extraction' })
+    ).not.toBeDisabled();
 
-    // 3. Start.
-    await click('Start collecting');
+    // 2. Start extraction.
+    await click('Start Extraction');
 
-    // 4. Done: the rows are in storage before the screen says so.
-    expect(await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Steps' })).toHaveTextContent('Step 4 of 4: Download');
+    // 3. Done: the rows are in storage before the screen says so.
+    expect(await screen.findByRole('heading', { name: 'Extraction complete' }, { timeout: 20000 })).toBeInTheDocument();
     const jobs = await stored(() => db.jobs.toArray());
     expect(jobs).toHaveLength(1);
     expect(jobs[0]).toMatchObject({ status: 'COMPLETED', totalExtracted: 20 });
@@ -90,11 +88,11 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     expect(rows.map((row) => row.Title)).toContain('Book number 20');
 
     // The Done screen shows those same rows.
-    const table = screen.getByRole('table', { name: 'The first rows' });
+    const table = screen.getByRole('table', { name: 'Preview Snippet' });
     expect(within(table).getByText('Book number 1')).toBeInTheDocument();
 
-    // 5. Download.
-    await click('Download for Excel');
+    // 4. Download.
+    await click(/Download for Excel/);
     await waitFor(() => expect(chromeMock.downloads.download).toHaveBeenCalledTimes(1));
     expect(chromeMock.downloads.download.mock.calls[0][0]).toMatchObject({ saveAs: false });
     expect(chromeMock.downloads.download.mock.calls[0][0].filename).toMatch(/\.xlsx$/);
@@ -113,13 +111,9 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     render(<App />);
 
     await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
-    await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
+    await clickAutoDetect();
 
-    const question = await screen.findByRole('group', { name: 'This list continues on more pages. Get them too?' });
-    expect(within(question).getByRole('radio', { name: 'Yes, get more pages' })).toBeChecked();
-    expect(within(question).getByRole('spinbutton', { name: 'Stop after this many pages:' })).toHaveValue(5);
-
-    await user.click(screen.getByRole('button', { name: 'Start collecting' }));
+    await user.click(screen.getByRole('button', { name: 'Start Extraction' }));
     await waitFor(async () => expect(await db.jobs.count()).toBe(1), { timeout: 10000 });
     // What the user saw on screen is what the job was told to do: Next button, 5 pages at most.
     const [job] = await stored(() => db.jobs.toArray());
@@ -127,10 +121,10 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     expect(job.schema.pagination.nextButtonSelector).toBeUndefined();
 
     // The first page's rows are saved while it runs, and stopping keeps them.
-    expect(await screen.findByRole('heading', { name: 'Collecting your rows…' })).toBeInTheDocument();
+    expect(await screen.findByText('Live Extraction Stage')).toBeInTheDocument();
     await waitFor(async () => expect((await db.jobs.get(job.id))?.totalExtracted).toBe(20), { timeout: 10000 });
-    await user.click(screen.getByRole('button', { name: 'Stop here and keep my rows' }));
-    expect(await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Stop extraction' }));
+    expect(await screen.findByRole('heading', { name: 'Extraction complete' }, { timeout: 20000 })).toBeInTheDocument();
     expect((await stored(() => db.jobs.get(job.id)))?.status).toBe('COMPLETED');
   }, 40000);
 
@@ -140,11 +134,11 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     render(<App />);
 
     await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
-    await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
-    await user.click(await screen.findByRole('radio', { name: 'No, just this page' }));
-    await user.click(screen.getByRole('button', { name: 'Start collecting' }));
+    await clickAutoDetect();
+    await user.click(screen.getByRole('radio', { name: /This Page Only/i }));
+    await user.click(screen.getByRole('button', { name: 'Start Extraction' }));
 
-    expect(await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Extraction complete' }, { timeout: 20000 })).toBeInTheDocument();
     const [job] = await stored(() => db.jobs.toArray());
     expect(job.schema.pagination.type).toBe('none');
     expect(job.pagesVisited).toBe(1);
@@ -156,15 +150,17 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     render(<App />);
 
     await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
-    await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
+    await clickAutoDetect();
 
+    // Inline column editing in List Setup: expand it, rename Title → Book, untick Link.
+    await user.click(screen.getByRole('button', { name: 'Edit columns' }));
     const title = await screen.findByRole('textbox', { name: 'Name of the column Title' });
     await user.clear(title);
     await user.type(title, 'Book{Enter}');
     await user.click(screen.getByRole('checkbox', { name: 'Keep the column Link' }));
-    await user.click(screen.getByRole('button', { name: 'Start collecting' }));
+    await user.click(screen.getByRole('button', { name: 'Start Extraction' }));
 
-    expect(await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Extraction complete' }, { timeout: 20000 })).toBeInTheDocument();
     const [job] = await stored(() => db.jobs.toArray());
     const names = job.schema.fields.map((field) => field.name);
     expect(names).toContain('Book');
@@ -181,20 +177,20 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     render(<App />);
 
     await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
-    await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
-    await screen.findByRole('heading', { name: 'Check your columns' });
-    await user.click(screen.getByRole('button', { name: 'Back' }));
-    expect(await screen.findByRole('heading', { name: 'We found 20 items on this page' })).toBeInTheDocument();
+    await clickAutoDetect();
+    await screen.findByText(/Found 20 items/);
+    await user.click(screen.getByRole('button', { name: 'Re-pick' }));
+    expect(await screen.findByText('Select a List Item')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await screen.findByText(/Found 20 items/);
+    await user.click(screen.getByRole('button', { name: 'Start Extraction' }));
+    await screen.findByRole('heading', { name: 'Extraction complete' }, { timeout: 20000 });
 
-    await user.click(screen.getByRole('button', { name: 'Yes, this is my list' }));
-    await user.click(await screen.findByRole('button', { name: 'Start collecting' }));
-    await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 });
-
-    await user.click(screen.getByRole('button', { name: 'See and change all rows' }));
-    expect(await screen.findByRole('textbox', { name: 'Search these rows' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Remove Duplicates/ })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Back' }));
-    expect(await screen.findByRole('heading', { name: 'Done. 20 rows collected' })).toBeInTheDocument();
+    const openSpy = vi.spyOn(workbench, 'openWorkbench').mockResolvedValue({ tabId: 1, reused: false });
+    await user.click(screen.getByRole('button', { name: /View data & export/i }));
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(await screen.findByRole('button', { name: /Find Data on This Page/i })).toBeInTheDocument();
   }, 40000);
 
   it('opens saved data from My data as a summary, and deletes it only after asking', async () => {
@@ -203,9 +199,9 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     render(<App />);
 
     await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
-    await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
-    await user.click(await screen.findByRole('button', { name: 'Start collecting' }));
-    await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 });
+    await clickAutoDetect();
+    await user.click(screen.getByRole('button', { name: 'Start Extraction' }));
+    await screen.findByRole('heading', { name: 'Extraction complete' }, { timeout: 20000 });
 
     await user.click(screen.getByRole('button', { name: 'Data' }));
     expect(await screen.findByRole('heading', { name: 'My data' })).toBeInTheDocument();
@@ -223,3 +219,7 @@ describe('App in simple mode: from one button to a saved Excel file (T1)', () =>
     expect(await stored(() => db.records.count())).toBe(0);
   }, 40000);
 });
+
+async function clickAutoDetect() {
+  await userEvent.click(await screen.findByRole('button', { name: /Auto-detect on this page/i }));
+}

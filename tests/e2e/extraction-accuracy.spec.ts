@@ -11,6 +11,7 @@ import {
   resultHeading,
   setLimits,
   startButton,
+  startListExtraction,
   startWith,
   waitForCompletedDownload,
   type StartTool,
@@ -139,15 +140,23 @@ async function finishedRows(panel: Page, status = 'COMPLETED'): Promise<{ job: S
 
 const detect = async (panel: Page, tool: StartTool = 'auto') => {
   await expect(await startButton(panel, tool)).toBeEnabled({ timeout: 10000 });
-  await startWith(panel, tool);
+  if (tool === 'auto') {
+    await startListExtraction(panel);
+  } else {
+    await startWith(panel, tool);
+  }
   await expect(resultHeading(panel)).toBeVisible({ timeout: 10000 });
 };
 const chooseFields = async (panel: Page) => {
-  await panel.getByRole('button', { name: 'Use this list', exact: true }).click();
-  await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
-  await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeEnabled({ timeout: 10000 });
+  const edit = panel.getByRole('button', { name: 'Edit columns' });
+  if (await edit.count()) {
+    await expect(edit).toBeEnabled({ timeout: 10000 });
+  } else {
+    await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
+  }
+  await expect(panel.getByRole('button', { name: /Start Extraction|Start extraction/ })).toBeEnabled({ timeout: 10000 });
 };
-const start = (panel: Page) => panel.getByRole('button', { name: /Start extraction/ }).click();
+const start = (panel: Page) => panel.getByRole('button', { name: /Start Extraction|Start extraction/ }).click();
 
 async function extractWithDefaults(fixture: string) {
   const { panel, target } = await open(fixture);
@@ -158,7 +167,7 @@ async function extractWithDefaults(fixture: string) {
 }
 
 async function downloadFile(panel: Page, setup: () => Promise<void>): Promise<string> {
-  await panel.getByRole('button', { name: 'Export', exact: true }).click();
+  await panel.getByRole('button', { name: /View data & export|Export/ }).click();
   await expect(panel.getByRole('dialog', { name: 'Export data' })).toBeVisible();
   await setup();
   const before = await panel.evaluate(async () => (await chrome.downloads.search({})).map((item) => item.id));

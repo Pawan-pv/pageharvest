@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type CDPSession, type Page } from '@playwright/test';
 import { expect, test } from './release-test';
-import { choosePagination, setLimits, markTourSeen, enableAdvancedOptions } from './helpers/panel';
+import { choosePagination, setLimits, markTourSeen, enableAdvancedOptions, startListExtraction } from './helpers/panel';
 
 /**
  * Real-Chromium verification of the Neon Indicator Overlays against the built
@@ -319,11 +319,9 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
   }
 
   async function configure(panel: Page): Promise<void> {
-    await expect(panel.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
-    await panel.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
-    await panel.getByRole('button', { name: 'Use this list', exact: true }).click({ timeout: 10000 });
-    await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
-    await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeEnabled({ timeout: 10000 });
+    await startListExtraction(panel);
+    await expect(panel.getByText(/Found \d+ items/)).toBeVisible({ timeout: 20000 });
+    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeEnabled({ timeout: 10000 });
   }
 
   test('Neon Hover Picker: hover and click paint the neon box, corners, badge and pattern', async () => {
@@ -460,7 +458,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
       ],
     });
 
-    await panel.getByRole('button', { name: /Start extraction/ }).click();
+    await panel.getByRole('button', { name: 'Start Extraction' }).click();
 
     const scanHost = target.locator(`#${SCAN_HOST}`);
     await expect(scanHost).toBeAttached({ timeout: 15000 });
@@ -561,7 +559,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
         timeoutMs: 60000,
         isFinished: (samples) => samples.some((sample) => sample.action === COMPLETE_TEXT),
       });
-      await panel.getByRole('button', { name: /Start extraction/ }).click();
+      await panel.getByRole('button', { name: 'Start Extraction' }).click();
 
       const { samples, removedAt } = await recording;
       const job = await waitForCompletedJob(panel, finishedJobs);

@@ -10,9 +10,11 @@ export function useDatasets() {
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
-  const loadDatasets = useCallback(async () => {
+  const loadDatasets = useCallback(async (options?: { silent?: boolean }) => {
     if (!isMountedRef.current) return;
-    setIsLoading(true);
+    if (!options?.silent) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const all = await repository.getAllDatasets();
@@ -23,7 +25,7 @@ export function useDatasets() {
       if (!isMountedRef.current) return;
       setError('Could not load saved datasets from local storage.');
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && !options?.silent) {
         setIsLoading(false);
       }
     }

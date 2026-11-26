@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Copy, ExternalLink, Link2, Loader2, Pause, Play, Trash2, XCircle } from 'lucide-react';
 import { Banner } from '@/components/common/Banner';
 import { Button } from '@/components/common/Button';
@@ -10,7 +10,9 @@ import { TabWorkerPool, createFetchRunner } from '@/background/tab-worker-pool';
 import { useDatasets } from '@/hooks/useDatasets';
 import { clearUrlHandoff, readUrlHandoff } from '@/platform/url-handoff';
 import { messagingService } from '@/services/messaging';
+import { isActiveJobStatus } from '@/shared/contracts/job';
 import type { ToolJobProgress, ToolType, UrlHandoff } from '@/shared/contracts/tool-job';
+import { JobRepository } from '@/storage/repositories';
 import type { Dataset, ExtractedRecord, FieldDefinition } from '@/types';
 
 const SitemapExplorerView = React.lazy(() =>
@@ -188,13 +190,23 @@ const DatasetWorkbench: React.FC<{
   initialDatasetId?: string;
   onOpenTool?: (tool: ToolType) => void;
 }> = ({ initialDatasetId, onOpenTool }) => {
-  const { datasets, isLoading, error, deleteDataset, renameDataset, getDatasetRecords } = useDatasets();
+  const { datasets, isLoading, error, refreshDatasets, deleteDataset, renameDataset, getDatasetRecords } =
+    useDatasets();
+  const jobRepository = useMemo(() => new JobRepository(), []);
   const [activeId, setActiveId] = useState<string | undefined>(initialDatasetId);
   const [records, setRecords] = useState<ExtractedRecord[]>([]);
   const [fields, setFields] = useState<FieldDefinition[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isActiveJob, setIsActiveJob] = useState(false);
   const requestToken = useRef(0);
+  const lastLoadedActiveIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (initialDatasetId) {
+      setActiveId(initialDatasetId);
+    }
+  }, [initialDatasetId]);
 
   useEffect(() => {
     if (datasets.length === 0) {
@@ -210,12 +222,17 @@ const DatasetWorkbench: React.FC<{
 
   useEffect(() => {
     if (!active) {
+      lastLoadedActiveIdRef.current = undefined;
       setRecords([]);
       setFields([]);
       return;
     }
     const token = ++requestToken.current;
-    setRecordsLoading(true);
+    const isDatasetSwitch = lastLoadedActiveIdRef.current !== active.id;
+    lastLoadedActiveIdRef.current = active.id;
+    if (isDatasetSwitch) {
+      setRecordsLoading(true);
+    }
     setLoadError(null);
     void getDatasetRecords(active.id)
       .then((rows) => {
@@ -231,6 +248,86 @@ const DatasetWorkbench: React.FC<{
         if (requestToken.current === token) setRecordsLoading(false);
       });
   }, [active, getDatasetRecords]);
+
+  useEffect(() => {
+    let live = true;
+    const jobId = active?.jobId;
+    if (!jobId) {
+      setIsActiveJob(false);
+      return undefined;
+    }
+    void jobRepository
+      .getJob(jobId)
+      .then((job) => {
+        if (live) {
+          setIsActiveJob(Boolean(job && isActiveJobStatus(job.status)));
+        }
+      })
+      .catch(() => {
+        if (live) setIsActiveJob(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [active?.id, active?.jobId, jobRepository]);
+
+  const activeDatasetId = active?.id;
+  const activeJobId = active?.jobId;
+
+  useEffect(() => {
+    let live = true;
+    const unsubscribe = messagingService.subscribe((message) => {
+      if (message.type !== 'JOB_UPDATED') return;
+      const matchesActiveJob = Boolean(activeJobId && message.payload.jobId === activeJobId);
+      const awaitingInitialDataset = Boolean(initialDatasetId && !activeDatasetId);
+      if (!matchesActiveJob && !awaitingInitialDataset) return;
+
+      if (matchesActiveJob) {
+        setIsActiveJob(isActiveJobStatus(message.payload.status));
+      }
+      void refreshDatasets({ silent: true });
+      if (activeDatasetId) {
+        void getDatasetRecords(activeDatasetId)
+          .then((rows) => {
+            if (live) setRecords(rows);
+          })
+          .catch(() => undefined);
+      }
+    });
+    return () => {
+      live = false;
+      unsubscribe();
+    };
+  }, [activeDatasetId, activeJobId, getDatasetRecords, initialDatasetId, refreshDatasets]);
+
+  useEffect(() => {
+    if (!isActiveJob || !active?.id) return undefined;
+    let live = true;
+    const datasetId = active.id;
+    const jobId = active.jobId;
+    const timer = setInterval(() => {
+      void refreshDatasets({ silent: true });
+      void getDatasetRecords(datasetId)
+        .then((rows) => {
+          if (live) setRecords(rows);
+        })
+        .catch(() => undefined);
+      if (jobId) {
+        void jobRepository
+          .getJob(jobId)
+          .then((job) => {
+            if (live && job && !isActiveJobStatus(job.status)) {
+              setIsActiveJob(false);
+            }
+          })
+          .catch(() => undefined);
+      }
+    }, 1500);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [active?.id, active?.jobId, getDatasetRecords, isActiveJob, jobRepository, refreshDatasets]);
 
   const selectDataset = (dataset: Dataset) => {
     setActiveId(dataset.id);

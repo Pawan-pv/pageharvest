@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { expect, test } from './release-test';
-import { markTourSeen } from './helpers/panel';
+import { markTourSeen, startListExtraction } from './helpers/panel';
 
 /**
  * A list belongs to the tab and the page it was found on. In real Chromium with the built
@@ -84,15 +84,15 @@ test.describe('A found list stays with its tab', () => {
 
     // Find the list on tab A.
     await tabA.bringToFront();
-    await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
-    await expect(panel.getByRole('heading', { name: 'We found 20 items on this page' })).toBeVisible({ timeout: 20000 });
-    await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
-    await expect(panel.getByRole('heading', { name: 'Check your columns' })).toBeVisible();
+    await startListExtraction(panel);
+    // List is detected: "Found 20 items · N columns" shows, Start Extraction is enabled.
+    await expect(panel.getByText(/Found 20 items/)).toBeVisible({ timeout: 20000 });
+    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeEnabled();
 
     // Switch to tab B. The panel says the list is on the other tab, and Start does nothing there.
     await tabB.bringToFront();
     await expect(panel.getByText('This list is on another tab')).toBeVisible({ timeout: 10000 });
-    const start = panel.getByRole('button', { name: 'Start collecting' });
+    const start = panel.getByRole('button', { name: 'Start Extraction' });
     if (await start.isVisible()) {
       await expect(start).toBeDisabled();
     }
@@ -102,9 +102,9 @@ test.describe('A found list stays with its tab', () => {
     await panel.getByRole('button', { name: 'Go back to that tab' }).click();
     await expect.poll(() => tabA.evaluate(() => document.visibilityState), { timeout: 10000 }).toBe('visible');
     await expect(panel.getByText('This list is on another tab')).toHaveCount(0, { timeout: 10000 });
-    await expect(panel.getByRole('button', { name: 'Start collecting' })).toBeEnabled();
-    await panel.getByRole('button', { name: 'Start collecting' }).click();
-    await expect(panel.getByRole('heading', { name: 'Done. 20 rows collected' })).toBeVisible({ timeout: 30000 });
+    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeEnabled();
+    await panel.getByRole('button', { name: 'Start Extraction' }).click();
+    await expect(panel.getByRole('heading', { name: 'Extraction complete' })).toBeVisible({ timeout: 30000 });
 
     const jobs = await readJobs(panel);
     expect(jobs).toHaveLength(1);
@@ -125,14 +125,13 @@ test.describe('A found list stays with its tab', () => {
     await tabA.bringToFront();
 
     await panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i }).click();
-    await expect(panel.getByRole('heading', { name: 'We found 20 items on this page' })).toBeVisible({ timeout: 20000 });
-    await panel.getByRole('button', { name: 'Yes, this is my list' }).click();
-    await expect(panel.getByRole('heading', { name: 'Check your columns' })).toBeVisible();
+    await panel.getByRole('button', { name: /Auto-detect on this page/i }).click();
+    await expect(panel.getByText(/Found 20 items/)).toBeVisible({ timeout: 20000 });
 
     await tabA.goto(`${FIXTURES}/job-listings.html`);
     await expect(panel.getByText('The page changed, so the list you found is gone')).toBeVisible({ timeout: 10000 });
     await expect(panel.getByRole('button', { name: /Find Data on This Page|Get the list on this page/i })).toBeVisible();
-    await expect(panel.getByRole('button', { name: 'Start collecting' })).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toHaveCount(0);
 
     await tabA.close();
     await panel.close();

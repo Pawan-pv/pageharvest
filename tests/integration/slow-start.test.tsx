@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../entrypoints/sidepanel/App';
 import type { JobTransport } from '@/background/job-coordinator';
@@ -25,9 +25,9 @@ function installBackgroundThatReachesThePage() {
 
 async function reachStart(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('button', { name: /Find Data on This Page|Get the list on this page/i }));
-  await user.click(await screen.findByRole('button', { name: 'Yes, this is my list' }));
-  expect(await screen.findByRole('heading', { name: 'Check your columns' })).toBeInTheDocument();
-  await waitFor(() => expect(screen.getAllByRole('checkbox', { name: /^Keep the column / }).length).toBeGreaterThanOrEqual(2));
+  await user.click(await screen.findByRole('button', { name: /Auto-detect on this page/i }));
+  await screen.findByText(/Found 20 items/);
+  expect(screen.getByRole('button', { name: 'Start Extraction' })).not.toBeDisabled();
 }
 
 /**
@@ -58,11 +58,10 @@ describe('A start that outlasts the panel timeout', () => {
     render(<App />);
     await reachStart(user);
 
-    await user.click(screen.getByRole('button', { name: 'Start collecting' }));
+    await user.click(screen.getByRole('button', { name: 'Start Extraction' }));
 
-    expect(await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Extraction complete' }, { timeout: 20000 })).toBeInTheDocument();
     expect(screen.queryByText(/Message timeout/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Check your columns' })).not.toBeInTheDocument();
     expect(await db.jobs.count()).toBe(1);
   });
 
@@ -77,9 +76,9 @@ describe('A start that outlasts the panel timeout', () => {
     render(<App />);
     await reachStart(user);
 
-    await user.click(screen.getByRole('button', { name: 'Start collecting' }));
+    await user.click(screen.getByRole('button', { name: 'Start Extraction' }));
 
-    expect(await screen.findByRole('heading', { name: 'Done. 20 rows collected' }, { timeout: 20000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Extraction complete' }, { timeout: 20000 })).toBeInTheDocument();
     expect(screen.queryByText(/already running/)).not.toBeInTheDocument();
   });
 
@@ -90,10 +89,9 @@ describe('A start that outlasts the panel timeout', () => {
     render(<App />);
     await reachStart(user);
 
-    await user.click(screen.getByRole('button', { name: 'Start collecting' }));
+    await user.click(screen.getByRole('button', { name: 'Start Extraction' }));
 
     expect(await screen.findByText(/Message timeout after 20000ms/, undefined, { timeout: 15000 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Check your columns' })).toBeInTheDocument();
     expect(await db.jobs.count()).toBe(0);
   });
 
@@ -113,7 +111,7 @@ describe('A start that outlasts the panel timeout', () => {
     } as never);
     vi.spyOn(messagingService, 'startJob').mockRejectedValue(new Error('Message timeout after 20000ms'));
 
-    await user.click(screen.getByRole('button', { name: 'Start collecting' }));
+    await user.click(screen.getByRole('button', { name: 'Start Extraction' }));
 
     expect(await screen.findByText(/Message timeout after 20000ms/, undefined, { timeout: 15000 })).toBeInTheDocument();
   });

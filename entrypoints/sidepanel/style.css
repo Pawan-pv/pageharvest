@@ -72,7 +72,12 @@ body {
 }
 
 .ph-shimmer {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.02) 100%);
+  background: linear-gradient(
+    90deg,
+    rgb(var(--ph-fg) / 0.04) 0%,
+    rgb(var(--ph-fg) / 0.12) 50%,
+    rgb(var(--ph-fg) / 0.04) 100%
+  );
   background-size: 200% 100%;
   animation: ph-shimmer 2s linear infinite;
 }
@@ -94,5 +99,9 @@ body {
   .ph-check-draw,
   .ph-shimmer {
     animation: none !important;
+  }
+
+  .ph-check-draw {
+    stroke-dashoffset: 0;
   }
 }

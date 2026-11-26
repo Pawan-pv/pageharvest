@@ -215,7 +215,7 @@ export interface ToolHubProps {
 export const ToolHub: React.FC<ToolHubProps> = ({
   datasetsCount,
   disabled = false,
-  onOpenListExtractor: _onOpenListExtractor,
+  onOpenListExtractor,
   onAutoDetectLists,
   onExtractTable,
   onExtractLinks,
@@ -259,7 +259,7 @@ export const ToolHub: React.FC<ToolHubProps> = ({
           badge="Ready"
           ariaLabel="Find Data on This Page"
           disabled={disabled}
-          onClick={onAutoDetectLists}
+          onClick={onOpenListExtractor ?? onAutoDetectLists}
         />
         <ToolCard
           title="Table Extractor"
