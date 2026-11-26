@@ -1028,7 +1028,7 @@ test.describe('PageHarvest production workflows', () => {
     panel = await openPanel(context, extensionId);
     await panel.getByRole('button', { name: 'Data', exact: true }).click();
     await panel.getByText(/20 Product Listing/).last().click();
-    await expect(panel.getByRole('button', { name: /View data & export|Export/ })).toBeVisible({ timeout: 15000 });
+    await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 15000 });
 
     await expect.poll(columns).toBe(startingColumns - 1);
     await expect(panel.getByText('Edited by test')).toBeVisible();
