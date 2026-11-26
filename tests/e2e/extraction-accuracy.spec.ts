@@ -604,11 +604,12 @@ test.describe('working with results', () => {
   test('Remove Duplicates removes rows from saved data', async () => {
     const { panel, job, rows } = await extractWithDefaults('accuracy-clean.html');
     expect(rows).toHaveLength(4);
-    await panel.bringToFront();
+    const workbench = await openResultsWorkbench(panel);
 
-    await panel.getByRole('button', { name: 'Remove Duplicates' }).click();
-    const confirm = panel.getByRole('button', { name: /^(Remove|Confirm|Yes)/ }).last();
-    await confirm.click();
+    await workbench.getByRole('button', { name: 'Remove Duplicates' }).click();
+    const dialog = workbench.getByRole('dialog', { name: 'Remove Duplicate Rows' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Confirm' }).click();
 
     await expect
       .poll(async () =>

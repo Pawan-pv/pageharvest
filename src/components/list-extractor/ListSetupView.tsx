@@ -486,7 +486,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
       </div>
 
       {/* Sticky Bottom Primary CTA */}
-      <div className="sticky bottom-0 -mx-4 -mb-4 mt-auto border-t border-line bg-canvas/95 p-4 backdrop-blur-md">
+      <div className="sticky bottom-0 mt-auto rounded-xl border border-line bg-canvas/95 p-3 backdrop-blur-md">
         <button
           type="button"
           onClick={onStartExtraction}

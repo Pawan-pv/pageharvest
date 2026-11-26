@@ -125,7 +125,11 @@ export async function choosePagination(panel: Page, mode: PaginationMode): Promi
 async function openAdvanced(panel: Page): Promise<void> {
   const toggle = panel.getByRole('button', { name: /Limits & timing/i });
   if (await toggle.count()) {
-    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+    // The setup screen's toggle has no aria-expanded, so check the inputs themselves:
+    // setLimits is called more than once in a flow and must not close what it just opened.
+    const limitsVisible =
+      (await panel.getByLabel('Max pages').count()) > 0 || (await panel.getByLabel('Max scrolls').count()) > 0;
+    if (!limitsVisible) await toggle.click();
     return;
   }
   const advanced = panel.getByRole('button', { name: 'Advanced' });
