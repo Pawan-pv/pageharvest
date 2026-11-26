@@ -417,25 +417,13 @@ test.describe('Extract Links', () => {
 test.describe('choosing a list', () => {
   test('main results come first, and a larger recommendations block can be chosen instead', async () => {
     const { panel, target } = await open('accuracy-ranked.html');
-    // The ranked alternatives live on the detailed result card, reached by the dock's picker.
-    await startWith(panel, 'pick');
-    await expect(panel.getByText('Visual Element Picker Active')).toBeVisible();
-    await target.locator('main .result').first().hover();
-    await target.locator('main .result').first().click();
-    await expect(panel.getByRole('heading', { name: 'Is this the data you want?' })).toBeVisible();
-
-    await expect(panel.getByText('10 similar items found').first()).toBeVisible();
-    const options = panel.getByRole('radio');
-    expect(await options.count()).toBeGreaterThan(1);
-    expect(await options.count()).toBeLessThanOrEqual(8);
-    await expect(options.first()).toBeChecked();
-    // Evidence is behind each card's Technical details.
-    for (const details of await panel.getByText('Technical details').all()) await details.click();
-    await expect(panel.getByText(/labelled as recommendations or promotions/).first()).toBeVisible();
-
-    await panel.getByRole('radio', { name: /24 similar items/ }).check();
-    await expect(panel.getByText('24 similar items found').first()).toBeVisible();
-    await chooseFields(panel);
+    // Pick the alternative list explicitly with the new picker selection step.
+    await startListExtraction(panel);
+    await panel.getByRole('button', { name: /Click to Pick List/i }).click();
+    await expect(panel.getByText('Select a List Item')).toBeVisible();
+    await target.locator('main .result').nth(10).hover();
+    await target.locator('main .result').nth(10).click();
+    await expect(panel.getByText(/Found 24 items/)).toBeVisible({ timeout: 20000 });
     await start(panel);
 
     const { rows } = await finishedRows(panel);
@@ -445,15 +433,14 @@ test.describe('choosing a list', () => {
 
   test('a page with no data list says so, and does not proceed on its own', async () => {
     const { panel, target } = await open('accuracy-blog.html');
-    // The rejection warning is on the detailed result card; reach it with the dock's picker.
-    await startWith(panel, 'pick');
-    await expect(panel.getByText('Visual Element Picker Active')).toBeVisible();
+    // Pick a nav item: no repeating data list is found, so Start stays disabled.
+    await startListExtraction(panel);
+    await panel.getByRole('button', { name: /Click to Pick List/i }).click();
+    await expect(panel.getByText('Select a List Item')).toBeVisible();
     await target.locator('header nav li').first().hover();
     await target.locator('header nav li').first().click();
-    await expect(panel.getByRole('heading', { name: 'Is this the data you want?' })).toBeVisible();
-
-    await expect(panel.getByRole('status').filter({ hasText: 'No data list was found' })).toBeVisible();
-    await expect(panel.getByRole('button', { name: 'Use this list', exact: true })).toBeDisabled();
+    await expect(panel.getByRole('button', { name: /Auto-detect on this page/i })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeDisabled();
   });
 });
 

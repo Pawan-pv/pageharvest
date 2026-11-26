@@ -440,8 +440,8 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     const { panel, target, session, pageErrors } = await open(`${FIXTURES}/long-scroll.html`);
     await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
-    await setLimits(panel, { maxScrolls: 3 });
-    await setLimits(panel, { scrollDelayMs: 500 });
+    // Limits & timing is one collapsible card; visiting it twice would close it.
+    await setLimits(panel, { maxScrolls: 3, scrollDelayMs: 500 });
 
     expect(await target.locator(`#${SCAN_HOST}`).count()).toBe(0);
 
@@ -459,6 +459,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     });
 
     await panel.getByRole('button', { name: 'Start Extraction' }).click();
+    await expect(panel.getByText('Live Extraction Stage')).toBeVisible({ timeout: 15000 });
 
     const scanHost = target.locator(`#${SCAN_HOST}`);
     await expect(scanHost).toBeAttached({ timeout: 15000 });

@@ -75,7 +75,9 @@ test.describe('A site that answers 429', () => {
     await panel.getByRole('button', { name: 'Start Extraction' }).click();
 
     await expect(panel.getByText('The site asked PageHarvest to slow down')).toBeVisible({ timeout: 45000 });
-    await expect(panel.getByRole('button', { name: 'Continue' })).toBeVisible();
+    // The recovery banner offers the continue action: "Continue" in simple mode, "Resume"
+    // when Advanced options are on. Both resume the same recoverable job from its checkpoint.
+    await expect(panel.getByRole('button', { name: /Continue|Resume/i }).first()).toBeVisible({ timeout: 15000 });
 
     const [job] = await readJobs(panel);
     expect(job.status).toBe('RECOVERABLE');

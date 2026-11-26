@@ -7,12 +7,10 @@ import { expect, test } from './release-test';
 import {
   choosePagination,
   discardInterrupted,
-  goToPagination,
   markTourSeen,
   enableAdvancedOptions,
   readLimit,
   setLimits,
-  setUrlTemplate,
   startListExtraction,
   waitForCompletedDownload,
 } from './helpers/panel';
@@ -309,8 +307,7 @@ test.describe('PageHarvest production workflows', () => {
     const target = await openTarget(context, `${FIXTURES}/long-scroll.html`);
     await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
-    await setLimits(panel, { maxScrolls: 6 });
-    await setLimits(panel, { scrollDelayMs: 500 });
+    await setLimits(panel, { maxScrolls: 6, scrollDelayMs: 500 });
     await start(panel);
 
     const running = await waitForJob(panel, (job) => job.status === 'RUNNING' && job.totalExtracted >= 5);
@@ -341,8 +338,7 @@ test.describe('PageHarvest production workflows', () => {
     const target = await openTarget(context, `${FIXTURES}/long-scroll.html`);
     await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
-    await setLimits(panel, { maxScrolls: 8 });
-    await setLimits(panel, { scrollDelayMs: 500 });
+    await setLimits(panel, { maxScrolls: 8, scrollDelayMs: 500 });
     await start(panel);
     const running = await waitForJob(panel, (job) => job.status === 'RUNNING' && job.totalExtracted >= 5);
 
@@ -363,8 +359,7 @@ test.describe('PageHarvest production workflows', () => {
     const target = await openTarget(context, `${FIXTURES}/long-scroll.html`);
     await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
-    await setLimits(panel, { maxScrolls: 6 });
-    await setLimits(panel, { scrollDelayMs: 500 });
+    await setLimits(panel, { maxScrolls: 6, scrollDelayMs: 500 });
     await start(panel);
     const running = await waitForJob(panel, (job) => job.status === 'RUNNING' && job.totalExtracted >= 5);
 
@@ -394,6 +389,9 @@ test.describe('PageHarvest production workflows', () => {
     const jobA = await waitForJob(panel, (job) => job.status === 'RUNNING' && job.lastSequence >= 1);
     const identityA = identityOf(jobA);
 
+    // The list flow's run screen finishes with "Stop extraction" (COMPLETED). The detailed
+    // run screen, reached with Tools, still offers the real Cancel that ends as CANCELLED.
+    await panel.getByRole('button', { name: 'Tools' }).click();
     await panel.getByRole('button', { name: 'Cancel job' }).click();
     await waitForJob(panel, (job) => job.id === jobA.id && job.status === 'CANCELLED');
     const rowsOfA = (await readRows(panel, jobA.datasetId)).length;
@@ -430,6 +428,7 @@ test.describe('PageHarvest production workflows', () => {
     expect(rowsOfB.every((row) => row._jobId === jobB.id)).toBe(true);
     expect((await readJobs(panel)).find((job) => job.id === jobA.id)?.status).toBe('CANCELLED');
 
+    await panel.getByRole('button', { name: 'Tools' }).click();
     await panel.getByRole('button', { name: 'Cancel job' }).click();
     await waitForJob(panel, (job) => job.id === jobB.id && job.status === 'CANCELLED');
   });
@@ -440,8 +439,7 @@ test.describe('PageHarvest production workflows', () => {
     const tabOne = await openTarget(context, `${FIXTURES}/long-scroll.html`);
     await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
-    await setLimits(panel, { maxScrolls: 3 });
-    await setLimits(panel, { scrollDelayMs: 500 });
+    await setLimits(panel, { maxScrolls: 3, scrollDelayMs: 500 });
     await start(panel);
     const first = await waitForJob(panel, (job) => job.status === 'RUNNING');
 
@@ -483,8 +481,7 @@ test.describe('PageHarvest production workflows', () => {
     await choosePagination(panel, 'infinite_scroll');
     // The restart must be mid-job. With 8 scrolls and 4s delay, scroll 1 triggers at 4s
     // leaving 7 scrolls (28s of work) for after resume.
-    await setLimits(panel, { maxScrolls: 8 });
-    await setLimits(panel, { scrollDelayMs: 4000 });
+    await setLimits(panel, { maxScrolls: 8, scrollDelayMs: 4000 });
     await start(panel);
 
     const interrupted = await waitForJob(panel, (job) => job.status === 'RUNNING' && job.scrollsCompleted >= 1);
@@ -606,8 +603,10 @@ test.describe('PageHarvest production workflows', () => {
     let panel = await openPanel(context, extensionId);
     const target = await openTarget(context, `${FIXTURES}/simple-grid.html`);
     await configure(panel);
-    // Saving a recipe is on the Pagination step, after the columns.
-    await goToPagination(panel);
+    // Saving a recipe is on the detailed Pagination step: open the columns editor from
+    // the new setup screen, then move to its Pagination half.
+    await panel.getByRole('button', { name: 'Edit columns' }).click();
+    await panel.getByRole('button', { name: 'Next: Pagination' }).click();
     await panel.getByLabel('Recipe Name').fill('Grid recipe');
     await panel.getByRole('button', { name: 'Save Recipe' }).click();
     await expect(panel.getByText('Saved recipe "Grid recipe".')).toBeVisible();
@@ -640,8 +639,10 @@ test.describe('PageHarvest production workflows', () => {
     // Success, saved as a recipe so it can then be broken on purpose.
     let target = await openTarget(context, `${FIXTURES}/simple-grid.html`);
     await configure(panel);
-    // Saving a recipe is on the Pagination step, after the columns.
-    await goToPagination(panel);
+    // Saving a recipe is on the detailed Pagination step: open the columns editor from
+    // the new setup screen, then move to its Pagination half.
+    await panel.getByRole('button', { name: 'Edit columns' }).click();
+    await panel.getByRole('button', { name: 'Next: Pagination' }).click();
     await panel.getByLabel('Recipe Name').fill('History recipe');
     await panel.getByRole('button', { name: 'Save Recipe' }).click();
     await expect(panel.getByText('Saved recipe "History recipe".')).toBeVisible();
@@ -792,6 +793,8 @@ test.describe('PageHarvest production workflows', () => {
     );
     expect(stored).toBe(baseline + total - 99);
 
+    // Cancel lives on the detailed run screen, which the Tools navigation opens.
+    await panel.getByRole('button', { name: 'Tools' }).click();
     await panel.getByRole('button', { name: 'Cancel job' }).click();
     await waitForJob(panel, (job) => job.id === running.id && job.status === 'CANCELLED');
   });
@@ -800,11 +803,10 @@ test.describe('PageHarvest production workflows', () => {
     const panel = await openPanel(context, extensionId);
     await openTarget(context, `${FIXTURES}/csv-values.html`);
     await expect(panel.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
-    await panel.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
-    await panel.getByRole('button', { name: 'Use this list', exact: true }).click({ timeout: 10000 });
-    await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
-    // Both columns are found automatically: the items have no heading to recognize.
-    await expect(panel.getByRole('button', { name: 'Start extraction (2 columns)' })).toBeEnabled({ timeout: 10000 });
+    await startListExtraction(panel);
+    await expect(panel.getByText(/Found \d+ items/)).toBeVisible({ timeout: 20000 });
+    // Both columns are found automatically; the new setup screen enables its single CTA.
+    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeEnabled({ timeout: 10000 });
     await start(panel);
     await waitForJob(panel, (job) => job.status === 'COMPLETED');
 
@@ -841,22 +843,29 @@ test.describe('PageHarvest production workflows', () => {
     const panel = await openPanel(context, extensionId);
     let target = await openTarget(context, `${FIXTURES}/catalog-1.html`);
     await configure(panel);
-
-    await setUrlTemplate(panel, `${FIXTURES}/catalog-{page}.html`);
-    await setLimits(panel, { maxPages: 5 });
-    await setLimits(panel, { delayMs: 3000 });
+    // The URL template lives on the detailed Pagination step, not in the new setup screen.
+    await panel.getByRole('button', { name: 'Edit columns' }).click();
+    await panel.getByRole('button', { name: 'Next: Pagination' }).click();
+    const template = `${FIXTURES}/catalog-{page}.html`;
+    await panel.getByRole('radio', { name: 'Page numbers in the URL' }).check();
+    await panel.getByLabel('Page address').fill(template);
+    await setLimits(panel, { maxPages: 5, delayMs: 3000 });
     await expect(panel.getByRole('list', { name: 'Generated page URLs' })).toContainText('catalog-2.html');
 
     // A template for another site is refused before it can start.
-    await setUrlTemplate(panel, 'https://other.example.com/{page}');
+    await panel.getByLabel('Page address').fill('https://other.example.com/{page}');
     await expect(panel.getByText(/must stay on/)).toBeVisible();
     await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeDisabled();
-    await setUrlTemplate(panel, `${FIXTURES}/catalog-{page}.html`);
+    await panel.getByLabel('Page address').fill(template);
     await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeEnabled();
 
     await start(panel);
     const first = await waitForJob(panel, (job) => job.status === 'RUNNING' && job.lastSequence >= 1);
-    await expect(panel.getByText(/^Page \d+ of 5$/)).toBeVisible();
+    await expect(panel.getByText('Live Extraction Stage')).toBeVisible();
+    // The run screen no longer prints "Page N of 5"; the committed job holds the same
+    // page-unit limit, so assert it there instead of dropping the check.
+    expect(first.progressKind).toBe('pages');
+    expect(first.targetSteps).toBe(5);
 
     // Interrupt during the delay before the next page.
     await target.close();
@@ -895,11 +904,10 @@ test.describe('PageHarvest production workflows', () => {
     );
 
     await choosePagination(panel, 'infinite_scroll');
-    await setLimits(panel, { maxScrolls: 3 });
-    await setLimits(panel, { scrollDelayMs: 500 });
+    await setLimits(panel, { maxScrolls: 3, scrollDelayMs: 500 });
     await start(panel);
 
-    await expect(panel.getByText(/^Scroll \d+ of 3$/)).toBeVisible({ timeout: 10000 });
+    await expect(panel.getByText('Live Extraction Stage')).toBeVisible({ timeout: 10000 });
     await expect(panel.getByText(/Page \d+ of/)).toHaveCount(0);
 
     const job = await waitForJob(panel, (candidate) => candidate.status === 'COMPLETED');
@@ -939,21 +947,22 @@ test.describe('PageHarvest production workflows', () => {
 
     // Pause: anything already past the gate settles, then nothing moves.
     await panel.getByRole('button', { name: 'Pause' }).click();
-    await expect(panel.getByText('Extraction paused')).toBeVisible();
+    await expect(panel.getByText('Paused', { exact: true })).toBeVisible();
     await target.waitForTimeout(3000);
     const cardsPaused = await cards();
     const rowsPaused = (await readRows(panel, running.datasetId)).length;
     await target.waitForTimeout(3000);
     expect(await cards()).toBe(cardsPaused);
     expect((await readRows(panel, running.datasetId)).length).toBe(rowsPaused);
-    await expect(panel.getByText('Extraction paused')).toBeVisible();
+    await expect(panel.getByText('Paused', { exact: true })).toBeVisible();
 
     // Resume: it moves again.
     await panel.getByRole('button', { name: 'Resume' }).click();
     await expect.poll(cards, { timeout: 15000 }).toBeGreaterThan(cardsPaused);
 
-    // Finish: the page stops and the results open.
-    await panel.getByRole('button', { name: /Finish and view rows/ }).click();
+    // Finish: the page stops and the results open. The list run screen calls this
+    // "Stop extraction"; it is the same "finish and view rows" command.
+    await panel.getByRole('button', { name: 'Stop extraction' }).click();
     await expect(panel.getByRole('button', { name: /View data & export|Export/ })).toBeVisible({ timeout: 15000 });
     await target.waitForTimeout(2500);
     const cardsFinished = await cards();

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { expect, test } from './release-test';
-import { enableAdvancedOptions, markTourSeen, startListExtraction } from './helpers/panel';
+import { choosePagination, enableAdvancedOptions, markTourSeen, startListExtraction } from './helpers/panel';
 
 /**
  * Two side panels on one job, in real Chromium with the built extension. Chrome keeps one
@@ -142,17 +142,15 @@ test.describe('Two panels on one job', () => {
     const watching = await openPanel();
     await target.bringToFront();
 
-    // Advanced options: the detailed flow, which has "Cancel job".
-    await watching.getByRole('button', { name: 'Find Data on This Page', exact: true }).click();
-    await watching.getByRole('button', { name: 'Use this list', exact: true }).click();
-    await watching.getByText('Choose your columns').waitFor({ timeout: 20000 });
-    const next = watching.getByRole('button', { name: 'Next: Pagination' });
-    if (await next.isVisible()) await next.click();
-    await watching.getByRole('radio', { name: 'Click a Next button' }).check();
-    await watching.getByRole('button', { name: /Start extraction/ }).click();
-    await expect(watching.getByText('Collecting rows…')).toBeVisible({ timeout: 20000 });
+    // The watching panel drives the new two-step List Extractor. Advanced options are on,
+    // so the other window's fresh panel opens on the detailed run screen with "Cancel job".
+    await startListExtraction(watching);
+    await expect(watching.getByText(/Found 3 items/)).toBeVisible({ timeout: 20000 });
+    await choosePagination(watching, 'next_button');
+    await watching.getByRole('button', { name: 'Start Extraction' }).click();
+    await expect(watching.getByText('Live Extraction Stage')).toBeVisible({ timeout: 20000 });
     await watching.getByRole('button', { name: 'Pause' }).click();
-    await expect(watching.getByText('Extraction paused')).toBeVisible({ timeout: 15000 });
+    await expect(watching.getByText('Paused', { exact: true })).toBeVisible({ timeout: 15000 });
 
     // The other window's panel opens on the same job and cancels it.
     const other = await openPanel();
@@ -165,7 +163,7 @@ test.describe('Two panels on one job', () => {
     await expect(watching.getByText('Collecting was stopped. The rows collected so far are saved in My data.')).toBeVisible({
       timeout: 10000,
     });
-    await expect(watching.getByText('Extraction paused')).toHaveCount(0);
+    await expect(watching.getByText('Paused', { exact: true })).toHaveCount(0);
     await expect(watching.getByRole('button', { name: 'Resume' })).toHaveCount(0);
 
     await Promise.all([target.close(), watching.close(), other.close()]);
