@@ -479,7 +479,7 @@ export const App: React.FC = () => {
   };
 
   const navPillClass = (section: NavSection) =>
-    `flex min-h-8 items-center gap-1 rounded-xl px-2 text-xs font-semibold transition-colors ${
+    `flex min-h-8 items-center gap-1 rounded-xl px-1.5 text-xs font-semibold transition-colors ${
       activeSection === section
         ? 'bg-surface-muted text-fg shadow-xs'
         : 'text-fg-subtle hover:bg-surface hover:text-fg'
@@ -508,7 +508,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-canvas font-sans text-fg antialiased">
-      <main className="flex-1 overflow-y-auto px-3.5 pb-6">
+      <main className="flex-1 overflow-y-auto px-3 pb-6">
         {/* Top brand row: scrolls with the page, so it never sits over the active-page strip. */}
         <div className="flex items-center justify-between gap-2 pb-2 pt-3">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -554,7 +554,7 @@ export const App: React.FC = () => {
               disabled={!tab.isInjectable}
               title="Pick element on page"
               aria-label="Pick element on page"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-tool-emerald/50 bg-tool-emerald/10 text-tool-emerald transition-colors hover:bg-tool-emerald/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-tool-emerald/50 bg-tool-emerald/10 text-tool-emerald transition-colors hover:bg-tool-emerald/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <MousePointer2 aria-hidden="true" className="h-4 w-4" />
             </button>

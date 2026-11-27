@@ -144,21 +144,24 @@ async function ensureFixtureServer() {
   return () => server.kill();
 }
 
-const clickPanelButton = (panel, label) =>
-  waitFor(`the "${label}" button`, () =>
-    evaluate(
-      panel,
-      `(() => {
-        const button = [...document.querySelectorAll('button')]
-          .find((item) => item.textContent.includes(${JSON.stringify(label)}) && !item.disabled);
-        if (!button) return false;
-        button.click();
-        return true;
-      })()`,
-      // A person's click is a user gesture. Start confirms site access with Chrome first
-      // (ADR-037; already granted since ADR-040), which Chrome refuses without a gesture.
-      { userGesture: true }
-    )
+const clickPanelButton = (panel, label, timeoutMs = STEP_TIMEOUT_MS) =>
+  waitFor(
+    `the "${label}" button`,
+    () =>
+      evaluate(
+        panel,
+        `(() => {
+          const button = [...document.querySelectorAll('button')]
+            .find((item) => item.textContent.includes(${JSON.stringify(label)}) && !item.disabled);
+          if (!button) return false;
+          button.click();
+          return true;
+        })()`,
+        // A person's click is a user gesture. Start confirms site access with Chrome first
+        // (ADR-037; already granted since ADR-040), which Chrome refuses without a gesture.
+        { userGesture: true }
+      ),
+    timeoutMs
   );
 
 const readFromDatabase = (panel, table) =>
@@ -236,18 +239,19 @@ async function collectEvidence({ browser, port, evidence, artifactDirectory, not
   evidence.panelOpened = panel !== null && notes.panelsBeforeClick.length === 0;
   if (!evidence.panelOpened) return;
 
-  // A fresh profile opens the first-run tour over the panel, as it would for a new user.
-  notes.tourShown = await clickPanelButton(panel, 'Skip tour').then(
+  // A fresh profile shows ConsentGate ("I understand, continue") and then the first-run tour.
+  notes.consentShown = await clickPanelButton(panel, 'I understand, continue', 5000).then(
     () => true,
     () => false
   );
-  // A fresh profile opens in simple mode (ADR-039), as a new user's does: the list is found
-  // and shown, the user says it is theirs, and collecting starts from the columns screen.
-  await clickPanelButton(panel, 'Find Data on This Page').catch(() =>
-    clickPanelButton(panel, 'Get the list on this page')
+  notes.tourShown = await clickPanelButton(panel, 'Skip tour', 5000).then(
+    () => true,
+    () => false
   );
-  await clickPanelButton(panel, 'Yes, this is my list');
-  await clickPanelButton(panel, 'Start collecting');
+  // A fresh profile opens the Tool Hub, then the 5-state List Extractor flow.
+  await clickPanelButton(panel, 'Find Data on This Page');
+  await clickPanelButton(panel, 'Auto-detect on this page');
+  await clickPanelButton(panel, 'Start Extraction');
   try {
     await waitFor('the job to complete', async () =>
       (await readFromDatabase(panel, 'jobs')).some((job) => job.status === 'COMPLETED')
