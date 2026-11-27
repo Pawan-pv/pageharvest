@@ -249,7 +249,7 @@ async function collectEvidence({ browser, port, evidence, artifactDirectory, not
     () => false
   );
   // A fresh profile opens the Tool Hub, then the 5-state List Extractor flow.
-  await clickPanelButton(panel, 'Find Data on This Page');
+  await clickPanelButton(panel, 'List Extractor');
   await clickPanelButton(panel, 'Auto-detect on this page');
   await clickPanelButton(panel, 'Start Extraction');
   try {
