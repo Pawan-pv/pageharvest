@@ -14,6 +14,7 @@ import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Input } from '@/components/common/Input';
 import { Banner } from '@/components/common/Banner';
+import { HarvestProgressStage, recordsToConveyorItems } from '@/components/shared/HarvestProgressStage';
 import { fetchShopifyCollections } from '@/core/shopify/client';
 import { paginateShopifyProducts } from '@/background/runners/shopify-runner';
 import { detectShopifyStore } from '@/core/shopify/detector';
@@ -320,36 +321,28 @@ export const ShopifyExtractorView: React.FC<ShopifyExtractorViewProps> = ({
         </div>
 
         {/* Live Counters */}
-        {(isRunning || extractedRecords.length > 0) && (
-          <div className="flex flex-col gap-2 border-t border-line/40 pt-2.5">
-            <div className="grid grid-cols-2 gap-2 text-center">
-              <div className="rounded-xl border border-line/60 bg-surface p-2">
-                <span className="block text-3xs uppercase tracking-wider text-fg-subtle">Products Found</span>
-                <span className="text-base font-bold tabular-nums text-fg">
-                  {progress?.productsFound ?? 0}
-                </span>
-              </div>
-              <div className="rounded-xl border border-tool-lime/25 bg-tool-lime/10 p-2">
-                <span className="block text-3xs uppercase tracking-wider text-tool-lime">
-                  {granularity === 'variant' ? 'Variants Extracted' : 'Products Extracted'}
-                </span>
-                <span className="text-base font-bold tabular-nums text-tool-lime">
-                  {extractedRecords.length}
-                </span>
-              </div>
-            </div>
-
-            {isRunning && (
-              <p className="text-3xs text-fg-muted italic">
-                Keep this panel or workbench tab open while running
-              </p>
-            )}
-
-            {progress?.status === 'rate_limited' && (
-              <div className="rounded-xl border border-warning-line bg-warning-soft p-2 text-2xs text-warning-fg">
-                Rate limited by store. Waiting {Math.round((progress.rateLimitWaitMs ?? 2000) / 1000)}s before retry…
-              </div>
-            )}
+        {(isRunning || extractedRecords.length > 0 || progress) && (
+          <div className="border-t border-line/40 pt-2.5">
+            <HarvestProgressStage
+              compact
+              count={extractedRecords.length}
+              metricLabel={granularity === 'variant' ? 'VARIANTS EXTRACTED' : 'PRODUCTS EXTRACTED'}
+              status={error && !isRunning ? 'failed' : !isRunning && createdDatasetId ? 'completed' : 'running'}
+              stageLabel="Shopify Catalog"
+              statusLabel={isRunning ? 'Syncing catalog…' : 'Complete'}
+              progressSummary={`Products Found: ${progress?.productsFound ?? 0}`}
+              pacingNotice={
+                progress?.status === 'rate_limited'
+                  ? `Rate limited by store. Waiting ${Math.round((progress.rateLimitWaitMs ?? 2000) / 1000)}s before retry…`
+                  : isRunning
+                    ? 'Keep this panel or workbench tab open while running'
+                    : undefined
+              }
+              errorMessage={error}
+              conveyorItems={recordsToConveyorItems(extractedRecords, 4)}
+              feedLabel="Recent Products"
+              emptyFeedText="Loading store catalog…"
+            />
           </div>
         )}
 

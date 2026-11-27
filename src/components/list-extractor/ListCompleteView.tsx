@@ -138,16 +138,31 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
 
   return (
     <div className="flex flex-col gap-4 p-4 text-left min-h-[480px]">
-      {/* Top Hero Section: Draw-in Checkmark & Count */}
+      {/* Top Hero Section: Draw-in Checkmark with 6-spark SVG burst & Count */}
       <div className="flex flex-col items-center justify-center text-center pt-2">
-        {/* Animated Draw-in Checkmark inside glowing emerald ring */}
+        {/* Animated Draw-in Checkmark + one-shot 6-spark burst inside glowing emerald ring */}
         <div className="relative flex h-16 w-16 items-center justify-center mb-3">
-          <div className="absolute inset-0 rounded-full bg-brand/20 blur-md" />
-          <svg className="h-16 w-16" viewBox="0 0 52 52">
+          <div className="absolute inset-0 rounded-full bg-brand/20 blur-md" aria-hidden="true" />
+          <svg className="h-16 w-16" viewBox="0 0 64 64" aria-hidden="true">
+            {[0, 60, 120, 180, 240, 300].map((deg, idx) => (
+              <g key={deg} transform={`translate(32 32) rotate(${deg})`}>
+                <line
+                  x1="0"
+                  y1="-23"
+                  x2="0"
+                  y2="-28"
+                  stroke={idx % 2 === 0 ? 'rgb(var(--ph-brand))' : 'rgb(var(--ph-tool-teal))'}
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  className="ph-spark-burst motion-reduce:animate-none"
+                  style={{ animationDelay: '160ms' }}
+                />
+              </g>
+            ))}
             <circle
-              cx="26"
-              cy="26"
-              r="24"
+              cx="32"
+              cy="32"
+              r="22"
               fill="none"
               stroke="rgb(var(--ph-brand))"
               strokeWidth="3"
@@ -160,7 +175,7 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
               strokeLinecap="round"
               strokeLinejoin="round"
               className="ph-check-draw motion-reduce:animate-none"
-              d="M14 27l8 8 16-16"
+              d="M21 33l7 7 15-15"
             />
           </svg>
         </div>
@@ -183,7 +198,7 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
         <span className="text-2xs font-semibold text-fg-subtle uppercase tracking-wider">
           Preview Snippet
         </span>
-        <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+        <div className="overflow-x-auto rounded-xl border border-line bg-surface ph-card-elevated">
           <table className="w-full text-left text-2xs" aria-label="Preview Snippet">
             <thead className="border-b border-line-subtle bg-surface-sunken text-fg-subtle">
               <tr>
@@ -210,7 +225,7 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
       </div>
 
       {/* 3-Column Summary Card */}
-      <div className="grid grid-cols-3 divide-x divide-line-subtle rounded-2xl border border-line bg-surface p-3 text-center shadow-sm">
+      <div className="grid grid-cols-3 divide-x divide-line-subtle rounded-2xl border border-line bg-surface p-3 text-center ph-card-elevated">
         <div className="flex flex-col items-center">
           <span className="text-2xs font-semibold tracking-wider text-fg-subtle uppercase">
             ITEMS
@@ -241,11 +256,11 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
 
       {/* Bottom Action Stack */}
       <div className="mt-auto flex flex-col gap-2.5 pt-2">
-        {/* High-contrast glowing emerald primary CTA */}
+        {/* High-contrast glowing emerald primary CTA with single-pass sheen */}
         <button
           type="button"
           onClick={handleOpenWorkbench}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 px-4 font-bold text-sm text-on-strong shadow-glow-emerald transition-all duration-200 hover:bg-brand-hover active:scale-[0.99] cursor-pointer"
+          className="ph-cta-sheen motion-reduce:animate-none flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 px-4 font-bold text-sm text-on-strong shadow-glow-emerald transition-all duration-200 hover:bg-brand-hover active:scale-[0.99] cursor-pointer"
         >
           <span>View data &amp; export</span>
           <ExternalLink className="h-4 w-4" aria-hidden="true" />
@@ -257,7 +272,7 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
             type="button"
             onClick={() => handleDownload('csv')}
             disabled={downloadingFormat === 'csv'}
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-line bg-surface py-1.5 px-2 text-2xs font-semibold text-fg transition-colors hover:border-brand/40 hover:text-brand-fg disabled:opacity-50 cursor-pointer"
+            className="flex min-h-8 items-center justify-center gap-1.5 rounded-xl border border-line bg-surface ph-card-elevated py-1.5 px-2 text-2xs font-semibold text-fg transition-colors hover:border-brand/40 hover:text-brand-fg disabled:opacity-50 cursor-pointer"
           >
             <Download className="h-3 w-3" aria-hidden="true" />
             <span>CSV</span>
@@ -269,7 +284,7 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
             disabled={downloadingFormat === 'xlsx'}
             title="Download for Excel"
             aria-label="Download for Excel"
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-line bg-surface py-1.5 px-2 text-2xs font-semibold text-fg transition-colors hover:border-brand/40 hover:text-brand-fg disabled:opacity-50 cursor-pointer"
+            className="flex min-h-8 items-center justify-center gap-1.5 rounded-xl border border-line bg-surface ph-card-elevated py-1.5 px-2 text-2xs font-semibold text-fg transition-colors hover:border-brand/40 hover:text-brand-fg disabled:opacity-50 cursor-pointer"
           >
             <FileSpreadsheet className="h-3 w-3" aria-hidden="true" />
             <span>XLSX</span>
@@ -278,7 +293,7 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
           <button
             type="button"
             onClick={handleCopyTsv}
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-line bg-surface py-1.5 px-2 text-2xs font-semibold text-fg transition-colors hover:border-brand/40 hover:text-brand-fg cursor-pointer"
+            className="flex min-h-8 items-center justify-center gap-1.5 rounded-xl border border-line bg-surface ph-card-elevated py-1.5 px-2 text-2xs font-semibold text-fg transition-colors hover:border-brand/40 hover:text-brand-fg cursor-pointer"
           >
             {copiedTsv ? (
               <>

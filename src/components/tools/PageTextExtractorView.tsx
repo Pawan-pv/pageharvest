@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Banner } from '@/components/common/Banner';
+import { HarvestProgressStage, type HarvestConveyorItem } from '@/components/shared/HarvestProgressStage';
 import { readUrlHandoff, clearUrlHandoff } from '@/platform/url-handoff';
 import { openWorkbench } from '@/platform/workbench';
 import { useDatasets } from '@/hooks/useDatasets';
@@ -158,7 +159,7 @@ export const PageTextExtractorView: React.FC<PageTextExtractorViewProps> = ({ on
         minDelayMs,
         onProgress: (p) => setProgress(p),
         onRowExtracted: (record) => {
-          setPreviewRows((prev) => [record, ...prev].slice(0, 3));
+          setPreviewRows((prev) => [record, ...prev].slice(0, 4));
           setAllExtractedRecords((prev) => [...prev, record]);
         },
       });
@@ -467,65 +468,34 @@ export const PageTextExtractorView: React.FC<PageTextExtractorViewProps> = ({ on
 
         {/* Progress Metrics */}
         {progress && (
-          <div className="flex flex-col gap-2 pt-1">
-            <div className="flex items-center justify-between text-2xs text-fg-subtle">
-              <span>
-                Processed {progress.processedUrls} of {progress.totalUrls} URLs
-              </span>
-              <span>{Math.round(((progress.processedUrls + progress.failedUrls) / (progress.totalUrls || 1)) * 100)}%</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
-              <div
-                className="h-full bg-fg-muted transition-all duration-300"
-                style={{
-                  width: `${Math.min(100, Math.round(((progress.processedUrls + progress.failedUrls) / (progress.totalUrls || 1)) * 100))}%`,
-                }}
-              />
-            </div>
-            {isRunning && (
-              <p className="text-3xs text-fg-muted italic">
-                Keep this panel or workbench tab open while running
-              </p>
+          <HarvestProgressStage
+            compact
+            count={progress.rowsExtracted}
+            metricLabel="PAGES SCANNED"
+            status={error && !isRunning ? 'failed' : !isRunning ? 'completed' : isPaused ? 'paused' : 'running'}
+            stageLabel="Page Text Extraction"
+            statusLabel={isRunning ? (isPaused ? 'Paused' : 'Extracting text…') : 'Complete'}
+            progressSummary={`Processed ${progress.processedUrls} of ${progress.totalUrls} URLs`}
+            progressPercent={Math.min(
+              100,
+              Math.round(((progress.processedUrls + progress.failedUrls) / (progress.totalUrls || 1)) * 100)
             )}
-
-            <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-              <div className="rounded-xl border border-line bg-surface p-1.5">
-                <span className="block text-3xs uppercase tracking-wider text-fg-subtle">Processed</span>
-                <span className="text-xs font-bold tabular-nums text-fg">{progress.processedUrls}</span>
-              </div>
-              <div className="rounded-xl border border-line bg-surface p-1.5">
-                <span className="block text-3xs uppercase tracking-wider text-fg-subtle">Pages Extracted</span>
-                <span className="text-xs font-bold tabular-nums text-fg">{progress.rowsExtracted}</span>
-              </div>
-              <div className="rounded-xl border border-line bg-surface p-1.5">
-                <span className="block text-3xs uppercase tracking-wider text-fg-subtle">Failed</span>
-                <span className="text-xs font-bold tabular-nums text-fg-muted">{progress.failedUrls}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Live Mini Preview */}
-        {previewRows.length > 0 && (
-          <div className="flex flex-col gap-1.5 pt-1">
-            <span className="text-3xs uppercase tracking-wider text-fg-subtle">Recent Cleaned Articles</span>
-            <div className="flex flex-col gap-1">
-              {previewRows.map((row) => (
-                <div
-                  key={row._id}
-                  className="flex flex-col gap-0.5 rounded-xl border border-line bg-surface p-2 text-2xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-fg truncate">{String(row.Title || row.URL || '')}</span>
-                    <span className="text-3xs font-medium text-fg-subtle tabular-nums shrink-0 ml-2">
-                      ~{String(row['Estimated Tokens'] || '0')} tokens
-                    </span>
-                  </div>
-                  <p className="text-3xs text-fg-muted line-clamp-2">{String(row.Excerpt || '')}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+            pacingNotice={
+              isRunning
+                ? 'Keep this panel or workbench tab open while running'
+                : progress.failedUrls > 0
+                  ? `${progress.failedUrls} URL(s) failed`
+                  : undefined
+            }
+            errorMessage={error}
+            conveyorItems={previewRows.map((row, idx): HarvestConveyorItem => ({
+              id: String(row._id ?? idx),
+              primary: String(row.Title || row.URL || ''),
+              pills: [row['Estimated Tokens'] ? `~${String(row['Estimated Tokens'])} tokens` : ''].filter(Boolean),
+            }))}
+            feedLabel="Recent Cleaned Articles"
+            emptyFeedText="Extracting clean article text…"
+          />
         )}
       </Card>
     </div>

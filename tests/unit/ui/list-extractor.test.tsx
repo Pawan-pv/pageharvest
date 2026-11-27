@@ -7,6 +7,7 @@ import {
   ListRunningView,
   ListCompleteView,
 } from '@/components/list-extractor';
+import { HarvestProgressStage } from '@/components/shared/HarvestProgressStage';
 import {
   useExtractionWorkflow,
   type DetectedList,
@@ -677,6 +678,107 @@ describe('5-State List Extractor Flow (Emerald Pulse)', () => {
 
       expect(screen.getByText('Preview Snippet')).toBeInTheDocument();
       expect(screen.getByText('Article Headline 1')).toBeInTheDocument();
+    });
+
+    it('renders 6-spark celebration burst, CTA sheen, elevated cards, and zero img tags', () => {
+      const { container } = render(
+        <ListCompleteView
+          dataset={MOCK_DATASET}
+          records={MOCK_RECORDS_WITH_IMAGES}
+          fields={MOCK_FIELDS}
+          runSummary={{ elapsedSeconds: 3, stopReason: 'completed', currentStep: 1 }}
+          onDone={vi.fn()}
+        />
+      );
+
+      const sparks = container.querySelectorAll('.ph-spark-burst');
+      expect(sparks).toHaveLength(6);
+      sparks.forEach((spark) => {
+        expect(spark.getAttribute('class')).toContain('motion-reduce:animate-none');
+      });
+
+      expect(container.querySelector('.ph-check-draw')).toBeTruthy();
+      const primaryCta = screen.getByRole('button', { name: /View data & export/i });
+      expect(primaryCta.className).toContain('ph-cta-sheen');
+      expect(primaryCta.className).toContain('motion-reduce:animate-none');
+      expect(container.querySelectorAll('.ph-card-elevated').length).toBeGreaterThanOrEqual(2);
+      expect(container.querySelectorAll('img')).toHaveLength(0);
+    });
+  });
+
+  describe('Shared HarvestProgressStage', () => {
+    it('renders 148x148 Harvest Reactor ring, orbit/scan motion, conveyor rows, reduced-motion classes, and zero img tags when running', () => {
+      const { container } = render(
+        <HarvestProgressStage
+          count={12}
+          metricLabel="ITEMS EXTRACTED"
+          status="running"
+          elapsedSeconds={4}
+          conveyorItems={[
+            { id: 'r-1', primary: 'Wireless Mouse', pills: ['$29', 'store.example.com'] },
+            { id: 'r-2', primary: 'Mechanical Keyboard', pills: ['$89'] },
+          ]}
+        />
+      );
+
+      const svg = container.querySelector('svg[viewBox="0 0 148 148"]');
+      expect(svg).toBeTruthy();
+      expect(container.querySelector('.ph-orbit-slow')?.getAttribute('class')).toContain('motion-reduce:animate-none');
+      expect(container.querySelector('.ph-ring-spin')?.getAttribute('class')).toContain('motion-reduce:animate-none');
+      expect(container.querySelector('.ph-scan-beam')?.className).toContain('motion-reduce:animate-none');
+      expect(container.querySelectorAll('.ph-row-enter')).toHaveLength(2);
+      expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent(/12 items extracted, running/i);
+      expect(container.querySelectorAll('img')).toHaveLength(0);
+      expect(screen.getByText('Wireless Mouse')).toBeInTheDocument();
+      expect(screen.getByText('$29')).toBeInTheDocument();
+      expect(screen.getByText('store.example.com')).toBeInTheDocument();
+    });
+
+    it('halts orbit/ring/scan animations cleanly when paused and triggers ph-harvest-pulse when count increases', () => {
+      const { container, rerender } = render(
+        <HarvestProgressStage
+          count={5}
+          metricLabel="EMAILS FOUND"
+          status="running"
+          elapsedSeconds={2}
+          conveyorItems={[{ id: 'e-1', primary: 'team@example.com', pills: ['example.com'] }]}
+        />
+      );
+
+      expect(container.querySelector('.ph-harvest-pulse')).toBeNull();
+
+      rerender(
+        <HarvestProgressStage
+          count={9}
+          metricLabel="EMAILS FOUND"
+          status="running"
+          elapsedSeconds={3}
+          conveyorItems={[{ id: 'e-2', primary: 'sales@example.com', pills: ['example.com'] }]}
+        />
+      );
+
+      const pulse = container.querySelector('.ph-harvest-pulse');
+      expect(pulse).toBeTruthy();
+      expect(pulse?.className).toContain('motion-reduce:animate-none');
+      expect(container.querySelector('.ph-tick-up')).toBeTruthy();
+
+      rerender(
+        <HarvestProgressStage
+          count={9}
+          metricLabel="EMAILS FOUND"
+          status="paused"
+          elapsedSeconds={3}
+          pacingNotice="Paused — press Resume to continue"
+          conveyorItems={[{ id: 'e-2', primary: 'sales@example.com', pills: ['example.com'] }]}
+        />
+      );
+
+      expect(container.querySelector('.ph-orbit-slow')).toBeNull();
+      expect(container.querySelector('.ph-ring-spin')).toBeNull();
+      expect(container.querySelector('.ph-scan-beam')).toBeNull();
+      expect(screen.getByText('Paused')).toBeInTheDocument();
+      expect(screen.getByText('Paused — press Resume to continue')).toBeInTheDocument();
+      expect(container.querySelectorAll('img')).toHaveLength(0);
     });
   });
 

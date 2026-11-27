@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Banner } from '@/components/common/Banner';
+import { HarvestProgressStage, type HarvestConveyorItem } from '@/components/shared/HarvestProgressStage';
 import { readUrlHandoff, clearUrlHandoff } from '@/platform/url-handoff';
 import { openWorkbench } from '@/platform/workbench';
 import { useDatasets } from '@/hooks/useDatasets';
@@ -159,7 +160,7 @@ export const SocialExtractorView: React.FC<SocialExtractorViewProps> = ({ onBack
         minDelayMs,
         onProgress: (p) => setProgress(p),
         onRowExtracted: (record) => {
-          setPreviewRows((prev) => [record, ...prev].slice(0, 3));
+          setPreviewRows((prev) => [record, ...prev].slice(0, 4));
         },
       });
 
@@ -434,65 +435,34 @@ export const SocialExtractorView: React.FC<SocialExtractorViewProps> = ({ onBack
 
         {/* Progress Metrics */}
         {progress && (
-          <div className="flex flex-col gap-2 pt-1">
-            <div className="flex items-center justify-between text-2xs text-fg-subtle">
-              <span>
-                Processed {progress.processedUrls} of {progress.totalUrls} URLs
-              </span>
-              <span>{Math.round(((progress.processedUrls + progress.failedUrls) / (progress.totalUrls || 1)) * 100)}%</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
-              <div
-                className="h-full bg-tool-amber transition-all duration-300"
-                style={{
-                  width: `${Math.min(100, Math.round(((progress.processedUrls + progress.failedUrls) / (progress.totalUrls || 1)) * 100))}%`,
-                }}
-              />
-            </div>
-            {isRunning && (
-              <p className="text-3xs text-fg-muted italic">
-                Keep this panel or workbench tab open while running
-              </p>
+          <HarvestProgressStage
+            compact
+            count={progress.rowsExtracted}
+            metricLabel="PROFILES FOUND"
+            status={error && !isRunning ? 'failed' : !isRunning ? 'completed' : isPaused ? 'paused' : 'running'}
+            stageLabel="Social Discovery"
+            statusLabel={isRunning ? (isPaused ? 'Paused' : 'Scanning profiles…') : 'Complete'}
+            progressSummary={`Processed ${progress.processedUrls} of ${progress.totalUrls} URLs`}
+            progressPercent={Math.min(
+              100,
+              Math.round(((progress.processedUrls + progress.failedUrls) / (progress.totalUrls || 1)) * 100)
             )}
-
-            <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-              <div className="rounded-xl border border-line bg-surface p-1.5">
-                <span className="block text-3xs uppercase tracking-wider text-fg-subtle">Processed</span>
-                <span className="text-xs font-bold tabular-nums text-fg">{progress.processedUrls}</span>
-              </div>
-              <div className="rounded-xl border border-line bg-surface p-1.5">
-                <span className="block text-3xs uppercase tracking-wider text-fg-subtle">Profiles Found</span>
-                <span className="text-xs font-bold tabular-nums text-tool-amber">{progress.rowsExtracted}</span>
-              </div>
-              <div className="rounded-xl border border-line bg-surface p-1.5">
-                <span className="block text-3xs uppercase tracking-wider text-fg-subtle">Failed</span>
-                <span className="text-xs font-bold tabular-nums text-fg-muted">{progress.failedUrls}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Live Mini Preview */}
-        {previewRows.length > 0 && (
-          <div className="flex flex-col gap-1.5 pt-1">
-            <span className="text-3xs uppercase tracking-wider text-fg-subtle">Recent Discovered Profiles</span>
-            <div className="flex flex-col gap-1">
-              {previewRows.map((row) => (
-                <div
-                  key={row._id}
-                  className="flex items-center justify-between rounded-xl border border-line bg-surface px-2.5 py-1.5 text-2xs"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="rounded bg-surface-muted px-1.5 py-0.5 text-3xs font-semibold text-tool-amber">
-                      {String(row.Platform || '')}
-                    </span>
-                    <span className="font-semibold text-fg truncate">{String(row.Handle || '')}</span>
-                  </div>
-                  <span className="text-3xs text-fg-subtle truncate max-w-[120px]">{String(row['Source Page'] || '')}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+            pacingNotice={
+              isRunning
+                ? 'Keep this panel or workbench tab open while running'
+                : progress.failedUrls > 0
+                  ? `${progress.failedUrls} URL(s) failed`
+                  : undefined
+            }
+            errorMessage={error}
+            conveyorItems={previewRows.map((row, idx): HarvestConveyorItem => ({
+              id: String(row._id ?? idx),
+              primary: String(row.Handle || row['Profile URL'] || ''),
+              pills: [String(row.Platform || ''), String(row['Source Page'] || '')].filter(Boolean),
+            }))}
+            feedLabel="Recent Discovered Profiles"
+            emptyFeedText="Scanning pages for social links…"
+          />
         )}
       </Card>
     </div>

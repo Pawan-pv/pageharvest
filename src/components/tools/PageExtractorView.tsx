@@ -17,6 +17,7 @@ import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Input } from '@/components/common/Input';
 import { Banner } from '@/components/common/Banner';
+import { HarvestProgressStage, type HarvestConveyorItem } from '@/components/shared/HarvestProgressStage';
 import { readUrlHandoff, clearUrlHandoff } from '@/platform/url-handoff';
 import { openWorkbench } from '@/platform/workbench';
 import { useDatasets } from '@/hooks/useDatasets';
@@ -226,7 +227,7 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
         datasetId: dsId,
         onProgress: (p) => setProgress(p),
         onRowExtracted: (row) => {
-          setPreviewRows((prev) => [row, ...prev].slice(0, 3));
+          setPreviewRows((prev) => [row, ...prev].slice(0, 4));
         },
       });
 
@@ -572,47 +573,36 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
 
         {/* Progress Display */}
         {progress && (
-          <div className="flex flex-col gap-1.5 pt-1">
-            <div className="flex items-center justify-between text-2xs font-semibold">
-              <span className="text-fg">
-                Progress: {progress.processedUrls} / {progress.totalUrls}
-              </span>
-              <span className="text-tool-sky">{progress.rowsExtracted} rows extracted</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
-              <div
-                className="h-full bg-tool-sky transition-all duration-300"
-                style={{
-                  width: `${Math.round((progress.processedUrls / Math.max(progress.totalUrls, 1)) * 100)}%`,
-                }}
-              />
-            </div>
-            {isRunning && (
-              <p className="text-3xs text-fg-muted italic">
-                Keep this panel or workbench tab open while running
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Mini Preview Table */}
-        {previewRows.length > 0 && (
-          <div className="flex flex-col gap-1 pt-1">
-            <span className="text-3xs uppercase tracking-wider text-fg-subtle">Recent Extracted Rows (Latest 3)</span>
-            <div className="flex flex-col divide-y divide-line/40 rounded-xl border border-line bg-surface-sunken">
-              {previewRows.map((row, idx) => (
-                <div key={idx} className="flex flex-col p-2 text-2xs">
-                  <span className="truncate font-semibold text-fg">{String(row['Title'] || row['Schema Name'] || row.URL)}</span>
-                  <span className="truncate text-3xs text-fg-subtle">{row.URL}</span>
-                  {row['Price'] && (
-                    <span className="mt-0.5 text-3xs font-mono text-tool-emerald">
-                      Price: {String(row['Price'])} {String(row['Currency'] || '')}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          <HarvestProgressStage
+            compact
+            count={progress.rowsExtracted}
+            metricLabel="PAGES EXTRACTED"
+            status={error && !isRunning ? 'failed' : !isRunning && createdDatasetId ? 'completed' : isPaused ? 'paused' : 'running'}
+            stageLabel="Page Extractor"
+            statusLabel={isRunning ? (isPaused ? 'Paused' : 'Harvesting URLs…') : 'Complete'}
+            progressSummary={`Progress: ${progress.processedUrls} / ${progress.totalUrls}`}
+            progressPercent={Math.round((progress.processedUrls / Math.max(progress.totalUrls, 1)) * 100)}
+            pacingNotice={isRunning ? 'Keep this panel or workbench tab open while running' : undefined}
+            errorMessage={error}
+            conveyorItems={previewRows.map((row, idx): HarvestConveyorItem => {
+              let host = '';
+              try {
+                if (row.URL) host = new URL(String(row.URL)).hostname;
+              } catch {
+                // Ignore invalid URL
+              }
+              return {
+                id: String(row._id ?? `${row.URL}-${idx}`),
+                primary: String(row['Title'] || row['Schema Name'] || row.URL || 'Page'),
+                pills: [
+                  row['Price'] ? `${String(row['Price'])} ${String(row['Currency'] || '')}`.trim() : '',
+                  host,
+                ].filter(Boolean),
+              };
+            })}
+            feedLabel="Recent Extracted Pages"
+            emptyFeedText="Fetching pages…"
+          />
         )}
 
         {/* Finish Action */}

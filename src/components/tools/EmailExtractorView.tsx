@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Banner } from '@/components/common/Banner';
+import { HarvestProgressStage, type HarvestConveyorItem } from '@/components/shared/HarvestProgressStage';
 import { readUrlHandoff, clearUrlHandoff } from '@/platform/url-handoff';
 import { openWorkbench } from '@/platform/workbench';
 import { useDatasets } from '@/hooks/useDatasets';
@@ -139,7 +140,7 @@ export const EmailExtractorView: React.FC<EmailExtractorViewProps> = ({ onBack, 
         deduplicate,
         onProgress: (p) => setProgress(p),
         onRowExtracted: (record) => {
-          setPreviewRows((prev) => [record, ...prev].slice(0, 3));
+          setPreviewRows((prev) => [record, ...prev].slice(0, 4));
         },
       });
 
@@ -394,60 +395,34 @@ export const EmailExtractorView: React.FC<EmailExtractorViewProps> = ({ onBack, 
 
         {/* Progress Metrics */}
         {progress && (
-          <div className="flex flex-col gap-2 pt-1">
-            <div className="flex items-center justify-between text-2xs text-fg-subtle">
-              <span>
-                Processed {progress.processedUrls} of {progress.totalUrls} URLs
-              </span>
-              <span>{Math.round(((progress.processedUrls + progress.failedUrls) / (progress.totalUrls || 1)) * 100)}%</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
-              <div
-                className="h-full bg-tool-emerald transition-all duration-300"
-                style={{
-                  width: `${Math.min(100, Math.round(((progress.processedUrls + progress.failedUrls) / (progress.totalUrls || 1)) * 100))}%`,
-                }}
-              />
-            </div>
-            {isRunning && (
-              <p className="text-3xs text-fg-muted italic">
-                Keep this panel or workbench tab open while running
-              </p>
+          <HarvestProgressStage
+            compact
+            count={progress.rowsExtracted}
+            metricLabel="EMAILS FOUND"
+            status={error && !isRunning ? 'failed' : !isRunning ? 'completed' : isPaused ? 'paused' : 'running'}
+            stageLabel="Email Discovery"
+            statusLabel={isRunning ? (isPaused ? 'Paused' : 'Scanning pages…') : 'Complete'}
+            progressSummary={`Processed ${progress.processedUrls} of ${progress.totalUrls} URLs`}
+            progressPercent={Math.min(
+              100,
+              Math.round(((progress.processedUrls + progress.failedUrls) / (progress.totalUrls || 1)) * 100)
             )}
-
-            <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-              <div className="rounded-xl border border-line bg-surface p-1.5">
-                <span className="block text-3xs uppercase tracking-wider text-fg-subtle">Processed</span>
-                <span className="text-xs font-bold tabular-nums text-fg">{progress.processedUrls}</span>
-              </div>
-              <div className="rounded-xl border border-line bg-surface p-1.5">
-                <span className="block text-3xs uppercase tracking-wider text-fg-subtle">Emails Found</span>
-                <span className="text-xs font-bold tabular-nums text-tool-emerald">{progress.rowsExtracted}</span>
-              </div>
-              <div className="rounded-xl border border-line bg-surface p-1.5">
-                <span className="block text-3xs uppercase tracking-wider text-fg-subtle">Failed</span>
-                <span className="text-xs font-bold tabular-nums text-fg-muted">{progress.failedUrls}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Live Mini Preview */}
-        {previewRows.length > 0 && (
-          <div className="flex flex-col gap-1.5 pt-1">
-            <span className="text-3xs uppercase tracking-wider text-fg-subtle">Recent Discovered Emails</span>
-            <div className="flex flex-col gap-1">
-              {previewRows.map((row) => (
-                <div
-                  key={row._id}
-                  className="flex items-center justify-between rounded-xl border border-line bg-surface px-2.5 py-1.5 text-2xs"
-                >
-                  <span className="font-semibold text-tool-emerald">{String(row.Email || '')}</span>
-                  <span className="text-3xs text-fg-subtle truncate max-w-[120px]">{String(row.Domain || '')}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+            pacingNotice={
+              isRunning
+                ? 'Keep this panel or workbench tab open while running'
+                : progress.failedUrls > 0
+                  ? `${progress.failedUrls} URL(s) failed`
+                  : undefined
+            }
+            errorMessage={error}
+            conveyorItems={previewRows.map((row, idx): HarvestConveyorItem => ({
+              id: String(row._id ?? idx),
+              primary: String(row.Email || ''),
+              pills: [String(row.Domain || ''), String(row['Found Via'] || '')].filter(Boolean),
+            }))}
+            feedLabel="Recent Discovered Emails"
+            emptyFeedText="Scanning pages for email addresses…"
+          />
         )}
       </Card>
     </div>

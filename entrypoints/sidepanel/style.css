@@ -45,10 +45,81 @@ body {
   background: rgb(var(--ph-line-strong));
 }
 
-/* Emerald Pulse pure-CSS motion primitives */
+/* Hardware-like card surface highlight in both themes */
+.ph-card-elevated {
+  box-shadow:
+    inset 0 1px 0 0 rgb(var(--ph-surface) / 0.9),
+    0 1px 3px 0 rgb(var(--ph-scrim) / 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .ph-card-elevated {
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--ph-hairline) / 0.08),
+      0 4px 14px -4px rgb(var(--ph-scrim) / 0.5);
+  }
+}
+
+/* Harvest Motion pure-CSS primitives (GPU-only transform/opacity/stroke-dashoffset) */
+.ph-orbit-slow {
+  animation: ph-orbit-slow 14s linear infinite;
+  transform-origin: center;
+}
+
 .ph-ring-spin {
   animation: ph-ring-spin 1.8s linear infinite;
   transform-origin: center;
+}
+
+.ph-harvest-pulse {
+  animation: ph-harvest-pulse 650ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center;
+}
+
+.ph-tick-up {
+  animation: ph-tick-up 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.ph-row-enter {
+  animation: ph-row-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.ph-scan-beam {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(var(--ph-brand) / 0.85) 50%,
+    rgb(var(--ph-tool-teal) / 0.85) 75%,
+    transparent 100%
+  );
+  animation: ph-scan-beam 2.2s ease-in-out infinite;
+}
+
+.ph-spark-burst {
+  animation: ph-spark-burst 750ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center;
+}
+
+.ph-cta-sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.ph-cta-sheen::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 45%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(var(--ph-on-strong) / 0.35) 50%,
+    transparent 100%
+  );
+  animation: ph-cta-sheen 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .ph-aura-breathe {
@@ -92,7 +163,14 @@ body {
     scroll-behavior: auto !important;
   }
 
+  .ph-orbit-slow,
   .ph-ring-spin,
+  .ph-harvest-pulse,
+  .ph-tick-up,
+  .ph-row-enter,
+  .ph-scan-beam,
+  .ph-spark-burst,
+  .ph-cta-sheen::after,
   .ph-aura-breathe,
   .ph-radar-ping,
   .ph-pop-in,
@@ -103,5 +181,11 @@ body {
 
   .ph-check-draw {
     stroke-dashoffset: 0;
+  }
+
+  .ph-spark-burst,
+  .ph-harvest-pulse,
+  .ph-cta-sheen::after {
+    opacity: 0;
   }
 }
