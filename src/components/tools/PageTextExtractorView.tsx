@@ -228,10 +228,10 @@ export const PageTextExtractorView: React.FC<PageTextExtractorViewProps> = ({ on
             </Button>
           )}
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-fg-muted">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-tool-slate/25 bg-tool-slate/10 text-tool-slate">
               <FileText className="h-4 w-4" />
             </span>
-            <h2 className="text-sm font-bold text-fg">Page Text Extractor</h2>
+            <h2 className="text-sm ph-heading text-fg">Page Text Extractor</h2>
           </div>
         </div>
 
@@ -369,7 +369,7 @@ export const PageTextExtractorView: React.FC<PageTextExtractorViewProps> = ({ on
 
         {/* Fast Fetch vs Browser Tabs Mode */}
         <div className="flex items-center gap-3 pt-1 text-2xs text-fg">
-          <span className="text-3xs uppercase tracking-wider text-fg-subtle">Engine:</span>
+          <span className="ph-eyebrow text-fg-subtle">Engine:</span>
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input
               type="radio"
@@ -405,7 +405,7 @@ export const PageTextExtractorView: React.FC<PageTextExtractorViewProps> = ({ on
                 value={concurrency}
                 onChange={(e) => setConcurrency(Math.max(1, Math.min(5, Number(e.target.value))))}
                 disabled={isRunning}
-                className="w-16 rounded border border-line bg-surface p-1 text-center text-xs"
+                className="w-16 rounded border border-line bg-surface p-1 text-center text-xs ph-tabular"
               />
             </div>
             <div className="flex items-center justify-between">
@@ -417,7 +417,7 @@ export const PageTextExtractorView: React.FC<PageTextExtractorViewProps> = ({ on
                 value={minDelayMs}
                 onChange={(e) => setMinDelayMs(Math.max(1000, Number(e.target.value)))}
                 disabled={isRunning}
-                className="w-20 rounded border border-line bg-surface p-1 text-center text-xs"
+                className="w-20 rounded border border-line bg-surface p-1 text-center text-xs ph-tabular"
               />
             </div>
           </div>

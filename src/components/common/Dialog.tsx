@@ -99,7 +99,7 @@ export const Dialog: React.FC<DialogProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
       <div
         data-testid="dialog-backdrop"
-        className="fixed inset-0 bg-scrim/40 backdrop-blur-xs animate-fade-in"
+        className="fixed inset-0 bg-scrim/50 backdrop-blur-xs animate-fade-in"
         onClick={() => onCloseRef.current()}
         aria-hidden="true"
       />
@@ -111,11 +111,11 @@ export const Dialog: React.FC<DialogProps> = ({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className={`relative z-10 w-full ${SIZES[size]} bg-surface rounded-card shadow-xl border border-line overflow-hidden flex flex-col text-left animate-scale-in`}
+        className={`relative z-10 w-full ${SIZES[size]} bg-surface rounded-card shadow-dock ph-card-elevated border border-line overflow-hidden flex flex-col text-left animate-scale-in`}
       >
         <div className="flex items-start justify-between gap-2 p-4 border-b border-line-subtle">
           <div className="min-w-0">
-            <h2 id={titleId} className="text-base font-semibold text-fg leading-tight">
+            <h2 id={titleId} className="text-base ph-heading text-fg leading-tight">
               {title}
             </h2>
             {description && (

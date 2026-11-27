@@ -70,7 +70,7 @@ const SampleRows: React.FC<{ samples: string[]; limit: number }> = ({ samples, l
   if (rows.length === 0) return null;
   return (
     <div>
-      <p id={labelId} className="text-xs font-semibold text-fg-muted mb-1">
+      <p id={labelId} className="ph-eyebrow text-fg-muted mb-1">
         Sample rows
       </p>
       <ol aria-labelledby={labelId} className="flex flex-col gap-1">
@@ -79,7 +79,7 @@ const SampleRows: React.FC<{ samples: string[]; limit: number }> = ({ samples, l
             key={index}
             className="flex items-start gap-2 p-2 rounded-control bg-surface-sunken border border-line text-xs text-fg-muted"
           >
-            <span aria-hidden="true" className="text-2xs font-mono text-fg-subtle shrink-0 pt-px">
+            <span aria-hidden="true" className="text-2xs font-mono ph-tabular text-fg-subtle shrink-0 pt-px">
               {index + 1}
             </span>
             <span className="min-w-0 truncate">{snippet || '(no text in this item)'}</span>

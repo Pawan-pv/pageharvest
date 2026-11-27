@@ -142,7 +142,7 @@ const EditableCellInput: React.FC<{
     <input
       type="text"
       autoFocus
-      className="w-full px-1.5 py-0.5 text-xs border border-brand rounded bg-surface shadow-xs focus:outline-none"
+      className="w-full px-1.5 py-0.5 text-xs border border-brand rounded bg-surface shadow-xs ring-2 ring-focus/20 focus:outline-none"
       value={val}
       onChange={(e) => setVal(e.target.value)}
       onBlur={() => onSave(val)}
@@ -735,15 +735,15 @@ export const DataTable: React.FC<DataTableProps> = ({
                   href={strVal}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-brand-fg hover:underline truncate inline-flex items-center gap-0.5"
+                  className="text-brand-fg hover:underline truncate inline-flex items-center gap-1 font-mono text-2xs"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <span className="truncate">{strVal}</span>
                   <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-70" />
                 </a>
               ) : (
-                <span className="truncate text-fg">
-                  {strVal || <span className="text-fg-faint italic">empty</span>}
+                <span className="truncate text-fg ph-tabular">
+                  {strVal || <span className="text-fg-faint italic font-normal">empty</span>}
                 </span>
               )}
             </div>
@@ -820,8 +820,8 @@ export const DataTable: React.FC<DataTableProps> = ({
 
   return (
     <div
-      className={`flex flex-col text-left h-full bg-surface-sunken/30 ${
-        fullPage ? 'gap-3 p-6' : 'gap-2.5 p-4'
+      className={`flex flex-col text-left h-full ${
+        fullPage ? 'gap-3' : 'gap-2.5 p-4 bg-surface-sunken/30'
       }`}
     >
       {gridError && (
@@ -839,7 +839,7 @@ export const DataTable: React.FC<DataTableProps> = ({
       )}
 
       {!simple && runSummary && runSummary.recordsDetected > 0 && (
-        <p className="text-2xs text-fg-subtle" aria-label="Extraction summary">
+        <p className="text-2xs text-fg-subtle ph-tabular" aria-label="Extraction summary">
           {runSummary.recordsDetected} detected, {runSummary.totalExtracted} kept,{' '}
           {runSummary.recordsWithMissingFields} with missing fields, {runSummary.recordsFiltered} filtered,{' '}
           {runSummary.recordsFailed} failed, {runSummary.duplicatesSkipped} duplicates skipped
@@ -865,8 +865,8 @@ export const DataTable: React.FC<DataTableProps> = ({
             </div>
           )}
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-fg leading-snug break-words">{dataset?.name || 'Your rows'}</h2>
-            <p className="text-body text-fg-muted mt-0.5">
+            <h2 className="text-base ph-heading text-fg break-words">{dataset?.name || 'Your rows'}</h2>
+            <p className="text-body text-fg-muted mt-0.5 ph-tabular">
               {currentRecords.length.toLocaleString('en-US')} {currentRecords.length === 1 ? 'row' : 'rows'},{' '}
               {visibleFields.length} {visibleFields.length === 1 ? 'column' : 'columns'}. Double-click a cell to change
               it. Changes are saved as you make them.
@@ -899,7 +899,7 @@ export const DataTable: React.FC<DataTableProps> = ({
 
       {/* Top Header & Actions */}
       {!simple && (
-      <div className="flex flex-col gap-2 bg-surface p-3 rounded-xl border border-line/80 shadow-xs">
+      <div className="flex flex-col gap-2 bg-surface p-3 rounded-xl border border-line ph-card-elevated">
         {fullPage && datasets && onRenameDataset && onDeleteDataset && onSelectDataset && (
           <DatasetSwitcher
             datasets={datasets}
@@ -911,10 +911,10 @@ export const DataTable: React.FC<DataTableProps> = ({
         )}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="text-sm font-bold text-fg leading-tight">
+            <h2 className="text-sm ph-heading text-fg leading-tight">
               {dataset?.name || 'Your rows'}
             </h2>
-            <div className="flex items-center gap-1.5 text-xs text-fg-subtle mt-0.5">
+            <div className="flex items-center gap-1.5 text-xs text-fg-subtle mt-0.5 ph-tabular">
               <Badge variant="brand" size="sm">
                 {currentRecords.length} records
               </Badge>
@@ -1070,7 +1070,7 @@ export const DataTable: React.FC<DataTableProps> = ({
 
           {imageColumns.length > 0 && (
             <div
-              className="flex items-center rounded-lg border border-line-strong bg-surface p-0.5"
+              className="flex items-center rounded-lg border border-line bg-surface-sunken p-0.5"
               role="group"
               aria-label="View"
             >
@@ -1078,8 +1078,8 @@ export const DataTable: React.FC<DataTableProps> = ({
                 type="button"
                 aria-pressed={viewMode === 'table'}
                 onClick={() => setViewMode('table')}
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
-                  viewMode === 'table' ? 'bg-surface-muted text-fg' : 'text-fg-muted hover:text-fg'
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                  viewMode === 'table' ? 'bg-surface text-fg shadow-xs' : 'text-fg-muted hover:text-fg'
                 }`}
               >
                 <Table2 aria-hidden="true" className="w-3.5 h-3.5" />
@@ -1089,8 +1089,8 @@ export const DataTable: React.FC<DataTableProps> = ({
                 type="button"
                 aria-pressed={viewMode === 'gallery'}
                 onClick={() => setViewMode('gallery')}
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${
-                  viewMode === 'gallery' ? 'bg-surface-muted text-fg' : 'text-fg-muted hover:text-fg'
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                  viewMode === 'gallery' ? 'bg-surface text-fg shadow-xs' : 'text-fg-muted hover:text-fg'
                 }`}
               >
                 <Images aria-hidden="true" className="w-3.5 h-3.5" />
@@ -1185,10 +1185,10 @@ export const DataTable: React.FC<DataTableProps> = ({
         </div>
       ) : (
         /* Spreadsheet Data Table */
-        <div className="flex-1 flex flex-col min-h-0 border border-line rounded-xl bg-surface shadow-xs overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 border border-line rounded-xl bg-surface ph-card-elevated overflow-hidden">
           <div className="overflow-x-auto overflow-y-auto flex-1">
             <table className="w-full border-collapse text-left text-xs" style={{ width: table.getTotalSize() }}>
-              <thead className="bg-surface-sunken/90 sticky top-0 z-10 border-b border-line text-fg-muted font-semibold select-none">
+              <thead className="bg-surface-sunken sticky top-0 z-10 border-b border-line text-2xs uppercase tracking-[0.04em] text-fg-muted font-semibold select-none">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => {
@@ -1281,13 +1281,13 @@ export const DataTable: React.FC<DataTableProps> = ({
           </div>
 
           {/* Table Footer / Pagination */}
-          <div className="p-2.5 bg-surface-sunken border-t border-line flex items-center justify-between text-xs text-fg-muted flex-wrap gap-2">
+          <div className="p-2.5 bg-surface-sunken border-t border-line flex items-center justify-between text-xs text-fg-muted flex-wrap gap-2 ph-tabular">
             <div className="flex items-center gap-1.5">
               <span>Rows per page:</span>
               <select
                 value={table.getState().pagination.pageSize}
                 onChange={(e) => table.setPageSize(Number(e.target.value))}
-                className="rounded border border-line-strong bg-surface px-2 py-0.5 text-xs text-fg-muted focus:outline-none"
+                className="rounded border border-line-strong bg-surface px-2 py-0.5 text-xs text-fg-muted ph-tabular focus:outline-none focus:ring-2 focus:ring-focus/20"
               >
                 {[10, 25, 50, 100].map((pageSize) => (
                   <option key={pageSize} value={pageSize}>
@@ -1316,7 +1316,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   onClick={() => table.previousPage()}
                   disabled={!table.getCanPreviousPage()}
                   aria-label="Previous table page"
-                  className="p-1 rounded border border-line bg-surface text-fg-muted hover:bg-surface-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="p-1 rounded border border-line bg-surface text-fg-muted hover:bg-surface-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
@@ -1324,7 +1324,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
                   aria-label="Next table page"
-                  className="p-1 rounded border border-line bg-surface text-fg-muted hover:bg-surface-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="p-1 rounded border border-line bg-surface text-fg-muted hover:bg-surface-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -1336,15 +1336,15 @@ export const DataTable: React.FC<DataTableProps> = ({
 
       {/* Rename Column Modal */}
       {renamingCol && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/30 backdrop-blur-2xs p-4">
-          <div className="bg-surface rounded-xl shadow-xl border border-line w-full max-w-xs p-4 flex flex-col gap-3">
-            <span className="font-bold text-fg text-xs">Rename Column "{renamingCol}"</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/50 backdrop-blur-xs p-4">
+          <div className="bg-surface rounded-xl shadow-dock ph-card-elevated border border-line w-full max-w-xs p-4 flex flex-col gap-3">
+            <span className="ph-heading text-fg text-xs">Rename Column "{renamingCol}"</span>
             <input
               type="text"
               value={newColName}
               onChange={(e) => setNewColName(e.target.value)}
               placeholder="Enter new column name..."
-              className="w-full px-2.5 py-1 text-xs border border-line rounded-lg focus:outline-none focus:border-brand"
+              className="w-full px-2.5 py-1 text-xs bg-surface text-fg border border-line rounded-lg focus:outline-none focus:border-brand focus:ring-2 focus:ring-focus/20"
               autoFocus
             />
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-line-subtle">

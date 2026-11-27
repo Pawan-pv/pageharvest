@@ -189,10 +189,10 @@ export const EmailExtractorView: React.FC<EmailExtractorViewProps> = ({ onBack, 
             </Button>
           )}
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-tool-emerald/15 text-tool-emerald">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-tool-emerald/25 bg-tool-emerald/15 text-tool-emerald">
               <Mail className="h-4 w-4" />
             </span>
-            <h2 className="text-sm font-bold text-fg">Email Extractor</h2>
+            <h2 className="text-sm ph-heading text-fg">Email Extractor</h2>
           </div>
         </div>
 
@@ -231,7 +231,7 @@ export const EmailExtractorView: React.FC<EmailExtractorViewProps> = ({ onBack, 
       <Card className="flex flex-col gap-2.5 p-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-fg">Target Websites / URLs</span>
-          <span className="text-2xs text-fg-subtle">
+          <span className="text-2xs text-fg-subtle ph-tabular">
             {parsedUrls.length} {parsedUrls.length === 1 ? 'URL' : 'URLs'} queued
           </span>
         </div>
@@ -266,7 +266,7 @@ export const EmailExtractorView: React.FC<EmailExtractorViewProps> = ({ onBack, 
           }}
           disabled={isRunning}
           placeholder="Paste addresses (https://example.com), one per line"
-          className="w-full rounded-xl border border-line bg-surface p-2 text-2xs text-fg placeholder:text-fg-subtle focus:border-tool-emerald focus:outline-none"
+          className="w-full rounded-xl border border-line bg-surface-sunken p-2 font-mono text-2xs text-fg placeholder:text-fg-subtle focus:border-tool-emerald focus:outline-none focus:ring-2 focus:ring-tool-emerald/20"
         />
       </Card>
 

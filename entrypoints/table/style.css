@@ -4,7 +4,7 @@
 
 /* Colours come from the design tokens in tailwind.config.js, which also defines the dark values. */
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   color-scheme: light dark;
 }
 
@@ -41,26 +41,26 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgb(var(--ph-line-strong) / 0.6);
+  background: rgb(var(--ph-line-strong) / 0.42);
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--ph-line-strong));
+  background: rgb(var(--ph-line-strong) / 0.72);
 }
 
 /* Hardware-like card surface highlight & Harvest Motion primitives */
 .ph-card-elevated {
   box-shadow:
-    inset 0 1px 0 0 rgb(var(--ph-surface) / 0.9),
-    0 1px 3px 0 rgb(var(--ph-scrim) / 0.06);
+    inset 0 1px 0 0 rgb(var(--ph-surface) / 0.95),
+    0 1px 2px 0 rgb(var(--ph-scrim) / 0.04);
 }
 
 @media (prefers-color-scheme: dark) {
   .ph-card-elevated {
     box-shadow:
-      inset 0 1px 0 0 rgb(var(--ph-hairline) / 0.08),
-      0 4px 14px -4px rgb(var(--ph-scrim) / 0.5);
+      inset 0 1px 0 0 rgb(var(--ph-hairline) / 0.07),
+      0 6px 16px -6px rgb(var(--ph-scrim) / 0.55);
   }
 }
 

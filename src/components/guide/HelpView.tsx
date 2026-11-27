@@ -78,8 +78,8 @@ const Block: React.FC<{ block: GuideBlock }> = ({ block }) => {
 };
 
 const SectionArticle: React.FC<{ section: GuideSection }> = ({ section }) => (
-  <article id={`guide-${section.id}`} className="flex flex-col gap-2 p-3 rounded-card border border-line bg-surface">
-    <h3 className="text-sm font-semibold text-fg">{section.title}</h3>
+  <article id={`guide-${section.id}`} className="flex flex-col gap-2 p-3 rounded-card border border-line bg-surface ph-card-elevated">
+    <h3 className="text-sm ph-heading text-fg">{section.title}</h3>
     <p className="text-xs text-fg-subtle">{section.summary}</p>
     <div className="flex flex-col gap-2 text-xs text-fg-muted leading-relaxed">
       {section.blocks.map((block, index) => (
@@ -114,7 +114,7 @@ export const HelpView: React.FC<HelpViewProps> = ({ onClose, onRestartTour, init
         </Button>
       </div>
 
-      <h2 className="text-base font-semibold text-fg">Help and guide</h2>
+      <h2 className="text-base ph-heading text-fg">Help and guide</h2>
 
       <div className="relative">
         <label htmlFor={searchId} className="sr-only">

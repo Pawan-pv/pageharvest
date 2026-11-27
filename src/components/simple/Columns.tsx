@@ -173,7 +173,7 @@ export const SimpleColumns: React.FC<SimpleColumnsProps> = ({
           const typed = Number.parseInt(event.target.value, 10);
           if (Number.isFinite(typed)) onPaginationChange(settingsForAnswer(answer, typed));
         }}
-        className="w-20 min-h-8 rounded-control border border-line-strong bg-surface px-2 py-1 text-sm text-fg focus:outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+        className="w-20 min-h-8 rounded-control border border-line-strong bg-surface px-2 py-1 text-sm ph-tabular text-fg focus:outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
       />
     </div>
   );
@@ -207,7 +207,7 @@ export const SimpleColumns: React.FC<SimpleColumnsProps> = ({
 
       <section aria-labelledby={`${legendId}-columns`} className="flex flex-col gap-2">
         <div>
-          <h2 id={`${legendId}-columns`} className="text-base font-semibold text-fg">
+          <h2 id={`${legendId}-columns`} className="text-base ph-heading text-fg">
             Check your columns
           </h2>
           <p className="text-body text-fg-muted mt-1">

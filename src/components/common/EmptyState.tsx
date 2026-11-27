@@ -21,17 +21,17 @@ export interface EmptyStateProps {
 
 export const EmptyState: React.FC<EmptyStateProps> = ({ icon, title, description, action, className = '' }) => (
   <div
-    className={`flex flex-col items-center justify-center text-center p-6 bg-surface-sunken border border-dashed border-line rounded-card ${className}`}
+    className={`flex flex-col items-center justify-center text-center p-6 bg-surface-sunken/70 border border-dashed border-line rounded-card ${className}`}
   >
     {icon && (
       <div
         aria-hidden="true"
-        className="w-10 h-10 rounded-pill bg-surface-muted flex items-center justify-center text-fg-subtle mb-3"
+        className="w-10 h-10 rounded-xl border border-line bg-surface shadow-xs flex items-center justify-center text-fg-subtle mb-3"
       >
         {icon}
       </div>
     )}
-    <h3 className="text-sm font-semibold text-fg">{title}</h3>
+    <h3 className="text-sm ph-heading text-fg">{title}</h3>
     <p className="text-xs text-fg-muted max-w-xs mt-1 leading-relaxed">{description}</p>
     {action && (
       <Button variant="primary" size="sm" className="mt-4" onClick={action.onClick}>

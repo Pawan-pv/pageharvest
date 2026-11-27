@@ -18,6 +18,7 @@ declare const config: {
       colors: Record<string, ColorEntry>;
       borderRadius: Record<string, string>;
       spacing: Record<string, string>;
+      fontFamily: Record<string, string[]>;
       fontSize: Record<string, [string, { lineHeight: string }]>;
       boxShadow: Record<string, string>;
       backdropBlur: Record<string, string>;

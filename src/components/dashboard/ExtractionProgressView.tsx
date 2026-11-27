@@ -34,11 +34,11 @@ const Metric: React.FC<{ label: string; value: React.ReactNode; help?: React.Rea
   large = false,
 }) => (
   <div className="p-2.5 rounded-control bg-surface-sunken border border-line">
-    <dt className="flex items-center gap-1 text-2xs text-fg-subtle">
+    <dt className="flex items-center gap-1 ph-eyebrow text-fg-subtle">
       {label}
       {help}
     </dt>
-    <dd className={`${large ? 'text-lg font-bold' : 'text-sm font-semibold'} text-fg tracking-tight`}>{value}</dd>
+    <dd className={`${large ? 'text-lg font-bold ph-display-num' : 'text-sm font-semibold ph-tabular'} text-fg mt-0.5`}>{value}</dd>
   </div>
 );
 
@@ -78,7 +78,7 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
           ) : (
             <Loader2 aria-hidden="true" className="w-5 h-5 text-brand-fg motion-safe:animate-spin" />
           )}
-          <h2 className="text-base font-semibold text-fg">{title}</h2>
+          <h2 className="text-base ph-heading text-fg">{title}</h2>
         </div>
 
         <p className="text-xs text-fg-muted" aria-live="polite">
@@ -110,7 +110,7 @@ export const ExtractionProgressView: React.FC<ExtractionProgressViewProps> = ({
         </dl>
 
         {/* What happened to each detected item, so nothing disappears silently */}
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-2xs text-fg-subtle">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-2xs text-fg-subtle ph-tabular">
           <div className="flex justify-between">
             <dt>Items detected</dt>
             <dd className="font-semibold text-fg-muted">{stats.recordsDetected}</dd>

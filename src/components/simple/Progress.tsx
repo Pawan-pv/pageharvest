@@ -45,11 +45,11 @@ export const SimpleProgress: React.FC<SimpleProgressProps> = ({ stats, onPause, 
           ) : (
             <Loader2 aria-hidden="true" className="w-5 h-5 text-brand-fg motion-safe:animate-spin" />
           )}
-          <h2 className="text-base font-semibold text-fg">{title}</h2>
+          <h2 className="text-base ph-heading text-fg">{title}</h2>
         </div>
 
         <p aria-live="polite" className="flex items-baseline gap-2">
-          <span className="text-3xl font-bold text-fg tracking-tight">{rows.toLocaleString('en-US')}</span>
+          <span className="text-3xl font-bold text-fg ph-display-num">{rows.toLocaleString('en-US')}</span>
           <span className="text-sm text-fg-muted">{rows === 1 ? 'row saved so far' : 'rows saved so far'}</span>
         </p>
 

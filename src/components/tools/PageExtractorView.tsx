@@ -288,7 +288,7 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
             <Database className="h-4 w-4" />
           </span>
           <div>
-            <h2 className="text-sm font-bold tracking-tight text-fg">Page Extractor 2.0</h2>
+            <h2 className="text-sm ph-heading text-fg">Page Extractor 2.0</h2>
             <p className="text-2xs text-fg-subtle">Extract metadata, JSON-LD, and custom fields across multiple URLs</p>
           </div>
         </div>
@@ -313,8 +313,8 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
       {/* SECTION ①: URLs Source */}
       <Card className="flex flex-col gap-2.5 p-3">
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-fg">
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-tool-sky/20 text-3xs font-black text-tool-sky">
+          <span className="flex items-center gap-1.5 ph-eyebrow text-fg ph-tabular">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-tool-sky/15 text-2xs font-semibold text-tool-sky ph-tabular">
               1
             </span>
             Target URLs ({parsedUrls.length})
@@ -322,7 +322,7 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
 
           {datasets.length > 0 && (
             <div className="flex items-center gap-1.5">
-              <span className="text-3xs text-fg-subtle">Or pick dataset:</span>
+              <span className="text-2xs text-fg-subtle">Or pick dataset:</span>
               <select
                 value={selectedDatasetId}
                 onChange={(e) => void handleDatasetChange(e.target.value)}
@@ -346,14 +346,14 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
           onChange={(e) => setRawUrls(e.target.value)}
           placeholder="Paste URLs here, one per line (https://...)"
           disabled={isRunning}
-          className="w-full rounded-xl border border-line bg-surface-sunken p-2 font-mono text-2xs text-fg placeholder:text-fg-subtle focus:border-tool-sky focus:outline-hidden"
+          className="w-full rounded-xl border border-line bg-surface-sunken p-2 font-mono text-2xs text-fg placeholder:text-fg-subtle focus:border-tool-sky focus:outline-none focus:ring-2 focus:ring-tool-sky/20"
         />
       </Card>
 
       {/* SECTION ②: What to Extract */}
       <Card className="flex flex-col gap-2.5 p-3">
-        <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-fg">
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-tool-sky/20 text-3xs font-black text-tool-sky">
+        <span className="flex items-center gap-1.5 ph-eyebrow text-fg">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-tool-sky/15 text-2xs font-semibold text-tool-sky ph-tabular">
             2
           </span>
           What to Extract
@@ -511,7 +511,7 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
                   value={concurrency}
                   onChange={(e) => setConcurrency(Math.max(1, Math.min(5, Number(e.target.value))))}
                   disabled={isRunning}
-                  className="w-16 rounded-lg border border-line bg-surface p-1 text-right text-2xs text-fg"
+                  className="w-16 rounded-lg border border-line bg-surface p-1 text-right text-2xs ph-tabular text-fg"
                 />
               </div>
 
@@ -524,7 +524,7 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
                   value={minDelayMs}
                   onChange={(e) => setMinDelayMs(Math.max(1000, Number(e.target.value)))}
                   disabled={isRunning}
-                  className="w-20 rounded-lg border border-line bg-surface p-1 text-right text-2xs text-fg"
+                  className="w-20 rounded-lg border border-line bg-surface p-1 text-right text-2xs ph-tabular text-fg"
                 />
               </div>
             </div>
@@ -535,8 +535,8 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
       {/* SECTION ③: Live Run Panel */}
       <Card className="flex flex-col gap-2.5 p-3">
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-fg">
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-tool-sky/20 text-3xs font-black text-tool-sky">
+          <span className="flex items-center gap-1.5 ph-eyebrow text-fg">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-tool-sky/15 text-2xs font-semibold text-tool-sky ph-tabular">
               3
             </span>
             Live Run

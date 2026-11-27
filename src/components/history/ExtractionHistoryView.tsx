@@ -194,7 +194,7 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="text-xs font-semibold text-fg truncate">
+                  <h3 className="text-xs ph-heading text-fg truncate">
                     {dataset.name}
                   </h3>
                   <a
@@ -202,19 +202,19 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="text-2xs text-fg-subtle hover:text-brand-fg truncate block mt-0.5 max-w-[240px]"
+                    className="font-mono text-2xs text-fg-subtle hover:text-brand-fg truncate block mt-0.5 max-w-[240px]"
                     title={dataset.url}
                   >
                     {siteOf(dataset.url) || dataset.url}
                   </a>
                 </div>
 
-                <span className="shrink-0 rounded-full border border-line/80 bg-surface-muted px-2 py-0.5 text-right text-2xs font-semibold tabular-nums text-fg-muted">
+                <span className="shrink-0 rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-right text-2xs font-semibold ph-tabular text-fg-muted">
                   {dataset.recordsCount} rows
                 </span>
               </div>
 
-              <div className="flex items-center justify-between pt-1 border-t border-line-subtle text-2xs text-fg-subtle">
+              <div className="flex items-center justify-between pt-1 border-t border-line-subtle text-2xs text-fg-subtle ph-tabular">
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-3 h-3" />
                   <span>{relativeTime(dataset.createdAt)}</span>

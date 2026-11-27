@@ -39,24 +39,24 @@ async function expectSize(file, width, height) {
   }
 }
 
-/** The small promo tile: the icon, the name and what the extension does, in OLED styling. */
+/** The small promo tile: the icon, the name and what the extension does, in Obsidian Studio styling. */
 async function promoTile(frame) {
   const icon = (await readFile(join(root, 'public', 'icon', '128.png'))).toString('base64');
   await frame.setViewportSize(PROMO);
   await frame.setContent(
     `<body style="margin:0;width:${PROMO.width}px;height:${PROMO.height}px;display:flex;flex-direction:column;
-                  align-items:center;justify-content:center;gap:12px;background:#000000;
-                  font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#ffffff">
+                  align-items:center;justify-content:center;gap:12px;background:radial-gradient(circle at 50% 0%, #141c1a 0%, #090b0d 65%);
+                  font-family:'Inter','SF Pro Text','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#f2f5f3">
        <div style="display:flex;align-items:center;gap:14px">
-         <img src="data:image/png;base64,${icon}" width="56" height="56" alt="" style="filter:drop-shadow(0 0 16px rgba(16,185,129,0.4))">
+         <img src="data:image/png;base64,${icon}" width="56" height="56" alt="" style="filter:drop-shadow(0 0 18px rgba(34,197,139,0.35))">
          <div style="display:flex;flex-direction:column">
-           <span style="font-size:32px;font-weight:800;letter-spacing:-0.5px;color:#f8fafc">PageHarvest</span>
-           <span style="font-size:12px;font-weight:600;color:#10b981;letter-spacing:1px;text-transform:uppercase">10-Tool Web Extractor</span>
+           <span style="font-size:32px;font-weight:700;letter-spacing:-0.025em;color:#f2f5f3">PageHarvest</span>
+           <span style="font-size:11px;font-weight:600;color:#4fdca8;letter-spacing:0.08em;text-transform:uppercase">10-Tool Web Extractor</span>
          </div>
        </div>
-       <div style="font-size:14px;color:#94a3b8;font-weight:500">100% Local-First • Zero Cloud Servers • Local IndexedDB</div>
-       <div style="margin-top:4px;padding:5px 14px;border-radius:999px;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.12);color:#34d399;
-                   font-size:12px;font-weight:600">Private • Fast • Spreadsheets</div>
+       <div style="font-size:13.5px;color:#919ba7;font-weight:500">100% Local-First · Zero Cloud Servers · Local IndexedDB</div>
+       <div style="margin-top:4px;padding:5px 14px;border-radius:999px;border:1px solid rgba(34,197,139,0.28);background:rgba(34,197,139,0.12);color:#4fdca8;
+                   font-size:12px;font-weight:600">Private · Fast · Spreadsheets</div>
      </body>`
   );
   const file = join(outputDir, 'promo-440x280.png');

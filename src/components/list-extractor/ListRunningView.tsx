@@ -76,13 +76,13 @@ export const ListRunningView: React.FC<ListRunningViewProps> = ({
         <button
           type="button"
           onClick={handleOpenLiveWorkbench}
-          className="flex min-h-10 items-center justify-between rounded-xl border border-brand/40 bg-brand-soft px-3.5 py-2.5 text-body font-semibold text-brand-fg shadow-glow-emerald transition-all hover:bg-brand/20 hover:text-brand-emphasis active:scale-[0.99] cursor-pointer"
+          className="flex min-h-10 items-center justify-between rounded-xl border border-brand-line bg-brand-soft px-3.5 py-2.5 text-body font-semibold text-brand-fg ph-card-elevated transition-colors hover:border-brand/50 hover:text-brand-emphasis active:scale-[0.99] cursor-pointer"
         >
           <span className="flex items-center gap-1.5">
             <span>View results live</span>
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
-          <span className="rounded-full bg-brand/20 px-2 py-0.5 text-2xs font-bold text-brand-emphasis tabular-nums">
+          <span className="rounded-full border border-brand-line bg-surface px-2 py-0.5 text-2xs font-semibold text-brand-emphasis ph-tabular">
             {count}
           </span>
         </button>
@@ -93,7 +93,7 @@ export const ListRunningView: React.FC<ListRunningViewProps> = ({
               <button
                 type="button"
                 onClick={onResume}
-                className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand/40 bg-brand-soft px-3 py-2 text-body font-bold text-brand-fg transition-colors hover:bg-brand/20 hover:text-brand-emphasis cursor-pointer"
+                className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand-line bg-brand-soft px-3 py-2 text-body font-semibold text-brand-fg transition-colors hover:border-brand/50 hover:text-brand-emphasis cursor-pointer"
               >
                 <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
                 <span>Resume</span>

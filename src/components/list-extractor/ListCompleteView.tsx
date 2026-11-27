@@ -137,13 +137,13 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 text-left min-h-[480px]">
+    <div className="flex flex-col gap-3.5 p-4 text-left min-h-[480px]">
       {/* Top Hero Section: Draw-in Checkmark with 6-spark SVG burst & Count */}
-      <div className="flex flex-col items-center justify-center text-center pt-2">
-        {/* Animated Draw-in Checkmark + one-shot 6-spark burst inside glowing emerald ring */}
-        <div className="relative flex h-16 w-16 items-center justify-center mb-3">
-          <div className="absolute inset-0 rounded-full bg-brand/20 blur-md" aria-hidden="true" />
-          <svg className="h-16 w-16 overflow-visible" viewBox="0 0 64 64" aria-hidden="true">
+      <div className="flex flex-col items-center justify-center text-center pt-1">
+        {/* Animated Draw-in Checkmark + one-shot 6-spark burst inside botanical emerald ring */}
+        <div className="relative flex h-14 w-14 items-center justify-center mb-2.5">
+          <div className="absolute inset-0 rounded-full bg-brand/15 blur-md" aria-hidden="true" />
+          <svg className="h-14 w-14 overflow-visible" viewBox="0 0 64 64" aria-hidden="true">
             {[0, 60, 120, 180, 240, 300].map((deg, idx) => (
               <g key={deg} transform={`translate(32 32) rotate(${deg})`}>
                 <line
@@ -165,13 +165,13 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
               r="22"
               fill="none"
               stroke="rgb(var(--ph-brand))"
-              strokeWidth="3"
-              className="opacity-80"
+              strokeWidth="2.75"
+              className="opacity-85"
             />
             <path
               fill="none"
               stroke="rgb(var(--ph-brand))"
-              strokeWidth="4"
+              strokeWidth="3.5"
               strokeLinecap="round"
               strokeLinejoin="round"
               className="ph-check-draw motion-reduce:animate-none"
@@ -180,22 +180,22 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
           </svg>
         </div>
 
-        <h2 className="text-sm font-bold text-fg uppercase tracking-wider mb-1">
+        <h2 className="text-xs font-semibold text-fg uppercase tracking-[0.07em] mb-0.5">
           Extraction complete
         </h2>
 
-        {/* Giant Emerald Tabular Counter */}
-        <div className="text-5xl font-black text-brand-fg tracking-tight tabular-nums">
+        {/* Crisp Emerald Tabular Counter */}
+        <div className="text-4xl font-bold text-brand-fg ph-display-num">
           {totalCount.toLocaleString('en-US')}
         </div>
-        <span className="text-xs font-bold tracking-widest text-brand-fg uppercase mt-0.5">
+        <span className="ph-eyebrow text-brand-fg mt-0.5">
           ITEMS EXTRACTED
         </span>
       </div>
 
       {/* Compact Preview: latest 5 records as structured text rows */}
       <div className="flex flex-col gap-1.5">
-        <span className="text-2xs font-semibold text-fg-subtle uppercase tracking-wider">
+        <span className="ph-eyebrow">
           Preview Snippet
         </span>
         <div className="overflow-x-auto rounded-xl border border-line bg-surface ph-card-elevated">
@@ -211,12 +211,21 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
             </thead>
             <tbody className="divide-y divide-line-subtle text-fg">
               {records.slice(0, 5).map((rec, rIdx) => (
-                <tr key={rIdx}>
-                  {displayColumns.slice(0, 3).map((col, cIdx) => (
-                    <td key={cIdx} className="px-2.5 py-1.5 truncate max-w-[100px]">
-                      {String(rec[col] ?? '')}
-                    </td>
-                  ))}
+                <tr key={rIdx} className="hover:bg-surface-sunken/50 transition-colors">
+                  {displayColumns.slice(0, 3).map((col, cIdx) => {
+                    const cellText = String(rec[col] ?? '');
+                    const isUrl = /^https?:\/\//i.test(cellText);
+                    return (
+                      <td
+                        key={cIdx}
+                        className={`px-2.5 py-1.5 truncate max-w-[100px] ${
+                          isUrl ? 'font-mono text-brand-fg' : 'ph-tabular'
+                        }`}
+                      >
+                        {cellText}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -225,42 +234,42 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
       </div>
 
       {/* 3-Column Summary Card */}
-      <div className="grid grid-cols-3 divide-x divide-line-subtle rounded-2xl border border-line bg-surface p-3 text-center ph-card-elevated">
+      <div className="grid grid-cols-3 divide-x divide-line-subtle rounded-xl border border-line bg-surface p-2.5 text-center ph-card-elevated">
         <div className="flex flex-col items-center">
-          <span className="text-2xs font-semibold tracking-wider text-fg-subtle uppercase">
+          <span className="ph-eyebrow">
             ITEMS
           </span>
-          <span className="text-sm font-bold text-fg tabular-nums mt-0.5">
+          <span className="text-sm font-semibold text-fg ph-tabular mt-0.5">
             {totalCount.toLocaleString('en-US')}
           </span>
         </div>
 
         <div className="flex flex-col items-center">
-          <span className="text-2xs font-semibold tracking-wider text-fg-subtle uppercase">
+          <span className="ph-eyebrow">
             TIME
           </span>
-          <span className="text-sm font-bold text-fg tabular-nums mt-0.5">
+          <span className="text-sm font-semibold text-fg ph-tabular mt-0.5">
             {formatElapsed(elapsed)}
           </span>
         </div>
 
         <div className="flex flex-col items-center">
-          <span className="text-2xs font-semibold tracking-wider text-fg-subtle uppercase">
+          <span className="ph-eyebrow">
             COLUMNS
           </span>
-          <span className="text-sm font-bold text-brand-fg tabular-nums mt-0.5">
+          <span className="text-sm font-semibold text-brand-fg ph-tabular mt-0.5">
             {columnsCount}
           </span>
         </div>
       </div>
 
       {/* Bottom Action Stack */}
-      <div className="mt-auto flex flex-col gap-2.5 pt-2">
-        {/* High-contrast glowing emerald primary CTA with single-pass sheen */}
+      <div className="mt-auto flex flex-col gap-2 pt-1">
+        {/* High-contrast emerald primary CTA with single-pass sheen */}
         <button
           type="button"
           onClick={handleOpenWorkbench}
-          className="ph-cta-sheen motion-reduce:animate-none flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 px-4 font-bold text-sm text-on-strong shadow-glow-emerald transition-all duration-200 hover:bg-brand-hover active:scale-[0.99] cursor-pointer"
+          className="ph-cta-sheen motion-reduce:animate-none flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 px-4 font-semibold text-sm text-on-strong ph-primary-cta transition-colors duration-150 hover:bg-brand-hover active:scale-[0.99] cursor-pointer"
         >
           <span>View data &amp; export</span>
           <ExternalLink className="h-4 w-4" aria-hidden="true" />

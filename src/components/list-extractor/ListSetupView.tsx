@@ -112,11 +112,11 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
       {/* CARD 1: Select List */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="text-2xs font-bold uppercase tracking-wider text-brand-fg">
+          <span className="ph-eyebrow text-brand-fg">
             ① Select List
           </span>
           {isSelected && (
-            <span className="flex items-center gap-1 text-2xs font-semibold text-brand-fg">
+            <span className="flex items-center gap-1.5 text-2xs font-semibold text-brand-fg">
               <span className="h-1.5 w-1.5 rounded-full bg-brand animate-pulse motion-reduce:animate-none" />
               Locked
             </span>
@@ -128,15 +128,14 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
             <button
               type="button"
               onClick={onPickList}
-              className="group relative flex flex-col items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-brand/40 bg-brand/[0.04] p-5 text-center transition-all duration-200 hover:border-brand hover:bg-brand/[0.08] active:scale-[0.99] cursor-pointer"
+              className="group relative flex flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed border-brand/45 bg-brand-soft/45 p-5 text-center transition-colors duration-150 hover:border-brand hover:bg-brand-soft/80 active:scale-[0.99] cursor-pointer"
             >
-              <div className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-brand/30 bg-brand/15 text-brand-fg shadow-glow-emerald transition-transform group-hover:scale-110">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-line bg-surface text-brand-fg shadow-xs transition-transform duration-150 group-hover:scale-105">
                 <MousePointerClick className="h-5 w-5 text-brand-fg" aria-hidden="true" />
-                <span className="absolute -inset-1 rounded-xl bg-brand/20 blur-sm -z-10 group-hover:bg-brand/35 transition-colors" />
               </div>
 
               <div className="flex flex-col items-center gap-0.5">
-                <span className="text-sm font-bold text-fg group-hover:text-brand-fg transition-colors">
+                <span className="text-sm font-semibold tracking-[-0.01em] text-fg group-hover:text-brand-fg transition-colors">
                   Click to Pick List
                 </span>
                 <span className="text-2xs text-fg-subtle">
@@ -149,24 +148,24 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
               type="button"
               onClick={onAutoDetect}
               disabled={isDetecting}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-line bg-surface py-2 px-3 text-xs font-semibold text-brand-fg shadow-sm transition-all hover:border-brand/40 hover:bg-brand-soft active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-line bg-surface py-2 px-3 text-xs font-semibold text-brand-fg ph-card-elevated transition-colors hover:border-brand-line hover:bg-brand-soft active:scale-[0.99] disabled:opacity-50 cursor-pointer"
             >
               <Zap className="h-3.5 w-3.5 text-brand-fg" aria-hidden="true" />
               <span>{isDetecting ? 'Detecting lists…' : 'Auto-detect on this page'}</span>
             </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-2.5 rounded-2xl border border-brand-line bg-brand-soft/60 p-3.5 shadow-glow-emerald transition-all">
+          <div className="flex flex-col gap-2.5 rounded-xl border border-brand-line bg-brand-soft/55 p-3.5 ph-card-elevated transition-colors">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand/20 text-brand-fg font-bold text-sm">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-brand-line bg-surface text-brand-fg shadow-xs">
                   <Check className="h-4 w-4" aria-hidden="true" />
                 </span>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-fg">
+                <div className="flex min-w-0 flex-col">
+                  <span className="text-body font-semibold tracking-[-0.01em] text-fg ph-tabular">
                     Found {list?.matchCount} items · {activeFieldsCount} columns
                   </span>
-                  <span className="text-2xs text-fg-subtle truncate">
+                  <span className="font-mono text-2xs text-fg-subtle truncate">
                     {list?.containerSelector}
                   </span>
                 </div>
@@ -176,7 +175,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
                 <button
                   type="button"
                   onClick={handleEditColumnsClick}
-                  className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-2xs font-semibold text-fg transition-colors hover:border-brand/40 hover:text-brand-fg cursor-pointer"
+                  className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-2xs font-semibold text-fg transition-colors hover:border-line-strong hover:text-brand-fg cursor-pointer"
                 >
                   <Columns className="h-3 w-3 text-brand-fg" aria-hidden="true" />
                   <span>Edit columns</span>
@@ -184,7 +183,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
                 <button
                   type="button"
                   onClick={onRepick}
-                  className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-2xs font-semibold text-fg-subtle transition-colors hover:text-fg hover:border-line-strong cursor-pointer"
+                  className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-2xs font-semibold text-fg-muted transition-colors hover:text-fg hover:border-line-strong cursor-pointer"
                   title="Pick a different repeating item"
                 >
                   <RefreshCw className="h-3 w-3" aria-hidden="true" />
@@ -245,11 +244,11 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
 
       {/* CARD 2: Load More Items */}
       <div
-        className={`flex flex-col gap-2.5 transition-all duration-300 ${
+        className={`flex flex-col gap-2.5 transition-opacity duration-200 ${
           isSelected ? 'opacity-100' : 'opacity-45 pointer-events-none'
         }`}
       >
-        <span className="text-2xs font-bold uppercase tracking-wider text-fg-subtle">
+        <span className="ph-eyebrow">
           ② Load More Items
         </span>
 
@@ -257,9 +256,9 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
           {/* Option: This Page Only */}
           <label
             onClick={() => handleSelectMode('none')}
-            className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
+            className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${
               currentMode === 'none'
-                ? 'border-brand/50 bg-brand-soft shadow-glow-emerald'
+                ? 'border-brand/55 bg-brand-soft/75 ph-card-elevated'
                 : 'border-line bg-surface hover:border-line-strong'
             }`}
           >
@@ -271,7 +270,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
               className="mt-0.5 accent-brand"
             />
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-bold text-fg">This Page Only</span>
+              <span className="text-xs font-semibold text-fg">This Page Only</span>
               <span className="text-2xs text-fg-subtle">Extract items visible on the current page</span>
             </div>
           </label>
@@ -279,9 +278,9 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
           {/* Option: Auto-Scroll */}
           <label
             onClick={() => handleSelectMode('infinite_scroll')}
-            className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
+            className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${
               currentMode === 'infinite_scroll'
-                ? 'border-brand/50 bg-brand-soft shadow-glow-emerald'
+                ? 'border-brand/55 bg-brand-soft/75 ph-card-elevated'
                 : 'border-line bg-surface hover:border-line-strong'
             }`}
           >
@@ -293,7 +292,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
               className="mt-0.5 accent-brand"
             />
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-bold text-fg">Auto-Scroll</span>
+              <span className="text-xs font-semibold text-fg">Auto-Scroll</span>
               <span className="text-2xs text-fg-subtle">Scrolls down automatically to load more items</span>
             </div>
           </label>
@@ -301,9 +300,9 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
           {/* Option: Pagination */}
           <div
             onClick={() => handleSelectMode('next_button')}
-            className={`flex flex-col gap-2 rounded-xl border p-3 cursor-pointer transition-all ${
+            className={`flex flex-col gap-2 rounded-xl border p-3 cursor-pointer transition-colors ${
               currentMode === 'next_button' && !isLoadMoreMode
-                ? 'border-brand/50 bg-brand-soft shadow-glow-emerald'
+                ? 'border-brand/55 bg-brand-soft/75 ph-card-elevated'
                 : 'border-line bg-surface hover:border-line-strong'
             }`}
           >
@@ -317,7 +316,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
                 className="mt-0.5 accent-brand"
               />
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-bold text-fg">Pagination</span>
+                <span className="text-xs font-semibold text-fg">Pagination</span>
                 <span className="text-2xs text-fg-subtle">
                   Clicks the Next button or link across pages
                 </span>
@@ -326,7 +325,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
 
             {currentMode === 'next_button' && !isLoadMoreMode && (
               <div className="mt-1 ml-6 flex items-center justify-between gap-2 border-t border-brand-line pt-2">
-                <span className="text-2xs text-fg-subtle truncate">
+                <span className="font-mono text-2xs text-fg-subtle truncate">
                   {pagination.nextButtonSelector
                     ? `Button: ${pagination.nextButtonSelector}`
                     : 'Auto-detecting Next button'}
@@ -338,7 +337,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
                       e.stopPropagation();
                       onPickNextButton();
                     }}
-                    className="flex items-center gap-1 rounded-md border border-brand/40 bg-brand-soft px-2 py-0.5 text-2xs font-semibold text-brand-fg hover:bg-brand/20 hover:text-brand-emphasis cursor-pointer shrink-0"
+                    className="flex items-center gap-1 rounded-md border border-brand-line bg-surface px-2 py-0.5 text-2xs font-semibold text-brand-fg hover:border-brand/50 hover:text-brand-emphasis cursor-pointer shrink-0"
                   >
                     <MousePointer2 className="h-3 w-3" aria-hidden="true" />
                     <span>Pick Next button</span>
@@ -351,9 +350,9 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
           {/* Option: Load More */}
           <div
             onClick={() => handleSelectMode('load_more')}
-            className={`flex flex-col gap-2 rounded-xl border p-3 cursor-pointer transition-all ${
+            className={`flex flex-col gap-2 rounded-xl border p-3 cursor-pointer transition-colors ${
               isLoadMoreMode
-                ? 'border-brand/50 bg-brand-soft shadow-glow-emerald'
+                ? 'border-brand/55 bg-brand-soft/75 ph-card-elevated'
                 : 'border-line bg-surface hover:border-line-strong'
             }`}
           >
@@ -367,7 +366,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
                 className="mt-0.5 accent-brand"
               />
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-bold text-fg">Load More</span>
+                <span className="text-xs font-semibold text-fg">Load More</span>
                 <span className="text-2xs text-fg-subtle">
                   Clicks a &apos;Load More&apos; button on the same page
                 </span>
@@ -376,7 +375,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
 
             {isLoadMoreMode && (
               <div className="mt-1 ml-6 flex items-center justify-between gap-2 border-t border-brand-line pt-2">
-                <span className="text-2xs text-fg-subtle truncate">
+                <span className="font-mono text-2xs text-fg-subtle truncate">
                   {pagination.nextButtonSelector
                     ? `Button: ${pagination.nextButtonSelector}`
                     : 'Auto-detecting Load More button'}
@@ -388,7 +387,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
                       e.stopPropagation();
                       onPickNextButton();
                     }}
-                    className="flex items-center gap-1 rounded-md border border-brand/40 bg-brand-soft px-2 py-0.5 text-2xs font-semibold text-brand-fg hover:bg-brand/20 hover:text-brand-emphasis cursor-pointer shrink-0"
+                    className="flex items-center gap-1 rounded-md border border-brand-line bg-surface px-2 py-0.5 text-2xs font-semibold text-brand-fg hover:border-brand/50 hover:text-brand-emphasis cursor-pointer shrink-0"
                   >
                     <MousePointer2 className="h-3 w-3" aria-hidden="true" />
                     <span>Pick Load More button</span>
@@ -500,12 +499,12 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
       </div>
 
       {/* Bottom Primary CTA (non-overlapping clearance below options) */}
-      <div className="mt-1 shrink-0 rounded-xl border border-line bg-canvas p-3">
+      <div className="mt-1 shrink-0 border-t border-line-subtle pt-3">
         <button
           type="button"
           onClick={onStartExtraction}
           disabled={!isSelected}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand py-3 px-4 font-bold text-sm text-on-strong shadow-glow-emerald transition-all duration-200 hover:bg-brand-hover active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none cursor-pointer"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand py-2.5 px-4 font-semibold text-sm text-on-strong ph-primary-cta transition-colors duration-150 hover:bg-brand-hover active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none cursor-pointer"
         >
           <Sparkles className="h-4 w-4" aria-hidden="true" />
           <span>Start Extraction</span>

@@ -87,7 +87,7 @@ export const SimpleListChooser: React.FC<SimpleListChooserProps> = ({ detectedLi
       ) : (
         <>
           <div>
-            <h2 className="text-base font-semibold text-fg">Which list do you want?</h2>
+            <h2 className="text-base ph-heading text-fg">Which list do you want?</h2>
             <p className="text-body text-fg-muted mt-1">
               {nothingClear
                 ? 'Nothing on this page clearly looks like a list of items. Use one of these if it is what you want, or pick one item yourself.'
@@ -117,7 +117,7 @@ export const SimpleListChooser: React.FC<SimpleListChooserProps> = ({ detectedLi
             {candidates.map((candidate, index) => (
               <li key={candidate.containerSelector}>
                 <Card className="flex flex-col gap-2">
-                  <p className="text-sm font-semibold text-fg">{itemCount(candidate.matchCount)}</p>
+                  <p className="text-sm ph-heading text-fg ph-tabular">{itemCount(candidate.matchCount)}</p>
                   {candidate.sampleSnippets.slice(0, 2).map((snippet, row) => (
                     <p key={row} className="text-body text-fg-muted break-words line-clamp-2">
                       {snippet || '(no words in this item)'}
