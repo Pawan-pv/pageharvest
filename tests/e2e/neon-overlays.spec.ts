@@ -409,7 +409,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     expect(textOf(locked.one('ph-selection-badge'))).toContain('3 matches');
     expect(await locked.box(locked.one('ph-toolbar'))).not.toBeNull();
 
-    const expectedSiblings = await target.locator('.product-price').evaluateAll((elements) =>
+    const expectedSiblings = await target.locator('.product-card').evaluateAll((elements) =>
       elements.slice(1).map((element) => {
         const rect = element.getBoundingClientRect();
         return [Math.round(rect.left), Math.round(rect.top)];
