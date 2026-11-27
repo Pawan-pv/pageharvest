@@ -375,10 +375,10 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
             </Button>
           )}
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-tool-violet/15 text-tool-violet">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-tool-violet/25 bg-tool-violet/15 text-tool-violet">
               <ImageIcon className="h-4 w-4" />
             </span>
-            <h2 className="text-sm font-bold text-fg">Bulk Image Downloader</h2>
+            <h2 className="text-sm ph-heading text-fg">Bulk Image Downloader</h2>
           </div>
         </div>
 
@@ -407,15 +407,15 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
       <Card className="flex flex-col gap-2.5 p-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-fg">Image Source</span>
-          <div className="flex rounded-lg border border-line bg-surface p-0.5 text-2xs">
+          <div className="flex rounded-lg border border-line bg-surface-sunken p-0.5 text-2xs">
             <button
               type="button"
               onClick={() => setSourceMode('page')}
               disabled={isDownloading}
               className={`rounded-md px-2 py-0.5 transition-colors ${
                 sourceMode === 'page'
-                  ? 'bg-tool-violet text-on-accent font-semibold'
-                  : 'text-fg-muted hover:text-fg'
+                  ? 'border border-tool-violet/45 bg-tool-violet/15 text-fg font-semibold'
+                  : 'border border-transparent text-fg-muted hover:text-fg'
               }`}
             >
               Current Page
@@ -426,8 +426,8 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
               disabled={isDownloading}
               className={`rounded-md px-2 py-0.5 transition-colors ${
                 sourceMode === 'dataset'
-                  ? 'bg-tool-violet text-on-accent font-semibold'
-                  : 'text-fg-muted hover:text-fg'
+                  ? 'border border-tool-violet/45 bg-tool-violet/15 text-fg font-semibold'
+                  : 'border border-transparent text-fg-muted hover:text-fg'
               }`}
             >
               From Dataset
@@ -461,7 +461,7 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
         ) : (
           <div className="grid grid-cols-2 gap-2 pt-1">
             <div className="flex flex-col gap-1">
-              <span className="text-3xs uppercase tracking-wider text-fg-subtle">Dataset</span>
+              <span className="ph-eyebrow text-fg-subtle">Dataset</span>
               <select
                 value={selectedDatasetId}
                 onChange={(e) => setSelectedDatasetId(e.target.value)}
@@ -477,7 +477,7 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-3xs uppercase tracking-wider text-fg-subtle">Image URL Column</span>
+              <span className="ph-eyebrow text-fg-subtle">Image URL Column</span>
               <select
                 value={selectedColumn}
                 onChange={(e) => setSelectedColumn(e.target.value)}
@@ -504,7 +504,7 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
               <Filter className="h-3.5 w-3.5 text-tool-violet" />
               <span>Filters & Naming</span>
             </div>
-            <span className="text-2xs text-fg-subtle">
+            <span className="text-2xs text-fg-subtle ph-tabular">
               Selected: <strong className="text-tool-violet">{selectedCount}</strong> / {filteredImages.length}
             </span>
           </div>
@@ -517,9 +517,9 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
                   key={fmt}
                   type="button"
                   onClick={() => setSelectedFormat(fmt)}
-                  className={`rounded-md px-1.5 py-0.5 text-3xs font-medium transition-colors ${
+                  className={`rounded-md px-1.5 py-0.5 text-2xs font-medium transition-colors ${
                     selectedFormat === fmt
-                      ? 'bg-tool-violet/20 border border-tool-violet text-tool-violet font-semibold'
+                      ? 'bg-tool-violet/15 border border-tool-violet/45 text-tool-violet font-semibold'
                       : 'border border-line bg-surface text-fg-muted hover:border-line-strong'
                   }`}
                 >
@@ -528,7 +528,7 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
               ))}
             </div>
 
-            <label className="flex items-center gap-1.5 text-3xs text-fg cursor-pointer">
+            <label className="flex items-center gap-1.5 text-2xs text-fg cursor-pointer">
               <input
                 type="checkbox"
                 checked={minDimensionFilter}
@@ -544,7 +544,7 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
             <button
               type="button"
               onClick={toggleSelectAll}
-              className="flex items-center gap-1 text-2xs text-fg hover:text-tool-violet"
+              className="flex items-center gap-1 text-2xs text-fg hover:text-tool-violet ph-tabular"
             >
               {selectedCount === filteredImages.length && filteredImages.length > 0 ? (
                 <CheckSquare className="h-3.5 w-3.5 text-tool-violet" />
@@ -572,18 +572,18 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
               onChange={(e) => setTemplate(e.target.value)}
               disabled={isDownloading}
               placeholder="{domain}/{alt}-{index}.{ext}"
-              className="w-full rounded-xl border border-line bg-surface p-1.5 text-2xs text-fg font-mono"
+              className="w-full rounded-xl border border-line bg-surface-sunken p-1.5 text-2xs text-fg font-mono focus:outline-none focus:border-tool-violet"
             />
 
             {showTemplateTokens && (
-              <div className="flex flex-wrap gap-1 p-1 bg-surface-muted rounded-lg text-3xs text-fg-subtle">
+              <div className="flex flex-wrap gap-1 p-1.5 bg-surface-muted rounded-lg text-2xs text-fg-subtle">
                 <span className="self-center font-semibold">Tokens:</span>
                 {['{index}', '{domain}', '{alt}', '{ext}', ...(datasetColumns.map((c) => `{${c}}`))].map((token) => (
                   <button
                     key={token}
                     type="button"
                     onClick={() => setTemplate((prev) => `${prev.replace(/\.\{ext\}$/, '')}-${token}.{ext}`)}
-                    className="rounded bg-surface px-1 py-0.5 font-mono text-fg border border-line hover:border-tool-violet"
+                    className="rounded bg-surface px-1.5 py-0.5 font-mono text-fg border border-line hover:border-tool-violet"
                   >
                     {token}
                   </button>
@@ -593,8 +593,8 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
 
             {/* Live Filename Previews */}
             {templatePreviews.length > 0 && (
-              <div className="flex flex-col gap-0.5 rounded-lg bg-surface p-1.5 text-3xs font-mono text-fg-muted">
-                <span className="font-semibold text-tool-violet uppercase tracking-wider text-4xs">Preview:</span>
+              <div className="flex flex-col gap-0.5 rounded-lg bg-surface-sunken border border-line-subtle p-1.5 text-2xs font-mono text-fg-muted">
+                <span className="ph-eyebrow text-tool-violet">Preview:</span>
                 {templatePreviews.map((p, idx) => (
                   <span key={idx} className="truncate">
                     {p}
@@ -661,7 +661,7 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
           {/* Download Progress */}
           {downloadProgress && (
             <div className="flex flex-col gap-1.5 pt-1">
-              <div className="flex items-center justify-between text-2xs text-fg-subtle">
+              <div className="flex items-center justify-between text-2xs text-fg-subtle ph-tabular">
                 <span>
                   Downloaded {downloadProgress.completed} of {downloadProgress.total}
                 </span>
@@ -676,7 +676,7 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
                 />
               </div>
               {isDownloading && (
-                <p className="text-3xs text-fg-muted italic">
+                <p className="text-2xs text-fg-muted italic">
                   Keep this panel or workbench tab open while running
                 </p>
               )}
@@ -684,7 +684,7 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
           )}
 
           {/* Thumbnail Grid */}
-          <div className="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto p-1 border border-line/60 rounded-xl bg-surface-sunken">
+          <div className="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto p-1.5 border border-line/70 rounded-xl bg-surface-sunken">
             {filteredImages.map((img) => {
               const isSelected = selectedIds.has(img.id);
               return (
@@ -707,7 +707,7 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
-                    <div className="absolute top-1 left-1 rounded bg-dock/80 p-0.5 text-fg">
+                    <div className="absolute top-1 left-1 rounded bg-surface/90 border border-line/70 p-0.5 text-fg">
                       {isSelected ? (
                         <CheckSquare className="h-3.5 w-3.5 text-tool-violet" />
                       ) : (
@@ -715,12 +715,12 @@ export const ImageDownloaderView: React.FC<ImageDownloaderViewProps> = ({
                       )}
                     </div>
                     {img.width > 0 && img.height > 0 && (
-                      <span className="absolute bottom-1 right-1 rounded bg-dock/80 px-1 py-0.5 text-4xs font-mono text-on-strong">
+                      <span className="absolute bottom-1 right-1 rounded bg-surface/90 border border-line/70 px-1 py-0.5 text-2xs font-mono ph-tabular text-fg">
                         {img.width}×{img.height}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center justify-between p-1 text-3xs">
+                  <div className="flex items-center justify-between px-1.5 py-1 text-2xs">
                     <span className="uppercase font-semibold text-tool-violet">{img.extension}</span>
                     <a
                       href={img.url}

@@ -22,7 +22,7 @@ export const Stepper: React.FC<StepperProps> = ({ steps, currentId, className = 
 
   return (
     <nav aria-label="Steps" className={`text-left ${className}`}>
-      <p className="text-2xs text-fg-subtle mb-1.5">
+      <p className="text-2xs ph-tabular text-fg-subtle mb-1.5">
         Step {currentIndex + 1} of {steps.length}:{' '}
         <span className="font-semibold text-fg">{current.label}</span>
         {current.optional && ' (optional)'}
@@ -38,8 +38,8 @@ export const Stepper: React.FC<StepperProps> = ({ steps, currentId, className = 
             >
               <span
                 aria-hidden="true"
-                className={`h-1.5 w-full rounded-pill ${
-                  state === 'upcoming' ? 'bg-surface-strong' : state === 'current' ? 'bg-brand' : 'bg-brand/60'
+                className={`h-1 w-full rounded-pill ${
+                  state === 'upcoming' ? 'bg-surface-strong' : state === 'current' ? 'bg-brand' : 'bg-brand/55'
                 }`}
               />
               <span

@@ -90,7 +90,7 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-1.5 bg-surface-sunken border border-line/80 rounded-xl p-2 text-xs">
+    <div className="flex flex-col gap-1.5 bg-surface-sunken/80 border border-line rounded-xl p-2 text-xs">
       {/* Toolbar actions */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -250,10 +250,10 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
 
       {/* Find and Replace Modal Dialog */}
       {showFindReplace && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/30 backdrop-blur-2xs p-4">
-          <div className="bg-surface rounded-xl shadow-xl border border-line w-full max-w-sm p-4 flex flex-col gap-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/50 backdrop-blur-xs p-4">
+          <div className="bg-surface rounded-xl shadow-dock ph-card-elevated border border-line w-full max-w-sm p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between pb-2 border-b border-line-subtle">
-              <span className="font-bold text-fg">Find & Replace</span>
+              <span className="ph-heading text-fg">Find & Replace</span>
               <button
                 onClick={() => setShowFindReplace(false)}
                 className="text-fg-subtle hover:text-fg-muted"
@@ -270,7 +270,7 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
                   value={findText}
                   onChange={(e) => setFindText(e.target.value)}
                   placeholder="Text to find..."
-                  className="w-full px-2.5 py-1 text-xs border border-line rounded-lg focus:outline-none focus:border-brand"
+                  className="w-full px-2.5 py-1 text-xs bg-surface text-fg border border-line rounded-lg focus:outline-none focus:border-brand focus:ring-2 focus:ring-focus/20"
                 />
               </div>
 
@@ -281,7 +281,7 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
                   value={replaceText}
                   onChange={(e) => setReplaceText(e.target.value)}
                   placeholder="Replacement text..."
-                  className="w-full px-2.5 py-1 text-xs border border-line rounded-lg focus:outline-none focus:border-brand"
+                  className="w-full px-2.5 py-1 text-xs bg-surface text-fg border border-line rounded-lg focus:outline-none focus:border-brand focus:ring-2 focus:ring-focus/20"
                 />
               </div>
 
@@ -331,9 +331,9 @@ export const DataCleaningToolbar: React.FC<DataCleaningToolbarProps> = ({
 
       {/* Destructive Action Confirmation Dialog */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-2xs p-4">
-          <div className="bg-surface rounded-xl shadow-xl border border-line w-full max-w-sm p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-warning-fg font-bold">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/50 backdrop-blur-xs p-4">
+          <div className="bg-surface rounded-xl shadow-dock ph-card-elevated border border-line w-full max-w-sm p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-warning-fg ph-heading">
               <AlertTriangle className="w-4 h-4" />
               <span>{confirmDialog.title}</span>
             </div>

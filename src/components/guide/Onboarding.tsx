@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { Wheat, Sparkles, Columns3, Download, ShieldCheck } from 'lucide-react';
+import { Sparkles, Columns3, Download, ShieldCheck } from 'lucide-react';
+import { BrandMark } from '@/components/common/BrandMark';
 import { Dialog } from '@/components/common/Dialog';
 import { Button } from '@/components/common/Button';
 
@@ -13,7 +14,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     title: 'Welcome to PageHarvest',
     body: 'PageHarvest turns lists on websites, such as products, search results or articles, into a table you can save as a spreadsheet.',
-    icon: <Wheat className="w-5 h-5" />,
+    icon: <BrandMark size="md" />,
   },
   {
     title: 'Find data on the page',

@@ -209,10 +209,10 @@ export const SocialExtractorView: React.FC<SocialExtractorViewProps> = ({ onBack
             </Button>
           )}
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-tool-amber/15 text-tool-amber">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-tool-amber/25 bg-tool-amber/15 text-tool-amber">
               <Globe className="h-4 w-4" />
             </span>
-            <h2 className="text-sm font-bold text-fg">Social Link Extractor</h2>
+            <h2 className="text-sm ph-heading text-fg">Social Link Extractor</h2>
           </div>
         </div>
 
@@ -283,7 +283,7 @@ export const SocialExtractorView: React.FC<SocialExtractorViewProps> = ({ onBack
           }}
           disabled={isRunning}
           placeholder="Paste addresses (https://example.com), one per line"
-          className="w-full rounded-xl border border-line bg-surface p-2 text-2xs text-fg placeholder:text-fg-subtle focus:border-tool-amber focus:outline-none"
+          className="w-full rounded-xl border border-line bg-surface-sunken p-2 font-mono text-2xs text-fg placeholder:text-fg-subtle focus:border-tool-amber focus:outline-none focus:ring-2 focus:ring-tool-amber/20"
         />
       </Card>
 
@@ -310,7 +310,7 @@ export const SocialExtractorView: React.FC<SocialExtractorViewProps> = ({ onBack
             disabled={isRunning}
             className={`rounded-lg px-2 py-0.5 text-2xs font-medium transition-colors ${
               selectedPlatforms.length === 0
-                ? 'bg-tool-amber text-on-accent'
+                ? 'border border-tool-amber/50 bg-tool-amber/15 text-fg font-semibold'
                 : 'border border-line bg-surface text-fg-muted hover:border-line-strong'
             }`}
           >
@@ -326,7 +326,7 @@ export const SocialExtractorView: React.FC<SocialExtractorViewProps> = ({ onBack
                 disabled={isRunning}
                 className={`rounded-lg px-2 py-0.5 text-2xs font-medium transition-colors ${
                   isSelected
-                    ? 'bg-tool-amber/20 border border-tool-amber text-tool-amber font-semibold'
+                    ? 'border border-tool-amber/50 bg-tool-amber/15 text-fg font-semibold'
                     : 'border border-line bg-surface text-fg-muted hover:border-line-strong'
                 }`}
               >

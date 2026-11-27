@@ -5,9 +5,9 @@ import {
   HelpCircle,
   MousePointer2,
   Settings as SettingsIcon,
-  Wheat,
   Wrench,
 } from 'lucide-react';
+import { BrandMark } from '@/components/common/BrandMark';
 import { useActiveTab } from '@/hooks/useActiveTab';
 import { useDatasets } from '@/hooks/useDatasets';
 import { useExtractionWorkflow, type DetectedList, type ExtractionStats } from '@/hooks/useExtractionWorkflow';
@@ -479,17 +479,17 @@ export const App: React.FC = () => {
   };
 
   const navPillClass = (section: NavSection) =>
-    `flex min-h-8 items-center gap-1 rounded-xl px-1.5 text-xs font-semibold transition-colors ${
+    `flex min-h-8 items-center gap-1 rounded-lg border px-1.5 text-xs font-semibold transition-all ${
       activeSection === section
-        ? 'bg-surface-muted text-fg shadow-xs'
-        : 'text-fg-subtle hover:bg-surface hover:text-fg'
+        ? 'border-line/80 bg-surface text-fg shadow-xs'
+        : 'border-transparent text-fg-subtle hover:bg-surface/60 hover:text-fg'
     }`;
 
   const iconButtonClass = (active: boolean) =>
-    `flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${
+    `flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
       active
-        ? 'border-tool-emerald/40 bg-tool-emerald/10 text-tool-emerald'
-        : 'border-hairline/10 bg-dock text-fg-muted hover:border-hairline/25 hover:text-fg'
+        ? 'border-brand-line bg-brand-soft text-brand-fg'
+        : 'border-line bg-surface text-fg-muted hover:border-line-strong hover:text-fg ph-card-elevated'
     }`;
 
   if (consent.hasConsent === false) {
@@ -510,13 +510,11 @@ export const App: React.FC = () => {
     <div className="flex h-screen flex-col overflow-hidden bg-canvas font-sans text-fg antialiased">
       <main className="flex-1 overflow-y-auto px-3 pb-6">
         {/* Top brand row: scrolls with the page, so it never sits over the active-page strip. */}
-        <div className="flex items-center justify-between gap-2 pb-2 pt-3">
+        <div className="flex items-center justify-between gap-2 pb-2.5 pt-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-tool-emerald to-tool-teal text-on-accent shadow-xs">
-              <Wheat aria-hidden="true" className="h-5 w-5" />
-            </div>
+            <BrandMark size="md" />
             <div className="min-w-0">
-              <h1 className="truncate text-[15px] font-bold tracking-tight text-fg">PageHarvest</h1>
+              <h1 className="truncate text-[15px] ph-heading text-fg">PageHarvest</h1>
               <p className="truncate text-2xs text-fg-subtle">Local data extraction, simplified</p>
             </div>
           </div>
@@ -546,7 +544,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* Sticky command dock: the picker is always one click away, and navigation never scrolls off. */}
-        <div className="sticky top-2 z-20 mb-2 rounded-2xl border border-hairline/10 bg-dock-solid/95 p-1.5 shadow-lg backdrop-blur-md">
+        <div className="sticky top-2 z-20 mb-2.5 rounded-xl border border-line bg-dock-solid/95 p-1 backdrop-blur-md ph-dock-surface">
           <div className="flex items-center justify-between gap-1.5">
             <button
               type="button"
@@ -554,7 +552,7 @@ export const App: React.FC = () => {
               disabled={!tab.isInjectable}
               title="Pick element on page"
               aria-label="Pick element on page"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-tool-emerald/50 bg-tool-emerald/10 text-tool-emerald transition-colors hover:bg-tool-emerald/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-line bg-brand-soft text-brand-fg transition-colors hover:bg-brand/15 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <MousePointer2 aria-hidden="true" className="h-4 w-4" />
             </button>
@@ -580,7 +578,7 @@ export const App: React.FC = () => {
                 {datasets.length > 0 && (
                   <span
                     aria-hidden="true"
-                    className="rounded-full bg-surface px-1.5 py-0.5 text-2xs font-bold tabular-nums text-fg-subtle"
+                    className="rounded-full border border-line/70 bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold ph-tabular text-fg-muted"
                   >
                     {datasets.length}
                   </span>

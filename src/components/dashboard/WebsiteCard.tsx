@@ -35,17 +35,21 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
 
   return (
     <div className="flex flex-col gap-2 text-left">
-      <div className="flex items-center gap-2 rounded-2xl border border-line/80 bg-surface px-2.5 py-2">
+      <div className="flex items-center gap-2.5 rounded-xl border border-line bg-surface px-2.5 py-2 ph-card-elevated">
         <div
           aria-hidden="true"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-brand-line bg-brand-soft text-brand-fg"
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${
+            tab.isInjectable
+              ? 'border-brand-line bg-brand-soft text-brand-fg'
+              : 'border-warning-line bg-warning-soft text-warning-fg'
+          }`}
         >
           <Globe className="h-3.5 w-3.5" />
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-xs font-semibold tracking-tight text-fg" title={hostname}>
+            <span className="truncate text-xs font-semibold tracking-[-0.01em] text-fg" title={hostname}>
               {hostname}
             </span>
             {tab.isInjectable ? (
@@ -77,7 +81,7 @@ export const WebsiteCard: React.FC<WebsiteCardProps> = ({
             disabled={isLoading}
             title="Check this page again"
             aria-label="Check this page again"
-            className="shrink-0 rounded-lg p-1.5 text-fg-subtle transition-colors hover:bg-surface-muted hover:text-fg-muted disabled:opacity-50"
+            className="shrink-0 rounded-lg border border-transparent p-1.5 text-fg-subtle transition-colors hover:border-line hover:bg-surface-muted hover:text-fg disabled:opacity-50"
           >
             <RefreshCw aria-hidden="true" className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>

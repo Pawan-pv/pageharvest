@@ -205,7 +205,7 @@ export const ShopifyExtractorView: React.FC<ShopifyExtractorViewProps> = ({
             <ShoppingBag className="h-4 w-4" />
           </span>
           <div>
-            <h2 className="text-sm font-bold tracking-tight text-fg">Shopify Extractor</h2>
+            <h2 className="text-sm ph-heading text-fg">Shopify Extractor</h2>
             <p className="text-2xs text-fg-subtle">Extract complete product catalogs with Shopify CSV parity</p>
           </div>
         </div>
@@ -219,7 +219,7 @@ export const ShopifyExtractorView: React.FC<ShopifyExtractorViewProps> = ({
 
       {/* Store URL & Verification Card */}
       <Card className="flex flex-col gap-2.5 p-3">
-        <label htmlFor="shopify-store-input" className="text-2xs font-bold uppercase tracking-wider text-fg-muted">
+        <label htmlFor="shopify-store-input" className="ph-eyebrow text-fg-muted">
           Shopify Storefront URL
         </label>
         <div className="flex items-center gap-2">
@@ -242,7 +242,7 @@ export const ShopifyExtractorView: React.FC<ShopifyExtractorViewProps> = ({
         {/* Collection & Granularity Selectors */}
         <div className="grid grid-cols-2 gap-2 pt-1">
           <div className="flex flex-col gap-1">
-            <span className="text-3xs uppercase tracking-wider text-fg-subtle">Collection</span>
+            <span className="ph-eyebrow text-fg-subtle">Collection</span>
             <select
               value={selectedCollection}
               onChange={(e) => setSelectedCollection(e.target.value)}
@@ -259,7 +259,7 @@ export const ShopifyExtractorView: React.FC<ShopifyExtractorViewProps> = ({
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-3xs uppercase tracking-wider text-fg-subtle">Granularity</span>
+            <span className="ph-eyebrow text-fg-subtle">Granularity</span>
             <div className="flex items-center gap-3 pt-1 text-2xs text-fg">
               <label className="flex items-center gap-1.5 cursor-pointer">
                 <input

@@ -42,10 +42,10 @@ export const Select: React.FC<SelectProps> = ({
           disabled={disabled}
           aria-invalid={error ? true : undefined}
           aria-describedby={hasMessage ? messageId : undefined}
-          className={`w-full appearance-none rounded-lg border bg-surface px-3 py-2 pr-9 text-sm text-fg transition-colors focus:outline-none focus:ring-1 focus:ring-offset-0 disabled:bg-surface-sunken disabled:text-fg-subtle disabled:cursor-not-allowed ${
+          className={`w-full appearance-none rounded-lg border bg-surface px-3 py-2 pr-9 text-body text-fg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:bg-surface-sunken disabled:text-fg-subtle disabled:cursor-not-allowed ${
             error
-              ? 'border-danger focus:border-danger focus:ring-danger'
-              : 'border-line-strong focus:border-focus focus:ring-focus'
+              ? 'border-danger focus:border-danger focus:ring-danger/20'
+              : 'border-line hover:border-line-strong focus:border-focus focus:ring-focus/20'
           } ${className}`}
           {...props}
         >

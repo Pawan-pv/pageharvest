@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Copy, ExternalLink, Link2, Loader2, Pause, Play, Trash2, XCircle } from 'lucide-react';
 import { Banner } from '@/components/common/Banner';
+import { BrandMark } from '@/components/common/BrandMark';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -76,14 +77,12 @@ export const TableWorkbenchApp: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-fg">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line/80 bg-dock-solid px-6 py-3">
+      <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b border-line bg-dock-solid/95 px-6 py-3 backdrop-blur-sm">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-on-strong">
-            <Link2 aria-hidden="true" className="w-4 h-4" />
-          </span>
+          <BrandMark size="sm" />
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold leading-tight">PageHarvest workbench</h1>
-            <p className="text-2xs text-fg-subtle">
+            <h1 className="text-sm ph-heading text-fg leading-tight">PageHarvest workbench</h1>
+            <p className="text-2xs text-fg-muted">
               {view.kind === 'tool' ? toolLabel(view.tool) : 'Your saved lists, in a full browser tab.'}
             </p>
           </div>
@@ -371,7 +370,7 @@ const DatasetWorkbench: React.FC<{
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 p-6">
+    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 px-6 py-5">
       {error && (
         <Banner tone="danger" title="Saved lists could not be read" details={error}>
           Nothing was changed.
@@ -661,24 +660,24 @@ const ToolWorkspace: React.FC<{
                 Clear the list
               </Button>
               {progress && (
-                <span className="text-xs text-fg-muted" role="status">
+                <span className="text-xs text-fg-muted ph-tabular" role="status">
                   {progress.processedUrls} of {progress.totalUrls} checked
                   {progress.failedUrls > 0 ? ` · ${progress.failedUrls} could not be read` : ''}
                 </span>
               )}
             </div>
 
-            <ul className="flex max-h-[55vh] flex-col divide-y divide-line-subtle overflow-y-auto rounded-lg border border-line">
+            <ul className="flex max-h-[55vh] flex-col divide-y divide-line-subtle overflow-y-auto rounded-lg border border-line bg-surface">
               {urls.map((url, index) => {
                 const result = results[url];
                 return (
-                  <li key={`${url}-${index}`} className="flex items-center gap-2 px-2.5 py-1.5">
-                    <span className="w-8 shrink-0 text-right text-2xs tabular-nums text-fg-faint">{index + 1}</span>
+                  <li key={`${url}-${index}`} className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-surface-sunken/50 transition-colors">
+                    <span className="w-8 shrink-0 text-right text-2xs ph-tabular text-fg-faint">{index + 1}</span>
                     <a
                       href={url}
                       target="_blank"
                       rel="noreferrer"
-                      className="min-w-0 flex-1 truncate text-xs text-brand-fg hover:underline"
+                      className="min-w-0 flex-1 truncate font-mono text-2xs text-brand-fg hover:underline"
                       title={url}
                     >
                       {url}

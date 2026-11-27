@@ -230,7 +230,7 @@ export const HarvestProgressStage: React.FC<HarvestProgressStageProps> = ({
 
       {/* Stage Header */}
       <div className="z-10 flex items-center justify-between gap-2 text-2xs">
-        <span className="font-bold uppercase tracking-wider text-brand-fg truncate">{stageLabel}</span>
+        <span className="ph-eyebrow text-brand-fg truncate">{stageLabel}</span>
         <span className="flex shrink-0 items-center gap-1.5 font-medium text-fg-subtle">
           <span
             className={`h-2 w-2 rounded-full ${
@@ -302,11 +302,11 @@ export const HarvestProgressStage: React.FC<HarvestProgressStageProps> = ({
           <div className="absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
             <span
               key={count}
-              className="text-3xl font-extrabold tracking-tight text-fg tabular-nums ph-tick-up motion-reduce:animate-none"
+              className="text-3xl font-bold text-fg ph-display-num ph-tick-up motion-reduce:animate-none"
             >
               {count.toLocaleString('en-US')}
             </span>
-            <span className="mt-0.5 text-2xs font-bold uppercase tracking-widest text-brand-fg">
+            <span className="mt-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-brand-fg">
               {metricLabel}
             </span>
           </div>
@@ -325,7 +325,7 @@ export const HarvestProgressStage: React.FC<HarvestProgressStageProps> = ({
 
       {/* Live "Harvest Conveyor" Feed (Zero <img> tags) */}
       <div className="z-10 flex flex-col gap-1.5">
-        <div className="flex items-center justify-between text-2xs font-semibold uppercase tracking-wider text-fg-subtle">
+        <div className="flex items-center justify-between ph-eyebrow">
           <span>{feedLabel}</span>
           <span>Text stream</span>
         </div>
@@ -338,13 +338,13 @@ export const HarvestProgressStage: React.FC<HarvestProgressStageProps> = ({
                 <div
                   key={item.id}
                   className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-1.5 ph-card-elevated ph-row-enter motion-reduce:animate-none ${
-                    isNewest ? 'border-brand/45 bg-brand-soft/40' : 'border-line-subtle bg-surface'
+                    isNewest ? 'border-brand-line bg-brand-soft/50' : 'border-line-subtle bg-surface'
                   }`}
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <span
                       className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                        isNewest ? 'bg-brand shadow-glow-emerald' : 'bg-brand/45'
+                        isNewest ? 'bg-brand' : 'bg-brand/45'
                       }`}
                     />
                     <span className="truncate text-body font-medium text-fg">{item.primary}</span>
@@ -354,7 +354,7 @@ export const HarvestProgressStage: React.FC<HarvestProgressStageProps> = ({
                       {item.pills.slice(0, 2).map((pill, pIdx) => (
                         <span
                           key={pIdx}
-                          className="max-w-[84px] truncate rounded-full border border-line-subtle bg-surface-muted px-1.5 py-0.5 text-2xs font-medium text-fg-muted"
+                          className="max-w-[84px] truncate rounded-full border border-line-subtle bg-surface-muted px-1.5 py-0.5 text-2xs font-medium ph-tabular text-fg-muted"
                         >
                           {pill}
                         </span>
@@ -384,7 +384,7 @@ export const HarvestProgressStage: React.FC<HarvestProgressStageProps> = ({
       </div>
 
       {/* 3-Column Telemetry Strip with scan-beam / calm pacing top edge */}
-      <div className="z-10 relative overflow-hidden rounded-2xl border border-line bg-surface ph-card-elevated">
+      <div className="z-10 relative overflow-hidden rounded-xl border border-line bg-surface ph-card-elevated">
         {(isRunning || isPaused) && (
           <div className="relative h-0.5 w-full overflow-hidden bg-surface-muted" aria-hidden="true">
             {isRunning ? (
@@ -399,9 +399,9 @@ export const HarvestProgressStage: React.FC<HarvestProgressStageProps> = ({
           <div className="flex flex-col gap-1 border-b border-line-subtle px-3 py-2">
             {progressSummary && (
               <div className="flex items-center justify-between gap-2 text-2xs font-semibold text-fg-muted">
-                <span className="truncate">{progressSummary}</span>
+                <span className="truncate ph-tabular">{progressSummary}</span>
                 {progressPercent !== undefined && (
-                  <span className="shrink-0 tabular-nums text-brand-fg">{progressPercent}%</span>
+                  <span className="shrink-0 ph-tabular text-brand-fg">{progressPercent}%</span>
                 )}
               </div>
             )}
@@ -421,29 +421,29 @@ export const HarvestProgressStage: React.FC<HarvestProgressStageProps> = ({
 
         <div className="grid grid-cols-3 divide-x divide-line-subtle p-3 text-center">
           <div className="flex min-w-0 flex-col items-center px-1">
-            <span className="text-2xs font-semibold uppercase tracking-wider text-fg-subtle">
+            <span className="ph-eyebrow">
               ELAPSED
             </span>
-            <span className="mt-0.5 text-sm font-bold text-fg tabular-nums">
+            <span className="mt-0.5 text-sm font-semibold text-fg ph-tabular">
               {formatElapsedSeconds(elapsed)}
             </span>
           </div>
 
           <div className="flex min-w-0 flex-col items-center px-1">
-            <span className="text-2xs font-semibold uppercase tracking-wider text-fg-subtle">
+            <span className="ph-eyebrow">
               SPEED
             </span>
-            <span className="mt-0.5 text-sm font-bold text-fg tabular-nums">
+            <span className="mt-0.5 text-sm font-semibold text-fg ph-tabular">
               {computedSpeed}
             </span>
           </div>
 
           <div className="flex min-w-0 flex-col items-center px-1">
-            <span className="text-2xs font-semibold uppercase tracking-wider text-fg-subtle">
+            <span className="ph-eyebrow">
               STATUS
             </span>
             <span
-              className={`mt-0.5 text-sm font-bold ${
+              className={`mt-0.5 text-sm font-semibold ${
                 isFailed
                   ? 'text-danger-fg'
                   : isPaused

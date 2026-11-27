@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   independent-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && vars.REQUIRE_INDEPENDENT_REVIEW == 'true'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read

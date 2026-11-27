@@ -42,12 +42,12 @@ export const Input: React.FC<InputProps> = ({
           disabled={disabled}
           aria-invalid={error ? true : undefined}
           aria-describedby={hasMessage ? messageId : undefined}
-          className={`w-full rounded-lg border bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-subtle transition-colors focus:outline-none focus:ring-1 focus:ring-offset-0 disabled:bg-surface-sunken disabled:text-fg-subtle disabled:cursor-not-allowed ${
+          className={`w-full rounded-lg border bg-surface px-3 py-2 text-body text-fg placeholder:text-fg-subtle transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:bg-surface-sunken disabled:text-fg-subtle disabled:cursor-not-allowed ${
             iconLeft ? 'pl-9' : ''
           } ${iconRight ? 'pr-9' : ''} ${
             error
-              ? 'border-danger focus:border-danger focus:ring-danger'
-              : 'border-line-strong focus:border-focus focus:ring-focus'
+              ? 'border-danger focus:border-danger focus:ring-danger/20'
+              : 'border-line hover:border-line-strong focus:border-focus focus:ring-focus/20'
           } ${className}`}
           {...props}
         />

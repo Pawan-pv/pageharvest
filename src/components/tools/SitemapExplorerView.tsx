@@ -255,7 +255,7 @@ export const SitemapExplorerView: React.FC<SitemapExplorerViewProps> = ({
             <MapIcon className="h-4 w-4" />
           </span>
           <div>
-            <h2 className="text-sm font-bold tracking-tight text-fg">Sitemap Explorer</h2>
+            <h2 className="text-sm ph-heading text-fg">Sitemap Explorer</h2>
             <p className="text-2xs text-fg-subtle">Discover, parse, and filter site XML sitemaps</p>
           </div>
         </div>
@@ -391,7 +391,7 @@ export const SitemapExplorerView: React.FC<SitemapExplorerViewProps> = ({
                   >
                     {isSelected ? <CheckSquare className="h-3 w-3" /> : <Square className="h-3 w-3" />}
                     <span>{group.prefix}</span>
-                    <span className="text-3xs opacity-70">({group.count})</span>
+                    <span className="text-2xs opacity-75 ph-tabular">({group.count})</span>
                   </button>
                 );
               })}
@@ -409,7 +409,7 @@ export const SitemapExplorerView: React.FC<SitemapExplorerViewProps> = ({
 
           {/* URL Preview List */}
           <Card className="flex flex-col gap-1 p-2">
-            <div className="flex items-center justify-between px-1 py-0.5 text-3xs uppercase tracking-wider text-fg-subtle">
+            <div className="flex items-center justify-between px-1 py-0.5 ph-eyebrow text-fg-subtle ph-tabular">
               <span>Preview (first 10 URLs)</span>
               <span>Total: {filteredEntries.length}</span>
             </div>
@@ -420,7 +420,7 @@ export const SitemapExplorerView: React.FC<SitemapExplorerViewProps> = ({
                     {entry.loc}
                   </span>
                   {(entry.lastmod || entry.priority) && (
-                    <span className="text-3xs text-fg-subtle">
+                    <span className="text-2xs text-fg-subtle ph-tabular">
                       {entry.lastmod ? `Modified: ${entry.lastmod} ` : ''}
                       {entry.priority ? `· Priority: ${entry.priority}` : ''}
                     </span>

@@ -147,7 +147,7 @@ export const SimpleDone: React.FC<SimpleDoneProps> = ({
         <div className="flex items-start gap-2.5">
           <CheckCircle2 aria-hidden="true" className="w-6 h-6 mt-0.5 shrink-0 text-brand-fg" />
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-fg leading-snug">Done. {rowCount(total)} collected</h2>
+            <h2 className="text-lg ph-heading text-fg leading-snug ph-tabular">Done. {rowCount(total)} collected</h2>
             <p className="text-body text-fg-muted mt-0.5">
               {site ? `From ${site}. ` : ''}They are saved in My data.
             </p>
@@ -155,8 +155,8 @@ export const SimpleDone: React.FC<SimpleDoneProps> = ({
         </div>
       ) : (
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-fg leading-snug break-words">{dataset?.name ?? 'Your rows'}</h2>
-          <p className="text-body text-fg-muted mt-0.5">
+          <h2 className="text-base ph-heading text-fg leading-snug break-words">{dataset?.name ?? 'Your rows'}</h2>
+          <p className="text-body text-fg-muted mt-0.5 ph-tabular">
             {rowCount(total)}
             {site ? ` from ${site}` : ''}
             {dataset ? `, collected on ${new Date(dataset.createdAt).toLocaleDateString()}` : ''}

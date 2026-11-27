@@ -32,8 +32,9 @@ function token(theme: ThemeName, path: string): string {
   return value;
 }
 
-const BACKGROUNDS = ['canvas', 'surface', 'surface-sunken', 'surface-muted'];
+const BACKGROUNDS = ['canvas', 'surface', 'surface-sunken', 'surface-muted', 'dock'];
 const TONES = ['brand', 'danger', 'warning', 'info'] as const;
+const TOOL_ACCENTS = Object.keys(designTokens.colors.light).filter((name) => name.startsWith('tool-'));
 
 /** [foreground, background, minimum ratio]: body text needs 4.5:1, UI boundaries 3:1. */
 const PAIRS: [string, string, number][] = [
@@ -47,6 +48,9 @@ const PAIRS: [string, string, number][] = [
     [`${tone}-fg`, `${tone}-emphasis`].flatMap((fg) =>
       [`${tone}-soft`, 'surface', 'canvas'].map((bg): [string, string, number] => [fg, bg, 4.5])
     )
+  ),
+  ...TOOL_ACCENTS.flatMap((tool) =>
+    ['surface', 'canvas'].map((bg): [string, string, number] => [tool, bg, 4.5])
   ),
   ...BACKGROUNDS.flatMap((bg) => [
     ['focus', bg, 3] as [string, string, number],
@@ -108,7 +112,11 @@ function listUiFiles(dir: string): string[] {
   });
 }
 
-const UI_FILES = [join(ROOT, 'entrypoints/sidepanel'), join(ROOT, 'src/components')].flatMap(listUiFiles);
+const UI_FILES = [
+  join(ROOT, 'entrypoints/sidepanel'),
+  join(ROOT, 'entrypoints/table'),
+  join(ROOT, 'src/components'),
+].flatMap(listUiFiles);
 
 describe('Side panel styling uses the tokens', () => {
   it('uses no raw palette colour classes, which would not follow dark mode', () => {
@@ -121,7 +129,8 @@ describe('Side panel styling uses the tokens', () => {
   });
 
   it('uses no classes that Tailwind 3 does not generate', () => {
-    const dead = /(?<![\w-])(?:animate-in|fade-in|zoom-in-\d+|py-0\.2)(?![\w-])/g;
+    const dead =
+      /(?<![\w-])(?:animate-in|fade-in|zoom-in-\d+|py-0\.2|text-3xs|text-4xs|outline-hidden|backdrop-blur-2xs)(?![\w-])/g;
     const offenders = UI_FILES.flatMap((file) =>
       Array.from(readFileSync(file, 'utf8').matchAll(dead), (m) => `${relative(ROOT, file)}: ${m[0]}`)
     );
@@ -130,7 +139,10 @@ describe('Side panel styling uses the tokens', () => {
 
   it('defines the small shadow and blur the components rely on', () => {
     expect(tailwindConfig.theme.extend.boxShadow.xs).toBeTruthy();
+    expect(tailwindConfig.theme.extend.boxShadow.dock).toBeTruthy();
     expect(tailwindConfig.theme.extend.backdropBlur.xs).toBeTruthy();
     expect(tailwindConfig.theme.extend.fontSize['2xs']).toBeTruthy();
+    expect(tailwindConfig.theme.extend.fontFamily.sans.length).toBeGreaterThan(2);
+    expect(tailwindConfig.theme.extend.fontFamily.mono.length).toBeGreaterThan(2);
   });
 });

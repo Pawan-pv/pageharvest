@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { PanelErrorBoundary } from '@/components/shell/PanelErrorBoundary';
 import './style.css';
+import '@/styles/craft.css';
 
 const rootElement = document.getElementById('root');
 

@@ -102,7 +102,7 @@ export const SimpleMyData: React.FC<SimpleMyDataProps> = ({
   return (
     <div className="flex flex-col gap-3 p-4 text-left">
       <div>
-        <h2 className="text-base font-semibold text-fg">My data</h2>
+        <h2 className="text-base ph-heading text-fg">My data</h2>
         <p className="text-body text-fg-muted mt-1">Every list you collect is saved here, on this computer.</p>
       </div>
 
@@ -163,12 +163,12 @@ export const SimpleMyData: React.FC<SimpleMyDataProps> = ({
                 <Card className="flex flex-col gap-2 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-fg break-words line-clamp-2">{dataset.name}</h3>
-                      <p className="mt-0.5 truncate text-body text-fg-muted">
+                      <h3 className="text-sm ph-heading text-fg break-words line-clamp-2">{dataset.name}</h3>
+                      <p className="mt-0.5 truncate text-body text-fg-muted ph-tabular">
                         {site || 'This page'} · {relativeTime(dataset.createdAt)}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-full border border-line/80 bg-surface-muted px-2 py-0.5 text-right text-2xs font-semibold tabular-nums text-fg-muted">
+                    <span className="shrink-0 rounded-full border border-line bg-surface-sunken px-2 py-0.5 text-right text-2xs font-semibold ph-tabular text-fg-muted">
                       {rowCount(dataset.recordsCount)}
                     </span>
                   </div>
