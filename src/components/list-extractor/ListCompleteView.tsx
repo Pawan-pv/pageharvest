@@ -143,14 +143,14 @@ export const ListCompleteView: React.FC<ListCompleteViewProps> = ({
         {/* Animated Draw-in Checkmark + one-shot 6-spark burst inside glowing emerald ring */}
         <div className="relative flex h-16 w-16 items-center justify-center mb-3">
           <div className="absolute inset-0 rounded-full bg-brand/20 blur-md" aria-hidden="true" />
-          <svg className="h-16 w-16" viewBox="0 0 64 64" aria-hidden="true">
+          <svg className="h-16 w-16 overflow-visible" viewBox="0 0 64 64" aria-hidden="true">
             {[0, 60, 120, 180, 240, 300].map((deg, idx) => (
               <g key={deg} transform={`translate(32 32) rotate(${deg})`}>
                 <line
                   x1="0"
-                  y1="-23"
+                  y1="-22"
                   x2="0"
-                  y2="-28"
+                  y2="-26"
                   stroke={idx % 2 === 0 ? 'rgb(var(--ph-brand))' : 'rgb(var(--ph-tool-teal))'}
                   strokeWidth="2.5"
                   strokeLinecap="round"

@@ -474,7 +474,15 @@ export const PageTextExtractorView: React.FC<PageTextExtractorViewProps> = ({ on
             metricLabel="PAGES SCANNED"
             status={error && !isRunning ? 'failed' : !isRunning ? 'completed' : isPaused ? 'paused' : 'running'}
             stageLabel="Page Text Extraction"
-            statusLabel={isRunning ? (isPaused ? 'Paused' : 'Extracting text…') : 'Complete'}
+            statusLabel={
+              error && !isRunning
+                ? 'Extraction Failed'
+                : isRunning
+                  ? isPaused
+                    ? 'Paused'
+                    : 'Extracting text…'
+                  : 'Complete'
+            }
             progressSummary={`Processed ${progress.processedUrls} of ${progress.totalUrls} URLs`}
             progressPercent={Math.min(
               100,
@@ -488,8 +496,8 @@ export const PageTextExtractorView: React.FC<PageTextExtractorViewProps> = ({ on
                   : undefined
             }
             errorMessage={error}
-            conveyorItems={previewRows.map((row, idx): HarvestConveyorItem => ({
-              id: String(row._id ?? idx),
+            conveyorItems={previewRows.map((row): HarvestConveyorItem => ({
+              id: String(row._id ?? String(row.URL || row.Title || '')),
               primary: String(row.Title || row.URL || ''),
               pills: [row['Estimated Tokens'] ? `~${String(row['Estimated Tokens'])} tokens` : ''].filter(Boolean),
             }))}

@@ -329,7 +329,7 @@ export const ShopifyExtractorView: React.FC<ShopifyExtractorViewProps> = ({
               metricLabel={granularity === 'variant' ? 'VARIANTS EXTRACTED' : 'PRODUCTS EXTRACTED'}
               status={error && !isRunning ? 'failed' : !isRunning && createdDatasetId ? 'completed' : 'running'}
               stageLabel="Shopify Catalog"
-              statusLabel={isRunning ? 'Syncing catalog…' : 'Complete'}
+              statusLabel={error && !isRunning ? 'Extraction Failed' : isRunning ? 'Syncing catalog…' : 'Complete'}
               progressSummary={`Products Found: ${progress?.productsFound ?? 0}`}
               pacingNotice={
                 progress?.status === 'rate_limited'

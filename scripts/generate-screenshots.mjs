@@ -175,6 +175,7 @@ async function main() {
     await repickBtn.click();
     await panel.getByText('Select a List Item').waitFor({ timeout: 15000 });
     await panel.getByText(/Hover/i).first().waitFor({ timeout: 15000 });
+    await panel.waitForTimeout(250);
     await captureDuo('focus-picker-mode');
 
     // Exit picker mode back to setup
@@ -186,6 +187,7 @@ async function main() {
     await panel.getByRole('button', { name: 'Start Extraction' }).click();
     await panel.getByText('Extraction complete').waitFor({ timeout: 60000 });
     await panel.getByRole('button', { name: /View data & export/i }).waitFor({ timeout: 15000 });
+    await panel.waitForTimeout(500);
     await captureDuo('extraction-complete');
 
     // 5. Full-Tab Workbench (table.html) at 1280x800

@@ -280,7 +280,7 @@ export default {
         'ph-tick-up': 'ph-tick-up 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
         'ph-row-enter': 'ph-row-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
         'ph-scan-beam': 'ph-scan-beam 2.2s ease-in-out infinite',
-        'ph-spark-burst': 'ph-spark-burst 750ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'ph-spark-burst': 'ph-spark-burst 750ms cubic-bezier(0.16, 1, 0.3, 1) both',
         'ph-cta-sheen': 'ph-cta-sheen 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
         'ph-aura-breathe': 'ph-aura-breathe 3s ease-in-out infinite',
         'ph-radar-ping': 'ph-radar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite',

@@ -401,7 +401,15 @@ export const EmailExtractorView: React.FC<EmailExtractorViewProps> = ({ onBack, 
             metricLabel="EMAILS FOUND"
             status={error && !isRunning ? 'failed' : !isRunning ? 'completed' : isPaused ? 'paused' : 'running'}
             stageLabel="Email Discovery"
-            statusLabel={isRunning ? (isPaused ? 'Paused' : 'Scanning pages…') : 'Complete'}
+            statusLabel={
+              error && !isRunning
+                ? 'Extraction Failed'
+                : isRunning
+                  ? isPaused
+                    ? 'Paused'
+                    : 'Scanning pages…'
+                  : 'Complete'
+            }
             progressSummary={`Processed ${progress.processedUrls} of ${progress.totalUrls} URLs`}
             progressPercent={Math.min(
               100,
@@ -415,8 +423,8 @@ export const EmailExtractorView: React.FC<EmailExtractorViewProps> = ({ onBack, 
                   : undefined
             }
             errorMessage={error}
-            conveyorItems={previewRows.map((row, idx): HarvestConveyorItem => ({
-              id: String(row._id ?? idx),
+            conveyorItems={previewRows.map((row): HarvestConveyorItem => ({
+              id: String(row._id ?? `${String(row.Email || '')}-${String(row['Source Page'] || '')}`),
               primary: String(row.Email || ''),
               pills: [String(row.Domain || ''), String(row['Found Via'] || '')].filter(Boolean),
             }))}

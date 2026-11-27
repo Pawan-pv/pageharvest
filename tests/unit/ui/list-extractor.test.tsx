@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import App from '~/entrypoints/sidepanel/App';
@@ -7,7 +9,7 @@ import {
   ListRunningView,
   ListCompleteView,
 } from '@/components/list-extractor';
-import { HarvestProgressStage } from '@/components/shared/HarvestProgressStage';
+import { HarvestProgressStage, recordsToConveyorItems } from '@/components/shared/HarvestProgressStage';
 import {
   useExtractionWorkflow,
   type DetectedList,
@@ -698,6 +700,7 @@ describe('5-State List Extractor Flow (Emerald Pulse)', () => {
       });
 
       expect(container.querySelector('.ph-check-draw')).toBeTruthy();
+      expect(container.querySelector('svg[viewBox="0 0 64 64"]')?.getAttribute('class')).toContain('overflow-visible');
       const primaryCta = screen.getByRole('button', { name: /View data & export/i });
       expect(primaryCta.className).toContain('ph-cta-sheen');
       expect(primaryCta.className).toContain('motion-reduce:animate-none');
@@ -779,6 +782,104 @@ describe('5-State List Extractor Flow (Emerald Pulse)', () => {
       expect(screen.getByText('Paused')).toBeInTheDocument();
       expect(screen.getByText('Paused — press Resume to continue')).toBeInTheDocument();
       expect(container.querySelectorAll('img')).toHaveLength(0);
+    });
+
+    it('preserves internal elapsed seconds across Pause and Resume when count is 0 and resets only on a fresh run', () => {
+      vi.useFakeTimers();
+      try {
+        const { rerender } = render(
+          <HarvestProgressStage count={0} metricLabel="PAGES EXTRACTED" status="running" />
+        );
+
+        act(() => {
+          vi.advanceTimersByTime(4000);
+        });
+        expect(screen.getByText('4s')).toBeInTheDocument();
+
+        rerender(<HarvestProgressStage count={0} metricLabel="PAGES EXTRACTED" status="paused" />);
+        expect(screen.getByText('4s')).toBeInTheDocument();
+
+        rerender(<HarvestProgressStage count={0} metricLabel="PAGES EXTRACTED" status="running" />);
+        expect(screen.getByText('4s')).toBeInTheDocument();
+
+        rerender(<HarvestProgressStage count={0} metricLabel="PAGES EXTRACTED" status="completed" />);
+        rerender(<HarvestProgressStage count={0} metricLabel="PAGES EXTRACTED" status="running" />);
+        expect(screen.getByText('0s')).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('filters image and HTML fields in recordsToConveyorItems and preserves stable keys across prepends', () => {
+      const baseRecords: ExtractedRecord[] = [
+        {
+          _id: '',
+          _page: 1,
+          _extractedAt: 1000,
+          Title: 'Trail Stove',
+          'Body (HTML)': '<p>Ultralight stove</p>',
+          'Image Src': 'https://cdn.example.com/stove?v=1',
+          'Variant Image': 'https://cdn.example.com/variant?v=2',
+          'Variant Price': '$64',
+        },
+      ];
+      const first = recordsToConveyorItems(baseRecords, 4);
+      expect(first).toHaveLength(1);
+      expect(first[0].primary).toBe('Trail Stove');
+      expect(first[0].pills).toEqual(['$64']);
+
+      const second = recordsToConveyorItems(
+        [
+          ...baseRecords,
+          {
+            _id: '',
+            _page: 1,
+            _extractedAt: 2000,
+            Title: 'Field Bag',
+            'OG Image': 'https://cdn.example.com/bag?v=1',
+            'Variant Price': '$128',
+          },
+        ],
+        4
+      );
+      expect(second).toHaveLength(2);
+      expect(second[0].primary).toBe('Field Bag');
+      expect(second[1].id).toBe(first[0].id);
+    });
+
+    it('emits concrete @keyframes definitions in sidepanel/style.css and table/style.css for all Harvest Motion primitives', () => {
+      const sidepanelCss = readFileSync(resolve(process.cwd(), 'entrypoints/sidepanel/style.css'), 'utf8');
+      for (const name of [
+        'ph-orbit-slow',
+        'ph-ring-spin',
+        'ph-harvest-pulse',
+        'ph-tick-up',
+        'ph-row-enter',
+        'ph-scan-beam',
+        'ph-spark-burst',
+        'ph-cta-sheen',
+        'ph-check-draw',
+        'ph-aura-breathe',
+        'ph-radar-ping',
+        'ph-pop-in',
+        'ph-shimmer',
+      ]) {
+        expect(sidepanelCss).toContain(`@keyframes ${name}`);
+      }
+
+      const tableCss = readFileSync(resolve(process.cwd(), 'entrypoints/table/style.css'), 'utf8');
+      for (const name of [
+        'ph-orbit-slow',
+        'ph-ring-spin',
+        'ph-harvest-pulse',
+        'ph-tick-up',
+        'ph-row-enter',
+        'ph-scan-beam',
+        'ph-aura-breathe',
+        'ph-shimmer',
+      ]) {
+        expect(tableCss).toContain(`@keyframes ${name}`);
+      }
     });
   });
 

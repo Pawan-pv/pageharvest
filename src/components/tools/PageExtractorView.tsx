@@ -579,21 +579,30 @@ export const PageExtractorView: React.FC<PageExtractorViewProps> = ({ onBack, on
             metricLabel="PAGES EXTRACTED"
             status={error && !isRunning ? 'failed' : !isRunning && createdDatasetId ? 'completed' : isPaused ? 'paused' : 'running'}
             stageLabel="Page Extractor"
-            statusLabel={isRunning ? (isPaused ? 'Paused' : 'Harvesting URLs…') : 'Complete'}
+            statusLabel={
+              error && !isRunning
+                ? 'Extraction Failed'
+                : isRunning
+                  ? isPaused
+                    ? 'Paused'
+                    : 'Harvesting URLs…'
+                  : 'Complete'
+            }
             progressSummary={`Progress: ${progress.processedUrls} / ${progress.totalUrls}`}
             progressPercent={Math.round((progress.processedUrls / Math.max(progress.totalUrls, 1)) * 100)}
             pacingNotice={isRunning ? 'Keep this panel or workbench tab open while running' : undefined}
             errorMessage={error}
-            conveyorItems={previewRows.map((row, idx): HarvestConveyorItem => {
+            conveyorItems={previewRows.map((row): HarvestConveyorItem => {
               let host = '';
               try {
                 if (row.URL) host = new URL(String(row.URL)).hostname;
               } catch {
                 // Ignore invalid URL
               }
+              const primary = String(row['Title'] || row['Schema Name'] || row.URL || 'Page');
               return {
-                id: String(row._id ?? `${row.URL}-${idx}`),
-                primary: String(row['Title'] || row['Schema Name'] || row.URL || 'Page'),
+                id: String(row._id ?? `${row.URL ?? primary}`),
+                primary,
                 pills: [
                   row['Price'] ? `${String(row['Price'])} ${String(row['Currency'] || '')}`.trim() : '',
                   host,

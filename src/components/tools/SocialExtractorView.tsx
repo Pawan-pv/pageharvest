@@ -441,7 +441,15 @@ export const SocialExtractorView: React.FC<SocialExtractorViewProps> = ({ onBack
             metricLabel="PROFILES FOUND"
             status={error && !isRunning ? 'failed' : !isRunning ? 'completed' : isPaused ? 'paused' : 'running'}
             stageLabel="Social Discovery"
-            statusLabel={isRunning ? (isPaused ? 'Paused' : 'Scanning profiles…') : 'Complete'}
+            statusLabel={
+              error && !isRunning
+                ? 'Extraction Failed'
+                : isRunning
+                  ? isPaused
+                    ? 'Paused'
+                    : 'Scanning profiles…'
+                  : 'Complete'
+            }
             progressSummary={`Processed ${progress.processedUrls} of ${progress.totalUrls} URLs`}
             progressPercent={Math.min(
               100,
@@ -455,8 +463,8 @@ export const SocialExtractorView: React.FC<SocialExtractorViewProps> = ({ onBack
                   : undefined
             }
             errorMessage={error}
-            conveyorItems={previewRows.map((row, idx): HarvestConveyorItem => ({
-              id: String(row._id ?? idx),
+            conveyorItems={previewRows.map((row): HarvestConveyorItem => ({
+              id: String(row._id ?? `${String(row.Platform || '')}-${String(row.Handle || row['Profile URL'] || '')}`),
               primary: String(row.Handle || row['Profile URL'] || ''),
               pills: [String(row.Platform || ''), String(row['Source Page'] || '')].filter(Boolean),
             }))}

@@ -53,12 +53,13 @@ export function formatElapsedSeconds(seconds: number): string {
 }
 
 const IMAGE_EXT_RE = /\.(?:png|jpe?g|gif|webp|svg|avif)(?:[?#].*)?$/i;
+const SKIP_PILL_KEY_RE = /(?:image|img|thumb|avatar|photo|html)/i;
 
 function toPillValue(key: string, val: unknown): string | null {
   if (val === null || val === undefined) return null;
+  if (SKIP_PILL_KEY_RE.test(key)) return null;
   const str = String(val).trim();
-  if (!str) return null;
-  if (/^image$/i.test(key) || IMAGE_EXT_RE.test(str)) return null;
+  if (!str || str.startsWith('<') || IMAGE_EXT_RE.test(str)) return null;
   if (/^https?:\/\//i.test(str)) {
     try {
       return new URL(str).hostname;
@@ -70,16 +71,18 @@ function toPillValue(key: string, val: unknown): string | null {
 }
 
 export function recordsToConveyorItems(records: ExtractedRecord[], limit = 4): HarvestConveyorItem[] {
+  const seenCounts = new Map<string, number>();
   return records
     .slice(-limit)
     .reverse()
-    .map((rec, idx) => {
+    .map((rec) => {
       let primary = '';
       const pills: string[] = [];
       for (const [key, val] of Object.entries(rec)) {
         if (key === 'id' || key === 'datasetId' || key.startsWith('_')) continue;
+        if (SKIP_PILL_KEY_RE.test(key)) continue;
         const str = typeof val === 'string' || typeof val === 'number' ? String(val).trim() : '';
-        if (!str) continue;
+        if (!str || str.startsWith('<')) continue;
         if (!primary && !IMAGE_EXT_RE.test(str) && !/^https?:\/\//i.test(str)) {
           primary = str;
           continue;
@@ -92,14 +95,25 @@ export function recordsToConveyorItems(records: ExtractedRecord[], limit = 4): H
       if (!primary) {
         for (const [key, val] of Object.entries(rec)) {
           if (key === 'id' || key === 'datasetId' || key.startsWith('_')) continue;
-          if (typeof val === 'string' && val.trim()) {
+          if (SKIP_PILL_KEY_RE.test(key)) continue;
+          if (typeof val === 'string' && val.trim() && !val.trim().startsWith('<')) {
             primary = val.trim();
             break;
           }
         }
       }
+      const rawId = rec._id ?? rec.id;
+      let id: string;
+      if (rawId !== undefined && rawId !== null && String(rawId).trim()) {
+        id = String(rawId);
+      } else {
+        const base = primary || 'captured';
+        const seen = seenCounts.get(base) ?? 0;
+        seenCounts.set(base, seen + 1);
+        id = seen === 0 ? base : `${base}#${seen}`;
+      }
       return {
-        id: String(rec._id ?? rec.id ?? `${idx}-${primary}`),
+        id,
         primary: primary || 'Captured item',
         pills,
       };
@@ -132,10 +146,13 @@ export const HarvestProgressStage: React.FC<HarvestProgressStageProps> = ({
 
   // Internal elapsed seconds fallback for tool views that don't track a timer externally
   const [autoElapsed, setAutoElapsed] = useState(0);
+  const prevStatusRef = useRef<HarvestStageStatus>(status);
   const isZeroCount = count === 0;
   useEffect(() => {
+    const prevStatus = prevStatusRef.current;
+    prevStatusRef.current = status;
     if (elapsedSeconds !== undefined) return;
-    if (isRunning && isZeroCount) {
+    if (isRunning && isZeroCount && prevStatus !== 'paused' && prevStatus !== 'running') {
       setAutoElapsed(0);
     }
     if (!isRunning) return;
@@ -143,7 +160,7 @@ export const HarvestProgressStage: React.FC<HarvestProgressStageProps> = ({
       setAutoElapsed((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(id);
-  }, [elapsedSeconds, isRunning, isZeroCount]);
+  }, [elapsedSeconds, isRunning, isZeroCount, status]);
 
   const elapsed = elapsedSeconds ?? autoElapsed;
   const computedSpeed = speedText ?? `${(elapsed > 0 ? count / elapsed : 0).toFixed(1)}/s`;
