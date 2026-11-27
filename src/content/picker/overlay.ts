@@ -225,7 +225,7 @@ export class PickerOverlay {
       const fragment = document.createDocumentFragment();
 
       matches.forEach((el) => {
-        if (el === currentElement) return;
+        if (el === currentElement || el.contains(currentElement)) return;
         if (this.isPickerElement(el)) return;
 
         const rect = el.getBoundingClientRect();
@@ -418,6 +418,10 @@ export class PickerOverlay {
   public destroy(): void {
     if (this.hostElement && this.hostElement.parentNode) {
       this.hostElement.parentNode.removeChild(this.hostElement);
+    }
+    const residual = typeof document !== 'undefined' ? document.getElementById(OVERLAY_HOST_ID) : null;
+    if (residual && residual !== this.hostElement && residual.parentNode) {
+      residual.parentNode.removeChild(residual);
     }
     this.hostElement = null;
     this.shadowRoot = null;

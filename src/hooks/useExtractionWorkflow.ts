@@ -309,6 +309,21 @@ export function useExtractionWorkflow(tab: TabInfo) {
   /** The list's tab id, for messages about the list. Undefined before anything is bound. */
   const listTabId = () => listSourceRef.current?.tabId;
 
+  const stopPickerQuietly = useCallback(async () => {
+    pickTargetRef.current = 'list';
+    setPickTarget('list');
+    setIsVisualPicking(false);
+    if (!pickerActiveRef.current) return;
+    pickerActiveRef.current = false;
+    const tabId = listTabId();
+    releasePicker();
+    try {
+      await messagingService.stopElementPicker(tabId);
+    } catch (err) {
+      console.warn('Could not cleanly stop element picker:', err);
+    }
+  }, [releasePicker]);
+
   const handleOperationError = useCallback((error: unknown, fallbackView: WorkflowView) => {
     console.warn('PageHarvest operation failed:', errorText(error));
     setOperationError(operationErrorFrom(error));
@@ -511,7 +526,10 @@ export function useExtractionWorkflow(tab: TabInfo) {
             break;
           }
 
-          if (!pickerActiveRef.current || viewRef.current !== 'inspecting') {
+          if (
+            !pickerActiveRef.current ||
+            (viewRef.current !== 'inspecting' && viewRef.current !== 'review_list')
+          ) {
             break;
           }
 
@@ -522,6 +540,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
           // Auto-trigger list detection using this selected element
           messagingService.detectRepeatedElements(selector, undefined, listTabId()).catch((err: unknown) => {
             if (detectRunIdRef.current !== runId) return;
+            void stopPickerQuietly();
             setOperationError({ message: errorText(err) });
           });
           break;
@@ -545,11 +564,28 @@ export function useExtractionWorkflow(tab: TabInfo) {
         }
 
         case 'SELECTION_CONFIRMED': {
+          const confirmedSelector = message.payload.selector;
           pickerActiveRef.current = false;
           pickTargetRef.current = 'list';
           setPickTarget('list');
           setIsVisualPicking(false);
           releasePicker();
+          const tabId = listTabId();
+          void messagingService.stopElementPicker(tabId).catch((err) => {
+            console.warn('Could not cleanly stop element picker:', err);
+          });
+          if (
+            confirmedSelector &&
+            viewRef.current === 'inspecting' &&
+            awaitingDetectRunIdRef.current === null
+          ) {
+            const runId = detectRunIdRef.current;
+            awaitingDetectRunIdRef.current = runId;
+            messagingService.detectRepeatedElements(confirmedSelector, undefined, tabId).catch((err: unknown) => {
+              if (detectRunIdRef.current !== runId) return;
+              setOperationError({ message: errorText(err) });
+            });
+          }
           break;
         }
 
@@ -620,7 +656,7 @@ export function useExtractionWorkflow(tab: TabInfo) {
     });
 
     return () => unsubscribe();
-  }, [refreshFollowedJob, refreshRecoverableJobs, releasePicker, setView]);
+  }, [refreshFollowedJob, refreshRecoverableJobs, releasePicker, setView, stopPickerQuietly]);
 
   // A panel that closes lets go of the picker, so the page stops it. Chrome closes the port
   // too when the panel's document goes away; this covers an unmount without that.
@@ -703,21 +739,6 @@ export function useExtractionWorkflow(tab: TabInfo) {
       handleOperationError(err, returnView);
     }
   }, [bindToTab, detectedList, handleOperationError, releasePicker, setView, tab]);
-
-  const stopPickerQuietly = useCallback(async () => {
-    pickTargetRef.current = 'list';
-    setPickTarget('list');
-    setIsVisualPicking(false);
-    if (!pickerActiveRef.current) return;
-    pickerActiveRef.current = false;
-    const tabId = listTabId();
-    releasePicker();
-    try {
-      await messagingService.stopElementPicker(tabId);
-    } catch (err) {
-      console.warn('Could not cleanly stop element picker:', err);
-    }
-  }, [releasePicker]);
 
   const cancelVisualPicker = useCallback(async () => {
     detectRunIdRef.current += 1;

@@ -14,11 +14,13 @@ import { detectTables, tableFields } from '@/core/extraction/table-extractor';
 import { DetectedListResult } from '@/types/detection';
 import {
   autoDetectLists,
+  buildDetectedListFromMatchedElements,
   discoverFieldsInCluster,
   detectListFromSelection,
   suggestionsToFieldDefinitions,
   attachFieldAnchors,
 } from '@/core/detection';
+import { generateSelectorCandidates } from '@/content/picker/selector-engine';
 import {
   CommitOutcome,
   JobBatchPayload,
@@ -370,11 +372,39 @@ export function createContentWorkflowCoordinator(
         candidates = detectLinkRegions(root);
         if (candidates.length === 0) throw new DetectionError('No links were found on this page.');
       } else if (targetSelector) {
-        const target = root.querySelector(targetSelector);
+        let matched: Element[];
+        try {
+          matched = Array.from(root.querySelectorAll(targetSelector));
+        } catch {
+          matched = [];
+        }
+        const target = matched[0];
         if (!target) {
           throw new DetectionError(`The selected element could not be found for selector "${targetSelector}".`);
         }
-        const picked = detectListFromSelection(target);
+        let picked = detectListFromSelection(target);
+        if (!picked && matched.length >= 2) {
+          picked = buildDetectedListFromMatchedElements(matched, targetSelector);
+        }
+        if (!picked) {
+          const similarCandidate = generateSelectorCandidates(target).find(
+            (c) =>
+              c.matchCount >= 2 &&
+              (c.strategy === 'semantic-class' ||
+                c.strategy === 'semantic-attribute' ||
+                c.strategy === 'hierarchy')
+          );
+          if (similarCandidate) {
+            try {
+              const candMatches = Array.from(root.querySelectorAll(similarCandidate.selector));
+              if (candMatches.length >= 2) {
+                picked = buildDetectedListFromMatchedElements(candMatches, similarCandidate.selector);
+              }
+            } catch {
+              // Ignore invalid candidate selector
+            }
+          }
+        }
         candidates = picked ? [listCandidateOf(picked)] : [];
       } else {
         candidates = autoDetectLists(root).map(listCandidateOf);

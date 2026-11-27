@@ -6,6 +6,7 @@
 
 import { PickerOverlay } from './overlay';
 import { isPageHarvestOverlayMutation } from '@/utils/dom';
+import { detectListFromSelection } from '@/core/detection';
 import {
   generateBestSelector,
   generateSelectorCandidates,
@@ -93,8 +94,6 @@ export class ElementPicker {
    * Stops the picker, removes all listeners and completely cleans up the DOM.
    */
   public stop(): void {
-    if (this.mode === 'inactive') return;
-
     this.mode = 'inactive';
     this.currentHoverElement = null;
     this.selectedElement = null;
@@ -116,7 +115,7 @@ export class ElementPicker {
       this.mutationObserver = null;
     }
 
-    // 3. Destroy overlay
+    // 3. Always destroy overlay (even if already inactive)
     this.overlay.destroy();
   }
 
@@ -176,22 +175,26 @@ export class ElementPicker {
    * Confirms the current selection and stops the picker.
    */
   public confirm(): void {
-    if (this.selectedInfo) {
-      if (this.options.onConfirm) {
+    try {
+      if (this.selectedInfo && this.options.onConfirm) {
         this.options.onConfirm(this.selectedInfo);
       }
+    } finally {
+      this.stop();
     }
-    this.stop();
   }
 
   /**
    * Cancels the selection and stops the picker.
    */
   public cancel(): void {
-    if (this.options.onCancel) {
-      this.options.onCancel();
+    try {
+      if (this.options.onCancel) {
+        this.options.onCancel();
+      }
+    } finally {
+      this.stop();
     }
-    this.stop();
   }
 
   /**
@@ -428,15 +431,34 @@ export class ElementPicker {
     const selectorCandidates = generateSelectorCandidates(element);
     const crossFrame = assessTargetElementFrame(element);
 
+    let detectedSelector: string | undefined;
+    let detectedCount = 0;
+    if (!this.isAltHeld) {
+      try {
+        const detected = detectListFromSelection(element);
+        if (detected && detected.itemCount >= 2) {
+          detectedSelector = detected.itemSelector;
+          detectedCount = detected.itemCount;
+        }
+      } catch {
+        detectedSelector = undefined;
+        detectedCount = 0;
+      }
+    }
+
     // Identify similar / repeated pattern selector
     const similarCandidate = selectorCandidates.find(
       (c) => c.matchCount > 1 && (c.strategy === 'semantic-class' || c.strategy === 'semantic-attribute' || c.strategy === 'hierarchy')
     );
-    const similarSelector = !this.isAltHeld && similarCandidate ? similarCandidate.selector : undefined;
+    const similarSelector = !this.isAltHeld
+      ? detectedSelector ?? (similarCandidate ? similarCandidate.selector : undefined)
+      : undefined;
 
     let matchCount = 1;
     if (!this.isAltHeld) {
-      if (similarCandidate) {
+      if (detectedCount >= 2) {
+        matchCount = detectedCount;
+      } else if (similarCandidate) {
         matchCount = similarCandidate.matchCount;
       } else {
         try {

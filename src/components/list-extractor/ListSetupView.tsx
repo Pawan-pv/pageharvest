@@ -108,7 +108,7 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 text-left">
+    <div className="flex flex-col gap-4 p-4 pb-6 text-left">
       {/* CARD 1: Select List */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
@@ -499,8 +499,8 @@ export const ListSetupView: React.FC<ListSetupViewProps> = ({
         )}
       </div>
 
-      {/* Sticky Bottom Primary CTA */}
-      <div className="sticky bottom-0 mt-auto rounded-xl border border-line bg-canvas/95 p-3 backdrop-blur-md">
+      {/* Bottom Primary CTA (non-overlapping clearance below options) */}
+      <div className="mt-1 shrink-0 rounded-xl border border-line bg-canvas p-3">
         <button
           type="button"
           onClick={onStartExtraction}

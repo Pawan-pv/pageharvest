@@ -5,25 +5,36 @@ import {
   CandidateSample,
 } from '@/types/detection';
 import { getBoundedAncestry, sampleElements } from './cache';
-import { clusterSiblings } from './similarity';
+import { calculateTreeSimilarity, clusterSiblings } from './similarity';
 import { calculateConfidence } from './confidence';
 import { discoverFieldsInCluster } from './fields';
 import { generateRepeatedSelector, createCandidateSample } from './repeated';
-import { escapeCss, filterMeaningfulClasses, isDynamicId } from '@/utils/selector';
+import {
+  escapeCss,
+  filterMeaningfulClasses,
+  getDurableAttributeSelector,
+  isDynamicId,
+  isUniqueId,
+} from '@/utils/selector';
 import { attachFieldAnchors, buildContainerAnchor } from './anchors';
 
 /**
- * Fast selector generator for a parent container avoiding expensive document-wide scans
+ * Fast selector generator for a parent container avoiding duplicate IDs.
  */
-function getFastParentSelector(parent: Element): string {
-  if (parent.id && !isDynamicId(parent.id)) {
+function getFastParentSelector(parent: Element, root: Document | Element = parent.ownerDocument ?? document): string {
+  if (parent.id && !isDynamicId(parent.id) && isUniqueId(parent.id, root)) {
     return `#${escapeCss(parent.id)}`;
+  }
+  const tag = parent.tagName.toLowerCase();
+  const attr = getDurableAttributeSelector(parent);
+  if (attr) {
+    return `${tag}${attr}`;
   }
   const meaningful = filterMeaningfulClasses(parent.classList);
   if (meaningful.length > 0) {
-    return `${parent.tagName.toLowerCase()}.${meaningful.map(escapeCss).join('.')}`;
+    return `${tag}.${meaningful.map(escapeCss).join('.')}`;
   }
-  return parent.tagName.toLowerCase();
+  return tag;
 }
 
 /**
@@ -102,9 +113,197 @@ export function inferListName(
   return 'Item list';
 }
 
+function buildDetectedListResult(
+  matchedElements: Element[],
+  parent: Element,
+  itemSelector: string,
+  fields: DiscoveredField[],
+  confidence: number,
+  confidencePercent: number,
+  confidenceFactors: import('@/types/detection').ConfidenceFactors,
+  sampleLimit: number,
+  evidence: string[]
+): DetectedListResult {
+  const parentSel = getFastParentSelector(parent, matchedElements[0].ownerDocument ?? document);
+  const listName = inferListName(matchedElements, parent, fields);
+  const samples: CandidateSample[] = sampleElements(matchedElements, sampleLimit).map(
+    createCandidateSample
+  );
+
+  return {
+    name: listName,
+    containerSelector: itemSelector,
+    containerAnchor:
+      buildContainerAnchor(matchedElements[0].parentElement ?? parent, matchedElements[0], itemSelector) ??
+      undefined,
+    parentSelector: parentSel,
+    itemSelector,
+    itemCount: matchedElements.length,
+    confidence,
+    confidencePercent,
+    confidenceFactors,
+    availableFields: attachFieldAnchors(fields, matchedElements[0]),
+    sampleElements: samples,
+    matchedElements,
+    credible: true,
+    evidence,
+  };
+}
+
 /**
- * Core Algorithm: Detects the enclosing repeated list and similar items starting
- * from any selected element context.
+ * Builds a DetectedListResult directly from an explicit list of >= 2 matched DOM elements
+ * when pattern clustering did not emit a structural list (e.g., heterogeneous user selection).
+ */
+export function buildDetectedListFromMatchedElements(
+  elements: Element[],
+  selector: string,
+  options?: DetectionOptions
+): DetectedListResult | null {
+  if (elements.length < (options?.minItems ?? 2)) return null;
+  const parent = elements[0].parentElement ?? elements[0].ownerDocument?.body ?? elements[0];
+  const fields = discoverFieldsInCluster(elements, options?.heuristics);
+  const { confidence, confidencePercent, factors } = calculateConfidence({
+    items: elements,
+    parent,
+    discoveredFields: fields,
+    totalSiblingCount: Math.max(elements.length, parent.children.length),
+  });
+  return buildDetectedListResult(
+    elements,
+    parent,
+    selector,
+    fields,
+    Math.max(confidence, 0.35),
+    Math.max(confidencePercent, 35),
+    factors,
+    options?.sampleLimit ?? 5,
+    ['matched your selection']
+  );
+}
+
+/**
+ * Builds a semantic or structural selector for a repeating container wrapper that may appear
+ * multiple times (e.g., chunked infinite-scroll blocks or row wrappers). Returns null if the
+ * container has no semantic class or durable attribute to identify it across chunks.
+ */
+function getGeneralizedWrapperSelector(container: Element): string | null {
+  const tag = container.tagName.toLowerCase();
+  const attr = getDurableAttributeSelector(container);
+  if (attr) return `${tag}${attr}`;
+  const classes = filterMeaningfulClasses(container.classList);
+  if (classes.length > 0) {
+    return `${tag}.${classes.slice(0, 2).map(escapeCss).join('.')}`;
+  }
+  return null;
+}
+
+/**
+ * Expands a repeated item cluster across structurally matching sibling/same-region containers
+ * (e.g., infinite-scroll grid chunks or row-wrapped cards) while staying inside the same region.
+ */
+function expandAcrossMatchingContainers(
+  candidateParent: Element,
+  targetCluster: Element[],
+  searchRoot: Document
+): { containers: Element[]; items: Element[] } {
+  const singleResult = { containers: [candidateParent], items: targetCluster };
+  if (targetCluster.length === 0) return singleResult;
+
+  const repItem = targetCluster[0];
+  const mainRegion = candidateParent.closest('main, [role="main"]');
+  const parentOfContainer = candidateParent.parentElement;
+  const wrapperSelector = getGeneralizedWrapperSelector(candidateParent);
+  const isNavSource = isInNavigationRegion(candidateParent);
+  const isSecondarySource = isSecondaryContent(candidateParent);
+
+  let matchingWrappers: Element[] = [];
+  if (wrapperSelector) {
+    try {
+      matchingWrappers = Array.from(searchRoot.querySelectorAll(wrapperSelector)).filter((el) => {
+        if (el === candidateParent) return true;
+        if (mainRegion && !mainRegion.contains(el)) return false;
+        if (!mainRegion && el.closest('main, [role="main"]') !== null) return false;
+        if (!isNavSource && isInNavigationRegion(el)) return false;
+        if (!isSecondarySource && isSecondaryContent(el)) return false;
+        return true;
+      });
+    } catch {
+      matchingWrappers = [];
+    }
+  } else if (parentOfContainer) {
+    // Classless wrappers (e.g. row divs) only aggregate with siblings under the same parent
+    matchingWrappers = Array.from(parentOfContainer.children).filter(
+      (el) => el.tagName === candidateParent.tagName
+    );
+  }
+
+  if (matchingWrappers.length <= 1) return singleResult;
+
+  const aggregatedContainers: Element[] = [];
+  const aggregatedItems: Element[] = [];
+
+  for (const wrapper of matchingWrappers) {
+    const clusters = clusterSiblings(wrapper, repItem);
+    const matchingCluster = clusters.find(
+      (c) => c.length > 0 && calculateTreeSimilarity(c[0], repItem) >= 0.65
+    );
+    if (matchingCluster && matchingCluster.length > 0) {
+      aggregatedContainers.push(wrapper);
+      aggregatedItems.push(...matchingCluster);
+    }
+  }
+
+  if (aggregatedItems.length > targetCluster.length && aggregatedContainers.length > 1) {
+    return { containers: aggregatedContainers, items: aggregatedItems };
+  }
+  return singleResult;
+}
+
+/**
+ * True when an element acts purely as a layout/chunk wrapper around an inner repeating rich list
+ * (e.g. an outer grid chunk or row container with >= 80% of its text inside inner repeating cards).
+ */
+function isLayoutOrChunkWrapper(sampleItem: Element, heuristics?: DetectionOptions['heuristics']): boolean {
+  const totalTextLen = (sampleItem.textContent ?? '').trim().length;
+  if (totalTextLen === 0) return false;
+
+  const queue: Array<{ el: Element; depth: number }> = [{ el: sampleItem, depth: 0 }];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current.el.children.length >= 2 && !SKIPPED_PARENT_TAGS.has(current.el.tagName)) {
+      for (const cluster of clusterSiblings(current.el)) {
+        if (cluster.length < 2 || NON_RECORD_TAGS.has(cluster[0].tagName)) continue;
+        const innerFields = discoverFieldsInCluster(cluster, heuristics, { sampleSize: 4 });
+        const innerTypes = new Set(innerFields.filter((f) => f.coverage >= 0.5).map((f) => f.type));
+        const hasRichFields =
+          innerFields.filter((f) => f.coverage >= 0.5).length >= 2 ||
+          innerTypes.has('price') ||
+          innerTypes.has('link');
+        if (!hasRichFields) continue;
+
+        const innerTextLen = cluster.reduce(
+          (sum, child) => sum + (child.textContent ?? '').trim().length,
+          0
+        );
+        if (innerTextLen / totalTextLen >= 0.8) {
+          return true;
+        }
+      }
+    }
+    if (current.depth < 2) {
+      for (const child of Array.from(current.el.children)) {
+        if (!SKIPPED_PARENT_TAGS.has(child.tagName)) {
+          queue.push({ el: child, depth: current.depth + 1 });
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Core Algorithm: Bidirectional (Walk-Up + Drill-Down) + Cross-Container list detection
+ * starting from any hovered or clicked element context.
  */
 export function detectListFromSelection(
   targetElement: Element,
@@ -114,16 +313,14 @@ export function detectListFromSelection(
   const minItems = options?.minItems ?? 2;
   const minConfidence = options?.minConfidence ?? 0.35;
   const sampleLimit = options?.sampleLimit ?? 5;
-
-  // Walk up from target element
-  const ancestry = getBoundedAncestry(targetElement, maxDepth);
-  if (ancestry.length === 0) return null;
+  const searchRoot = targetElement.ownerDocument ?? document;
 
   interface CandidateEvaluation {
     itemSelector: string;
     containerSelector: string;
     parentSelector: string;
     matchedElements: Element[];
+    containers: Element[];
     parent: Element;
     fields: DiscoveredField[];
     confidence: number;
@@ -134,76 +331,100 @@ export function detectListFromSelection(
   }
 
   const evaluations: CandidateEvaluation[] = [];
+  const seenClusterKeys = new Set<string>();
 
+  const evaluateCluster = (
+    parent: Element,
+    cluster: Element[],
+    depthDistance: number,
+    direction: 'walk_up' | 'drill_down'
+  ) => {
+    if (cluster.length < minItems || NON_RECORD_TAGS.has(cluster[0].tagName)) return;
+
+    const expanded = expandAcrossMatchingContainers(parent, cluster, searchRoot);
+    const matchedElements = expanded.items;
+    if (matchedElements.length < minItems) return;
+
+    const dedupeKey = `${matchedElements[0].tagName}:${matchedElements.length}:${getFastParentSelector(parent, searchRoot)}`;
+    if (seenClusterKeys.has(dedupeKey) && evaluations.some((e) => e.matchedElements[0] === matchedElements[0] && e.matchedElements.length === matchedElements.length)) {
+      return;
+    }
+    seenClusterKeys.add(dedupeKey);
+
+    const fields = discoverFieldsInCluster(matchedElements, options?.heuristics);
+    const { confidence, confidencePercent, factors } = calculateConfidence({
+      items: matchedElements,
+      parent,
+      discoveredFields: fields,
+      totalSiblingCount: parent.children.length,
+    });
+
+    if (confidence < minConfidence) return;
+
+    const parentSel = getFastParentSelector(parent, searchRoot);
+    const repeatedSelector = generateRepeatedSelector(parent, matchedElements[0]);
+
+    const meaningfulColumns = fields.filter((f) => f.coverage >= 0.5).length;
+    const richnessBonus =
+      meaningfulColumns >= 3 ? 1.2 : meaningfulColumns === 2 ? 1.05 : meaningfulColumns === 1 ? 0.85 : 0.65;
+    const wrapsInner = isLayoutOrChunkWrapper(matchedElements[0], options?.heuristics);
+    const wrapperPenalty = wrapsInner ? 0.25 : 1.0;
+    const proximityBonus = direction === 'walk_up' ? 1 / (1 + depthDistance * 0.12) : 1 / (1 + depthDistance * 0.08);
+    const score =
+      confidence *
+      Math.log2(matchedElements.length + 1) *
+      richnessBonus *
+      proximityBonus *
+      wrapperPenalty;
+
+    evaluations.push({
+      itemSelector: repeatedSelector,
+      containerSelector: repeatedSelector,
+      parentSelector: parentSel,
+      matchedElements,
+      containers: expanded.containers,
+      parent,
+      fields,
+      confidence,
+      confidencePercent,
+      factors,
+      depthDistance,
+      score,
+    });
+  };
+
+  // 1. Walk-Up Search along bounded ancestry
+  const ancestry = getBoundedAncestry(targetElement, maxDepth);
   for (let d = 0; d < ancestry.length; d++) {
     const candidateItem = ancestry[d];
     const candidateParent = candidateItem.parentElement;
-    if (!candidateParent) continue;
+    if (!candidateParent || SKIPPED_PARENT_TAGS.has(candidateParent.tagName)) continue;
 
-    // Cluster siblings of candidateParent that match candidateItem
     const clusters = clusterSiblings(candidateParent, candidateItem);
     const targetCluster = clusters.find((c) => c.includes(candidateItem));
-
     if (targetCluster && targetCluster.length >= minItems) {
-      const repeatedSelector = generateRepeatedSelector(candidateParent, candidateItem);
-      let matchedElements: Element[] = targetCluster;
+      evaluateCluster(candidateParent, targetCluster, d, 'walk_up');
+    }
+  }
 
-      // The rows of one grid are one list. The same selector elsewhere on the page is
-      // not: that is how a site menu or a recommendations block gets mixed in.
-      if (targetCluster.length < 5 && candidateParent.children.length < 50) {
-        try {
-          const rows = Array.from(document.querySelectorAll(repeatedSelector)).filter(
-            (element) =>
-              element.parentElement?.parentElement === candidateParent.parentElement &&
-              candidateParent.parentElement !== null
-          );
-          if (rows.length >= targetCluster.length && rows.includes(candidateItem)) {
-            matchedElements = rows;
-          }
-        } catch {
-          matchedElements = targetCluster;
-        }
+  // 2. Drill-Down Search inside targetElement (depth 0..4) for wrapper/chunk selections
+  const bfsQueue: Array<{ el: Element; depth: number }> = [{ el: targetElement, depth: 0 }];
+  let scannedDrillNodes = 0;
+  const MAX_DRILL_NODES = 60;
+  while (bfsQueue.length > 0 && scannedDrillNodes < MAX_DRILL_NODES) {
+    const { el, depth } = bfsQueue.shift()!;
+    scannedDrillNodes++;
+
+    if (el.children.length >= minItems && !SKIPPED_PARENT_TAGS.has(el.tagName) && !el.closest('svg')) {
+      for (const cluster of clusterSiblings(el)) {
+        evaluateCluster(el, cluster, depth, 'drill_down');
       }
+    }
 
-      const containsTarget = targetCluster.includes(candidateItem);
-
-      if (containsTarget && matchedElements.length >= minItems) {
-        // Discover fields in the cluster
-        const fields = discoverFieldsInCluster(matchedElements, options?.heuristics);
-
-        // Calculate confidence
-        const { confidence, confidencePercent, factors } = calculateConfidence({
-          items: matchedElements,
-          parent: candidateParent,
-          discoveredFields: fields,
-          totalSiblingCount: candidateParent.children.length,
-        });
-
-        if (confidence >= minConfidence) {
-          const parentSel = getFastParentSelector(candidateParent);
-
-          // Scoring weights confidence, item count, and proximity to clicked element
-          const proximityBonus = 1 / (1 + d * 0.15);
-          const score = confidence * Math.log2(matchedElements.length + 1) * proximityBonus;
-
-          evaluations.push({
-            itemSelector: repeatedSelector,
-            containerSelector: repeatedSelector,
-            parentSelector: parentSel,
-            matchedElements,
-            parent: candidateParent,
-            fields,
-            confidence,
-            confidencePercent,
-            factors,
-            depthDistance: d,
-            score,
-          });
-
-          // Early exit if high-confidence repeating cluster found
-          if (matchedElements.length >= 10 && confidence >= 0.70) {
-            break;
-          }
+    if (depth < 4) {
+      for (const child of Array.from(el.children)) {
+        if (!SKIPPED_PARENT_TAGS.has(child.tagName)) {
+          bfsQueue.push({ el: child, depth: depth + 1 });
         }
       }
     }
@@ -211,17 +432,23 @@ export function detectListFromSelection(
 
   if (evaluations.length === 0) return null;
 
-  // Sort candidates by score descending
   evaluations.sort((a, b) => b.score - a.score);
   const best = evaluations[0];
 
   // What is shown and what is extracted come from one selector, so they cannot differ.
-  const searchRoot = targetElement.ownerDocument ?? document;
   const itemSelector = scopeItemSelector(
-    { parent: best.parent, items: best.matchedElements, required: minItems },
+    { parent: best.parent, containers: best.containers, items: best.matchedElements, required: minItems },
     searchRoot
   );
-  const matchedElements = Array.from(searchRoot.querySelectorAll(itemSelector));
+  let matchedElements: Element[];
+  try {
+    matchedElements = Array.from(searchRoot.querySelectorAll(itemSelector));
+  } catch {
+    matchedElements = best.matchedElements;
+  }
+  if (matchedElements.length === 0) {
+    matchedElements = best.matchedElements;
+  }
   const listName = inferListName(matchedElements, best.parent, best.fields);
   const samples: CandidateSample[] = sampleElements(matchedElements, sampleLimit).map(
     createCandidateSample
@@ -231,8 +458,8 @@ export function detectListFromSelection(
     name: listName,
     containerSelector: itemSelector,
     containerAnchor: buildContainerAnchor(
-      best.matchedElements[0].parentElement ?? best.parent,
-      best.matchedElements[0],
+      matchedElements[0].parentElement ?? best.parent,
+      matchedElements[0],
       itemSelector
     ) ?? undefined,
     parentSelector: best.parentSelector,
@@ -313,7 +540,7 @@ export function autoDetectLists(
           matchedElements[0],
           itemSelector
         ) ?? undefined,
-      parentSelector: getFastParentSelector(group.parent),
+      parentSelector: getFastParentSelector(group.parent, root),
       itemSelector,
       itemCount: matchedElements.length,
       confidence: candidate.confidence,
@@ -332,6 +559,7 @@ export function autoDetectLists(
 
 interface RepeatedGroup {
   parent: Element;
+  containers?: Element[];
   items: Element[];
   /** Fewest items this group needs to count as a list. */
   required: number;
@@ -376,7 +604,7 @@ const MIN_CREDIBLE_CONFIDENCE = 0.2;
 function findRepeatedGroups(root: Document | Element, minItems: number): RepeatedGroup[] {
   const scope = 'body' in root ? root.body ?? root.documentElement : root;
   const elements = [scope, ...Array.from(scope.querySelectorAll('*')).slice(0, MAX_SCANNED_ELEMENTS)];
-  // Rows of a grid are separate parents with the same items, so they are one list.
+  // Rows of a grid or chunked infinite-scroll blocks with identical semantic wrappers are one list.
   const merged = new Map<Element | null, Map<string, RepeatedGroup>>();
 
   for (const parent of elements) {
@@ -385,16 +613,34 @@ function findRepeatedGroups(root: Document | Element, minItems: number): Repeate
       ? minItems
       : Math.max(minItems, MIN_ITEMS_OUTSIDE_LIST_CONTAINER);
 
+    const wrapperSel = getGeneralizedWrapperSelector(parent);
+    const isSemanticChunkWrapper =
+      wrapperSel !== null &&
+      !isInNavigationRegion(parent) &&
+      !isSecondaryContent(parent) &&
+      (parent.matches(LIST_LIKE_CONTAINER) || getDurableAttributeSelector(parent) !== null);
+
     for (const items of clusterSiblings(parent)) {
       if (items.length < minItems || NON_RECORD_TAGS.has(items[0].tagName)) continue;
+      const regionKey: Element | null =
+        isSemanticChunkWrapper && items.length >= required
+          ? (parent.closest('main, [role="main"]') ?? scope)
+          : parent.parentElement;
       const key = generateRepeatedSelector(parent, items[0]);
-      const siblings = merged.get(parent.parentElement) ?? new Map<string, RepeatedGroup>();
-      merged.set(parent.parentElement, siblings);
+      const siblings = merged.get(regionKey) ?? new Map<string, RepeatedGroup>();
+      merged.set(regionKey, siblings);
       const existing = siblings.get(key);
       if (existing) {
-        existing.items.push(...items);
+        if (
+          existing.items.length > 0 &&
+          calculateTreeSimilarity(existing.items[0], items[0]) >= 0.65
+        ) {
+          existing.containers = existing.containers ?? [existing.parent];
+          existing.containers.push(parent);
+          existing.items.push(...items);
+        }
       } else {
-        siblings.set(key, { parent, items: [...items], required });
+        siblings.set(key, { parent, containers: [parent], items: [...items], required });
       }
     }
   }
@@ -504,11 +750,11 @@ function matchesExactly(selector: string, root: Document | Element, items: Eleme
 }
 
 /** A path from the nearest stable ancestor, for lists nothing else can tell apart. */
-function structuralParentPath(parent: Element): string {
+function structuralParentPath(parent: Element, root: Document | Element = parent.ownerDocument ?? document): string {
   const parts: string[] = [];
   let current: Element | null = parent;
   while (current && current.tagName !== 'BODY' && current.tagName !== 'HTML') {
-    if (current.id && !isDynamicId(current.id)) {
+    if (current.id && !isDynamicId(current.id) && isUniqueId(current.id, root)) {
       parts.unshift(`#${escapeCss(current.id)}`);
       return parts.join(' > ');
     }
@@ -523,35 +769,93 @@ function structuralParentPath(parent: Element): string {
   return parts.join(' > ');
 }
 
+function commonAncestorOf(elements: Element[]): Element | null {
+  if (elements.length === 0) return null;
+  let ancestor: Element | null = elements[0].parentElement;
+  while (ancestor) {
+    if (elements.every((el) => ancestor!.contains(el))) return ancestor;
+    ancestor = ancestor.parentElement;
+  }
+  return null;
+}
+
 /**
  * Extraction uses this selector on every page of the job, so it must match this list and
  * not the same tags elsewhere, such as `ul > li` also matching the site menu.
  */
 function scopeItemSelector(group: RepeatedGroup, root: Document | Element): string {
-  const { parent, items } = group;
+  const { parent, containers, items } = group;
   const tag = items[0].tagName.toLowerCase();
   const base = generateRepeatedSelector(parent, items[0]);
   const parentSelector = base.includes(' > ') ? base.slice(0, base.lastIndexOf(' > ')) : '';
   const tagOnly = parentSelector ? `${parentSelector} > ${tag}` : tag;
-  const covering = [base, tagOnly].find((selector) => {
-    const matched = new Set(Array.from(root.querySelectorAll(selector)));
-    return items.every((item) => matched.has(item));
+
+  const wantedSet = new Set(items);
+  const candidatesToTry = [base, tagOnly];
+
+  // If `base` matches extra non-item siblings inside the container (e.g. injected promo banners),
+  // try excluding their distinctive classes with :not(...)
+  try {
+    const baseMatched = Array.from(root.querySelectorAll(base));
+    const activeContainers = new Set(containers && containers.length > 0 ? containers : [parent]);
+    const extrasInContainer = baseMatched.filter(
+      (el) => !wantedSet.has(el) && el.parentElement !== null && activeContainers.has(el.parentElement)
+    );
+    if (extrasInContainer.length > 0) {
+      const itemClassSet = new Set(filterMeaningfulClasses(items[0].classList));
+      const extraClasses = new Set<string>();
+      for (const extra of extrasInContainer) {
+        for (const cls of filterMeaningfulClasses(extra.classList)) {
+          if (!itemClassSet.has(cls)) extraClasses.add(cls);
+        }
+      }
+      if (extraClasses.size > 0) {
+        const notClause = Array.from(extraClasses)
+          .slice(0, 3)
+          .map((cls) => `:not(.${escapeCss(cls)})`)
+          .join('');
+        candidatesToTry.unshift(`${base}${notClause}`);
+      }
+    }
+  } catch {
+    // Ignore invalid selector check
+  }
+
+  const covering = candidatesToTry.find((sel) => {
+    try {
+      const matched = new Set(Array.from(root.querySelectorAll(sel)));
+      return items.every((item) => matched.has(item));
+    } catch {
+      return false;
+    }
   });
   const selector = covering ?? base;
 
   if (matchesExactly(selector, root, items)) return selector;
 
+  const isMultiContainer = Boolean(containers && containers.length > 1);
   let scoped = selector;
-  let ancestor = parent.parentElement;
+  let ancestor = isMultiContainer ? commonAncestorOf(containers!) : parent.parentElement;
   for (let depth = 0; ancestor && ancestor.tagName !== 'BODY' && depth < MAX_SCOPE_DEPTH; depth++) {
-    scoped = `${getFastParentSelector(ancestor)} ${scoped}`;
-    if (matchesExactly(scoped, root, items)) return scoped;
+    const ancestorSel = getFastParentSelector(ancestor, root);
+    const candidateScoped = `${ancestorSel} ${scoped}`;
+    if (matchesExactly(candidateScoped, root, items)) return candidateScoped;
+    scoped = candidateScoped;
     ancestor = ancestor.parentElement;
   }
 
-  const lastStep = selector.includes(' > ') ? selector.slice(selector.lastIndexOf(' > ') + 3) : selector;
-  const structural = `${structuralParentPath(parent)} > ${lastStep}`;
-  return matchesExactly(structural, root, items) ? structural : selector;
+  if (!isMultiContainer) {
+    const lastStep = selector.includes(' > ') ? selector.slice(selector.lastIndexOf(' > ') + 3) : selector;
+    const structural = `${structuralParentPath(parent, root)} > ${lastStep}`;
+    return matchesExactly(structural, root, items) ? structural : selector;
+  }
+
+  const shared = commonAncestorOf(containers!);
+  if (shared) {
+    const structuralMulti = `${structuralParentPath(shared, root)} ${selector}`;
+    if (matchesExactly(structuralMulti, root, items)) return structuralMulti;
+  }
+  return selector;
 }
 
 /**
