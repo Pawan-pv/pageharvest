@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ADVANCED_STORAGE_KEY } from '@/components/settings/advanced-preference';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ExtractionHistoryView } from '@/components/history/ExtractionHistoryView';
 import { SettingsView } from '@/components/settings/SettingsView';
@@ -116,13 +117,15 @@ describe('UI: History & Settings Management', () => {
     beforeEach(async () => {
       await db.datasets.clear();
       await db.records.clear();
+      // The detailed defaults are behind Advanced options (ADR-039).
+      await chrome.storage.local.set({ [ADVANCED_STORAGE_KEY]: { version: 1, advanced: true } });
     });
 
     it('renders default throttling preferences and saves with feedback', async () => {
       await db.settings.clear();
       render(<SettingsView onBackToDashboard={vi.fn()} />);
 
-      const delayInput = screen.getByLabelText('Default Page Delay (ms)');
+      const delayInput = await screen.findByLabelText('Default Page Delay (ms)');
       expect(delayInput).toHaveValue(1500);
       await waitFor(() => expect(screen.getByRole('button', { name: 'Save Preferences' })).toBeEnabled());
 
@@ -135,7 +138,7 @@ describe('UI: History & Settings Management', () => {
       expect(await screen.findByText('Settings saved successfully.')).toBeInTheDocument();
     });
 
-    it('opens confirmation modal when clicking Clear All Saved Data', async () => {
+    it('opens a confirmation dialog when clicking Delete all saved data', async () => {
       await db.datasets.add({
         id: 'ds_cleanup',
         name: 'Cleanup Dataset',
@@ -148,13 +151,13 @@ describe('UI: History & Settings Management', () => {
 
       render(<SettingsView onBackToDashboard={vi.fn()} />);
 
-      const clearBtn = await screen.findByRole('button', { name: /clear all saved data/i });
+      const clearBtn = await screen.findByRole('button', { name: 'Delete all saved data' });
       await waitFor(() => {
         expect(clearBtn).not.toBeDisabled();
       });
       fireEvent.click(clearBtn);
 
-      expect(await screen.findByText('Clear All Saved Data?')).toBeInTheDocument();
+      expect(await screen.findByRole('dialog', { name: 'Delete all saved data?' })).toBeInTheDocument();
     });
   });
 });

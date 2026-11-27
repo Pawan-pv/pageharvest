@@ -25,7 +25,8 @@ import {
   normalizeUrlForDeduplication,
   validateUrlTemplate,
 } from '@/core/navigation/url-paginator';
-import { checkRequiredPermissions } from '@/platform/permissions';
+import type { InjectionResult } from '@/platform/content-script';
+import { checkRequiredPermissions, hasHostAccess, SITE_PERMISSION_MESSAGE } from '@/platform/permissions';
 import { isHarvestableUrl } from '@/platform/tab-manager';
 import {
   ExtractionJob,
@@ -42,10 +43,13 @@ import {
   HistoryRepository,
   JobRepository,
   ProjectRepository,
+  RecordRepository,
+  RecipeRepository,
   SchemaRepository,
   SettingsRepository,
 } from '@/storage/repositories';
-import { ErrorCategory, ExtractionRunHistory, HarvestError, RecordEntity } from '@/types';
+import { schemaToRecipe } from '@/core/library/recipe-file';
+import { DatasetEntity, ErrorCategory, ExtractionRunHistory, FieldDefinition, HarvestError, RecordEntity } from '@/types';
 import type { ExtractionErrorCode } from '@/shared/contracts/error';
 
 /**
@@ -67,8 +71,30 @@ export interface JobTransport {
   /** Opens an empty tab, so its ID is known before any page in it can report in. */
   openBlankTab(): Promise<number>;
   navigateTab(tabId: number, url: string): Promise<void>;
+  /** Closes a tab this coordinator opened when the resume did not complete. */
+  closeTab?(tabId: number): Promise<void>;
   /** 'complete', 'loading', or null when the tab no longer exists. */
   getTabLoadStatus(tabId: number): Promise<string | null>;
+  /**
+   * Makes sure the tab's current document runs the content script (ADR-037). Idempotent:
+   * `injected` is true only when the document had no script yet. Throws when the tab
+   * cannot be scripted.
+   */
+  injectContentScript(tabId: number): Promise<InjectionResult>;
+  /**
+   * The address the tab shows now, or undefined when Chrome does not say. Used to check
+   * that a job starts on the page its list was found on.
+   */
+  getTabUrl?(tabId: number): Promise<string | undefined>;
+}
+
+/** Said when the tab no longer shows the page a list was found on (the tab-binding check). */
+export const LIST_PAGE_CHANGED_MESSAGE =
+  'This tab is not the page the list was found on. Get the list again on this page.';
+
+/** Two addresses name the same document if they differ at most in the #fragment. */
+export function sameDocument(a: string, b: string): boolean {
+  return a.split('#')[0] === b.split('#')[0];
 }
 
 export interface JobCoordinatorDeps {
@@ -163,7 +189,7 @@ export class JobCoordinator {
     this.checkPermissions = deps.checkPermissions ?? checkRequiredPermissions;
     this.reporter = deps.reporter ?? errorReporter;
     this.schedule = deps.schedule ?? ((callback, delayMs) => void setTimeout(callback, delayMs));
-    this.pageLoadGraceMs = deps.pageLoadGraceMs ?? 4_000;
+    this.pageLoadGraceMs = deps.pageLoadGraceMs ?? 15_000;
 
     this.jobs = new JobRepository(this.db);
     this.projects = new ProjectRepository(this.db);
@@ -214,6 +240,17 @@ export class JobCoordinator {
       }
       if (!isHarvestableUrl(payload.sourceUrl)) {
         return { ok: false, error: 'Extraction is only available on regular web pages.' };
+      }
+      // Persistent per-site grant (ADR-037). The side panel requests it from the
+      // Start click's user gesture; the background only checks it (contains).
+      if (!(await hasHostAccess(payload.sourceUrl))) {
+        return { ok: false, error: SITE_PERMISSION_MESSAGE };
+      }
+      // The list was found on sourceUrl. If the tab has moved on, its selectors describe
+      // another page, so nothing is created.
+      const shownNow = await this.transport.getTabUrl?.(payload.tabId).catch(() => undefined);
+      if (shownNow && !sameDocument(shownNow, payload.sourceUrl)) {
+        return { ok: false, error: LIST_PAGE_CHANGED_MESSAGE };
       }
 
       const { recipe, tabId, sourceUrl } = payload;
@@ -345,9 +382,14 @@ export class JobCoordinator {
         if (needsNavigation) {
           await this.transport.navigateTab(tabId, firstUrl);
         } else {
+          await this.transport.injectContentScript(tabId);
           await this.sendExtract(created.job, created.checkpoint);
         }
       } catch (error: unknown) {
+        if (isSitePermissionFailure(error)) {
+          await this.failJob(created.job.id, SITE_PERMISSION_MESSAGE, 'RUNTIME_MESSAGING', 'SITE_PERMISSION_REQUIRED');
+          return { ok: false, error: SITE_PERMISSION_MESSAGE };
+        }
         const reason = `The page could not start extraction: ${toMessage(error)}`;
         await this.failJob(created.job.id, reason, 'RUNTIME_MESSAGING');
         return { ok: false, error: reason };
@@ -389,13 +431,28 @@ export class JobCoordinator {
       // current document from the checkpoint.
       const checkpoint = await this.jobs.getCheckpoint(job.id);
       if (checkpoint) {
+        if (!isHarvestableUrl(checkpoint.currentUrl)) {
+          // Restricted page: keep the existing can't-work-here path; SITE is
+          // only for http(s) hosts where a grant is missing.
+          await this.interruptJob(job.id, 'The page could not continue: restricted page.');
+          return { ok: false, error: 'The page could not continue, so the job was saved for recovery.' };
+        }
+        if (!(await hasHostAccess(checkpoint.currentUrl))) {
+          await this.interruptForSiteAccess(job.id);
+          return { ok: false, error: SITE_PERMISSION_MESSAGE };
+        }
         try {
           await this.duringHandoff(job.tabId, async () => {
             await this.db.jobs.update(job.id, { updatedAt: this.now() });
             await this.db.checkpoints.update(job.id, { awaitingNavigation: false });
+            await this.transport.injectContentScript(job.tabId!);
             await this.sendExtract(job, { ...checkpoint, awaitingNavigation: false });
           });
         } catch (error: unknown) {
+          if (isSitePermissionFailure(error)) {
+            await this.interruptForSiteAccess(job.id);
+            return { ok: false, error: SITE_PERMISSION_MESSAGE };
+          }
           await this.interruptJob(job.id, `The page could not continue: ${toMessage(error)}`);
           return { ok: false, error: 'The page could not continue, so the job was saved for recovery.' };
         }
@@ -429,6 +486,23 @@ export class JobCoordinator {
    * re-extracted page is committed.
    */
   public async recoverJob(jobId: string): Promise<JobCommandResult> {
+    // A double click sends two requests. The second must not open a tab of its own, which
+    // would be left empty: the transaction below lets only one of them resume the session.
+    if (this.resuming.has(jobId)) {
+      return { ok: false, error: 'This session is already being resumed.' };
+    }
+    this.resuming.add(jobId);
+    try {
+      return await this.recoverJobOnce(jobId);
+    } finally {
+      this.resuming.delete(jobId);
+    }
+  }
+
+  /** Sessions whose resume is in progress in this worker. */
+  private readonly resuming = new Set<string>();
+
+  private async recoverJobOnce(jobId: string): Promise<JobCommandResult> {
     const candidate = await this.jobs.getJob(jobId);
     if (!candidate || candidate.status !== 'RECOVERABLE') {
       return { ok: false, error: 'This session can no longer be resumed.' };
@@ -443,68 +517,182 @@ export class JobCoordinator {
       return { ok: false, error: 'This session has expired.' };
     }
 
-    const resumeUrl = this.resumeUrlFor(candidate, existing);
+    let resumeUrl = this.resumeUrlFor(candidate, existing);
     if (!isHarvestableUrl(resumeUrl) || !isSameOrigin(resumeUrl, existing.startUrl)) {
       await this.failJob(jobId, `The saved session points to an invalid page: ${resumeUrl}`, 'VALIDATION_FAILED');
       return { ok: false, error: 'The saved session points to an invalid page.' };
     }
-
-    let tabId: number;
-    try {
-      tabId = await this.transport.openBlankTab();
-    } catch (error: unknown) {
-      return { ok: false, error: `Could not open a tab to resume in: ${toMessage(error)}` };
+    // Persistent grant must exist to resume on a fresh tab; the panel's Allow
+    // access click re-requests it first (ADR-037). Background only checks.
+    if (!(await hasHostAccess(resumeUrl))) {
+      return { ok: false, error: SITE_PERMISSION_MESSAGE };
     }
 
-    const job = await this.db.transaction('rw', this.db.jobs, this.db.checkpoints, async () => {
+    // Re-check under a read transaction immediately before a tab exists. The write
+    // transaction below is still the final arbiter, but this keeps the common
+    // duplicate/already-discarded case from ever opening an empty tab.
+    const stillResumable = await this.db.transaction('r', this.db.jobs, this.db.checkpoints, async () => {
       const latest = await this.jobs.getJob(jobId);
-      // Re-checked here so that two resume requests cannot both succeed.
       if (!latest || latest.status !== 'RECOVERABLE') return null;
       const checkpoint = await this.jobs.getCheckpoint(jobId);
-      if (!checkpoint) return null;
-
-      const machine = ExtractionStateMachine.fromJob(latest);
-      machine.transition({ type: 'RECOVER' });
-
-      const now = this.now();
-      const updated: ExtractionJob = {
-        ...latest,
-        status: machine.getState(),
-        generation: generateToken('gen'),
-        tabId,
-        consecutiveEmptySteps: 0,
-        interruptedReason: undefined,
-        interruptedAt: undefined,
-        pausedAt: undefined,
-        updatedAt: now,
-      };
-      await this.jobs.saveJob(updated);
-      await this.jobs.saveCheckpoint({
-        ...checkpoint,
-        tabId,
-        expectedUrl: resumeUrl,
-        awaitingNavigation: true,
-        navigationStartedAt: now,
-        // Reloading a scroll feed returns to the top, so earlier scrolls are repeated.
-        catchUpScrolls: checkpoint.scrollsCompleted,
-        scrollsCompleted: 0,
-        updatedAt: now,
-      });
-      return updated;
+      if (!checkpoint || checkpoint.expiresAt <= this.now()) return null;
+      const checkedUrl = this.resumeUrlFor(latest, checkpoint);
+      if (!isHarvestableUrl(checkedUrl) || !isSameOrigin(checkedUrl, checkpoint.startUrl)) return null;
+      return { url: checkedUrl };
     });
-
-    if (!job) {
-      return { ok: false, error: 'This session has already been resumed or discarded.' };
+    if (!stillResumable) {
+      return { ok: false, error: 'This session can no longer be resumed.' };
+    }
+    resumeUrl = stillResumable.url;
+    if (!(await hasHostAccess(resumeUrl))) {
+      return { ok: false, error: SITE_PERMISSION_MESSAGE };
     }
 
-    await this.notify(job);
+    let tabId: number | undefined;
+    let resumedJob: ExtractionJob | null = null;
+    let handedOff = false;
     try {
+      tabId = await this.transport.openBlankTab();
+      const job = await this.db.transaction('rw', this.db.jobs, this.db.checkpoints, async () => {
+        const latest = await this.jobs.getJob(jobId);
+        // Re-checked here so that two resume requests cannot both succeed.
+        if (!latest || latest.status !== 'RECOVERABLE') return null;
+        const checkpoint = await this.jobs.getCheckpoint(jobId);
+        if (!checkpoint || checkpoint.expiresAt <= this.now()) return null;
+
+        const machine = ExtractionStateMachine.fromJob(latest);
+        machine.transition({ type: 'RECOVER' });
+
+        const now = this.now();
+        const updated: ExtractionJob = {
+          ...latest,
+          status: machine.getState(),
+          generation: generateToken('gen'),
+          tabId,
+          consecutiveEmptySteps: 0,
+          interruptedReason: undefined,
+          interruptedAt: undefined,
+          pausedAt: undefined,
+          updatedAt: now,
+        };
+        await this.jobs.saveJob(updated);
+        await this.jobs.saveCheckpoint({
+          ...checkpoint,
+          tabId,
+          expectedUrl: resumeUrl,
+          awaitingNavigation: true,
+          navigationStartedAt: now,
+          // Reloading a scroll feed returns to the top, so earlier scrolls are repeated.
+          catchUpScrolls: checkpoint.scrollsCompleted,
+          scrollsCompleted: 0,
+          updatedAt: now,
+        });
+        return updated;
+      });
+
+      if (!job) {
+        return { ok: false, error: 'This session has already been resumed or discarded.' };
+      }
+      resumedJob = job;
+
+      await this.notify(job);
       await this.transport.navigateTab(tabId, resumeUrl);
+      handedOff = true;
+      return { ok: true, identity: this.identityOf(job) };
     } catch (error: unknown) {
-      await this.interruptJob(jobId, `The page could not be reopened: ${toMessage(error)}`);
-      return { ok: false, error: 'The page could not be reopened.' };
+      if (resumedJob) {
+        await this.interruptJob(jobId, `The page could not be reopened: ${toMessage(error)}`).catch(() => undefined);
+        return { ok: false, error: 'The page could not be reopened.' };
+      }
+      return { ok: false, error: `Could not open a tab to resume in: ${toMessage(error)}` };
+    } finally {
+      if (tabId !== undefined && !handedOff) {
+        await this.transport.closeTab?.(tabId).catch(() => undefined);
+      }
     }
-    return { ok: true, identity: this.identityOf(job) };
+  }
+
+  // -------------------------------------------------------------------------
+  // Data commands from the side panel
+  // -------------------------------------------------------------------------
+
+  /** Deletes everything collected or saved, keeping preferences (see db.clearUserData). */
+  public async clearUserData(): Promise<void> {
+    await this.db.clearUserData();
+  }
+
+  /** Persists one inline grid edit. */
+  public async updateRecordCell(
+    recordId: string,
+    field: string,
+    value: string | number | null
+  ): Promise<void> {
+    await this.db.updateRecordCell(recordId, field, value);
+  }
+
+  /** Deletes one or more rows and keeps the dataset's saved count in step. */
+  public async deleteRecords(datasetId: string, recordIds: string[]): Promise<number> {
+    return new RecordRepository(this.db).deleteBatch(recordIds, datasetId);
+  }
+
+  /** Replaces a dataset's rows and columns after a cleaning, rename or bulk delete. */
+  public async applyDatasetEdit(
+    datasetId: string,
+    records: RecordEntity[],
+    fields: FieldDefinition[]
+  ): Promise<void> {
+    await new DatasetRepository(this.db).applyEdit(datasetId, records, fields);
+  }
+
+  /** Renames a saved list without touching its rows. */
+  public async renameDataset(datasetId: string, name: string): Promise<void> {
+    const changed = await this.db.datasets.update(datasetId, { name, updatedAt: this.now() });
+    if (changed === 0) {
+      throw new Error('This saved list no longer exists.');
+    }
+  }
+
+  /** Deletes a saved list and its rows in one transaction. Refused while a job can write. */
+  public async deleteDataset(datasetId: string): Promise<void> {
+    await new DatasetRepository(this.db).deleteDataset(datasetId);
+  }
+
+  /**
+   * Creates a dataset and its initial records as one atomic transaction (single-writer rule N5).
+   */
+  public async createDatasetWithRecords(
+    name: string,
+    url: string,
+    fields: FieldDefinition[],
+    records: RecordEntity[]
+  ): Promise<string> {
+    const datasetId = `ds_${this.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const now = this.now();
+    const dataset: DatasetEntity = {
+      id: datasetId,
+      name,
+      url,
+      createdAt: now,
+      updatedAt: now,
+      recordsCount: records.length,
+      fields,
+    };
+    await this.db.transaction('rw', this.db.datasets, this.db.records, async () => {
+      await this.db.datasets.add(dataset);
+      if (records.length > 0) {
+        await this.db.saveExtractedBatch(datasetId, records);
+      }
+    });
+    return datasetId;
+  }
+
+  /**
+   * Stores one validated recipe imported from a file. The recipe id is kept when it is
+   * free; a second import of the same file replaces the earlier copy instead of creating
+   * a duplicate.
+   */
+  public async importRecipe(recipe: ExtractionSchema): Promise<void> {
+    await new RecipeRepository(this.db).saveRecipe(schemaToRecipe(recipe));
   }
 
   // -------------------------------------------------------------------------
@@ -788,7 +976,8 @@ export class JobCoordinator {
     }
 
     if (recoverable) {
-      await this.interruptJob(identity.jobId, message);
+      // The code says why, for the panel (for example RATE_LIMITED).
+      await this.interruptJob(identity.jobId, message, code);
     } else {
       await this.failJob(identity.jobId, message, category, code);
     }
@@ -831,33 +1020,104 @@ export class JobCoordinator {
       return;
     }
 
-    const now = this.now();
-    const updatedCheckpoint: JobCheckpoint = {
-      ...checkpoint,
-      currentUrl: url,
-      awaitingNavigation: job.status === 'PAUSED',
-      expectedUrl: job.status === 'PAUSED' ? url : undefined,
-      navigationStartedAt: undefined,
-      updatedAt: now,
-    };
     await this.duringHandoff(job.tabId, async () => {
-      await this.jobs.saveCheckpoint(updatedCheckpoint);
-
-      // A paused job stays parked on the new page until the user resumes it.
-      if (job.status === 'PAUSED') return;
+      // The decision above was made on a read. A stop, pause or interruption may have
+      // committed since, so the job is read again in the transaction that writes the
+      // checkpoint: an ended job must not get a resumable checkpoint back, and only the
+      // run that was read (same status class, generation and tab) is continued.
+      const continued = await this.db.transaction('rw', this.db.jobs, this.db.checkpoints, async () => {
+        const latest = await this.jobs.getJob(job.id);
+        const current = await this.jobs.getCheckpoint(job.id);
+        if (
+          !latest ||
+          !current ||
+          !isActiveJobStatus(latest.status) ||
+          latest.generation !== job.generation ||
+          latest.tabId !== tabId
+        ) {
+          return null;
+        }
+        const now = this.now();
+        const paused = latest.status === 'PAUSED';
+        const updatedCheckpoint: JobCheckpoint = {
+          ...current,
+          currentUrl: url,
+          // A paused job stays parked on the new page until the user resumes it.
+          awaitingNavigation: paused,
+          expectedUrl: paused ? url : undefined,
+          navigationStartedAt: undefined,
+          updatedAt: now,
+        };
+        await this.jobs.saveCheckpoint(updatedCheckpoint);
+        if (!paused) await this.db.jobs.update(job.id, { updatedAt: now });
+        return { job: latest, checkpoint: updatedCheckpoint, paused };
+      });
+      if (!continued || continued.paused) return;
 
       try {
-        await this.db.jobs.update(job.id, { updatedAt: now });
-        await this.sendExtract(job, updatedCheckpoint);
+        await this.sendExtract(continued.job, continued.checkpoint);
       } catch (error: unknown) {
-        await this.interruptJob(job.id, `The page could not continue: ${toMessage(error)}`);
+        if (isSitePermissionFailure(error)) {
+          await this.interruptForSiteAccess(job.id);
+        } else {
+          await this.interruptJob(job.id, `The page could not continue: ${toMessage(error)}`);
+        }
+        return;
       }
+      await this.repeatControlToNewRun(continued.job);
     });
+  }
+
+  /**
+   * A pause or stop that commits while a page is being handed the job sends its control
+   * before that page has a run, so the page ignores it. Once the page has the run, the
+   * control is repeated to it. Both controls are idempotent in the page.
+   */
+  private async repeatControlToNewRun(started: ExtractionJob): Promise<void> {
+    if (started.tabId === undefined) return;
+    const latest = await this.jobs.getJob(started.id);
+    if (latest && latest.generation === started.generation) {
+      if (latest.status === 'PAUSED') await this.sendControl(latest, 'pause');
+      return;
+    }
+    await this.transport
+      .sendToTab(started.tabId, this.buildMessage({
+        type: 'CONTROL_JOB',
+        payload: { identity: this.identityOf(started), action: 'abort' },
+      }))
+      .catch(() => undefined);
   }
 
   // -------------------------------------------------------------------------
   // Browser events and reconciliation
   // -------------------------------------------------------------------------
+
+  /**
+   * chrome.permissions.onRemoved (ADR-037): when a site grant is revoked,
+   * every active job on that origin becomes RECOVERABLE with
+   * SITE_PERMISSION_REQUIRED in one transaction per job via the state machine.
+   * Already-recoverable jobs stay recoverable; their resume path re-checks.
+   */
+  public async handlePermissionRemoved(origins: string[]): Promise<void> {
+    if (!origins.length) return;
+    const matchesOrigin = (url: string | undefined): boolean => {
+      if (!url) return false;
+      try {
+        const parsed = new URL(url);
+        const origin = `${parsed.protocol}//${parsed.host}`;
+        return origins.some((o) => o === `${origin}/*` || o === `${parsed.protocol}//*/*`);
+      } catch {
+        return false;
+      }
+    };
+    for (const job of await this.jobs.findActiveJobs()) {
+      const checkpoint = await this.jobs.getCheckpoint(job.id);
+      const url = checkpoint?.currentUrl ?? job.targetUrl;
+      if (matchesOrigin(url) || matchesOrigin(job.targetUrl)) {
+        await this.interruptForSiteAccess(job.id);
+      }
+    }
+  }
 
   public async handleTabClosed(tabId: number): Promise<void> {
     const job = await this.jobs.findActiveJobForTab(tabId);
@@ -874,8 +1134,38 @@ export class JobCoordinator {
     const job = await this.jobs.findActiveJobForTab(tabId);
     if (!job) return;
     const checkpoint = await this.jobs.getCheckpoint(job.id);
-    if (!checkpoint?.awaitingNavigation || job.status === 'PAUSED') return;
+    if (!checkpoint) return;
 
+    // On-demand injection (ADR-037): a new document in a job's tab has no content
+    // script until the background injects one. Every load of an active job's tab
+    // (running or paused, expected or not) is checked, which keeps the behaviour of
+    // the old static script: a document that is new to the script goes to
+    // handleContentReady, which continues the job, parks it (paused) or interrupts it
+    // (reload, left the site). A load event for a document that already runs the
+    // script is ignored, so the job is never sent to the same page twice.
+    let injection: InjectionResult | null;
+    try {
+      injection = await this.transport.injectContentScript(tabId);
+    } catch {
+      injection = null;
+    }
+    if (injection?.injected && injection.url) {
+      await this.handleContentReady(injection.url, tabId);
+    }
+    if (!injection) {
+      if (!(await hasHostAccess(checkpoint.expectedUrl ?? checkpoint.currentUrl))) {
+        await this.interruptForSiteAccess(job.id);
+        return;
+      }
+      if (!checkpoint.awaitingNavigation && job.status !== 'PAUSED') {
+        // The job's site is granted but this document cannot be scripted, so the
+        // tab is on another site or an error page and the job cannot go on here.
+        await this.interruptJob(job.id, 'The page changed during extraction and PageHarvest could not reach it.');
+        return;
+      }
+    }
+
+    if (!checkpoint.awaitingNavigation || job.status === 'PAUSED') return;
     this.schedule(() => {
       void this.checkPendingNavigation(job.id, tabId);
     }, this.pageLoadGraceMs);
@@ -996,7 +1286,18 @@ export class JobCoordinator {
   // Lifecycle internals
   // -------------------------------------------------------------------------
 
-  public async interruptJob(jobId: string, reason: string): Promise<void> {
+  /** Saves the job for recovery because this site's access grant is missing (ADR-037). */
+  private interruptForSiteAccess(jobId: string): Promise<void> {
+    return this.interruptJob(jobId, SITE_PERMISSION_MESSAGE, 'SITE_PERMISSION_REQUIRED');
+  }
+
+  public async interruptJob(jobId: string, reason: string, code?: ExtractionErrorCode): Promise<void> {
+    // The session is kept for retentionDays from now, when it was abandoned, not from when
+    // the job first started. If settings cannot be read, the expiry already stored stands.
+    const retentionMs = await this.settings
+      .getSettings()
+      .then((settings) => settings.retentionDays * DAY_MS)
+      .catch(() => undefined);
     const job = await this.db.transaction(
       'rw',
       [this.db.jobs, this.db.checkpoints, this.db.history],
@@ -1016,7 +1317,7 @@ export class JobCoordinator {
           interruptedReason: reason,
           interruptedAt: now,
           updatedAt: now,
-          errors: appendError(current.errors, this.buildError('RUNTIME_MESSAGING', reason, 'WARN', { jobId })),
+          errors: appendError(current.errors, this.buildError('RUNTIME_MESSAGING', reason, 'WARN', { jobId }, code)),
         };
 
         if (!checkpoint) {
@@ -1029,6 +1330,9 @@ export class JobCoordinator {
         machine.transition({ type: 'MARK_RECOVERABLE' });
         interrupted.status = machine.getState();
         await this.jobs.saveJob(interrupted);
+        if (retentionMs !== undefined) {
+          await this.jobs.saveCheckpoint({ ...checkpoint, expiresAt: now + retentionMs, updatedAt: now });
+        }
         return interrupted;
       }
     );
@@ -1291,25 +1595,35 @@ export class JobCoordinator {
     if (job.tabId === undefined) {
       throw new Error('The job has no tab to run in.');
     }
-    await this.transport.sendToTab(
-      job.tabId,
-      this.buildMessage({
-        type: 'EXTRACT_RECORDS',
-        payload: {
-          identity: this.identityOf(job),
-          recipe: job.schema,
-          resume: {
-            page: checkpoint.nextPage,
-            nextSequence: job.lastSequence + 1,
-            recordsExtracted: job.totalExtracted,
-            scrollsCompleted: checkpoint.scrollsCompleted,
-            catchUpScrolls: checkpoint.catchUpScrolls,
-            visitedUrls: checkpoint.visitedUrls,
-            startUrl: checkpoint.startUrl,
-          },
+    const message = this.buildMessage({
+      type: 'EXTRACT_RECORDS',
+      payload: {
+        identity: this.identityOf(job),
+        recipe: job.schema,
+        resume: {
+          page: checkpoint.nextPage,
+          nextSequence: job.lastSequence + 1,
+          recordsExtracted: job.totalExtracted,
+          scrollsCompleted: checkpoint.scrollsCompleted,
+          catchUpScrolls: checkpoint.catchUpScrolls,
+          visitedUrls: checkpoint.visitedUrls,
+          startUrl: checkpoint.startUrl,
         },
-      })
-    );
+      },
+    });
+    try {
+      await this.transport.sendToTab(job.tabId, message);
+    } catch (err) {
+      // No listener means the document has no content script yet (on-demand
+      // injection, ADR-037). Inject (idempotent) and retry once. A missing
+      // persistent grant surfaces as SITE_PERMISSION_REQUIRED, not TAB_…
+      // (TAB_DISCONNECTED keeps its existing meaning).
+      if (!(await hasHostAccess(checkpoint.currentUrl))) {
+        throw new SitePermissionFailure();
+      }
+      await this.transport.injectContentScript(job.tabId);
+      await this.transport.sendToTab(job.tabId, message);
+    }
   }
 
   /** Returns whether a live run in the page applied the control. */
@@ -1377,9 +1691,10 @@ export class JobCoordinator {
     category: ErrorCategory,
     message: string,
     severity: HarvestError['severity'],
-    context: Record<string, unknown>
+    context: Record<string, unknown>,
+    code?: ExtractionErrorCode
   ): HarvestError {
-    return this.reporter.report(category, message, { severity, context });
+    return this.reporter.report(category, message, { severity, context, code });
   }
 }
 
@@ -1399,6 +1714,22 @@ interface CommitOutcome {
 }
 
 class JobConflictError extends Error {}
+
+/** Thrown inside the coordinator when a tab cannot be scripted because its site grant is missing. */
+class SitePermissionFailure extends Error {
+  readonly code = 'SITE_PERMISSION_REQUIRED' as const;
+  constructor() {
+    super(SITE_PERMISSION_MESSAGE);
+    this.name = 'SitePermissionFailure';
+  }
+}
+
+function isSitePermissionFailure(error: unknown): boolean {
+  return (
+    error instanceof SitePermissionFailure ||
+    (typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'SITE_PERMISSION_REQUIRED')
+  );
+}
 
 function rejectedAck(sequence: number, reason: BatchRejectionReason): BatchAck {
   return { status: 'rejected', sequence, inserted: 0, duplicates: 0, reason };

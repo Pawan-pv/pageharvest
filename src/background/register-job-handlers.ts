@@ -63,6 +63,63 @@ export function registerJobHandlers(router: MessageRouter, coordinator: JobCoord
     return { ok: true };
   });
 
+  // Data writes go through the background too (AGENTS.md: one writer). The router has
+  // already validated each payload against its Zod schema before this handler runs.
+  const dataCommand = async (work: () => Promise<{ deleted?: number; datasetId?: string } | void>) => {
+    try {
+      const result = await work();
+      return {
+        ok: true,
+        ...(result && 'deleted' in result ? { deleted: result.deleted } : {}),
+        ...(result && 'datasetId' in result ? { datasetId: result.datasetId } : {}),
+      };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      const code =
+        error instanceof Error && error.name === 'DatasetInUseError'
+          ? ('DATASET_IN_USE' as const)
+          : ('UNKNOWN' as const);
+      return { ok: false, error: message, code };
+    }
+  };
+
+  fromPanel('CLEAR_USER_DATA', () => dataCommand(() => coordinator.clearUserData()));
+  fromPanel('UPDATE_RECORD_CELL', (message) =>
+    dataCommand(() =>
+      coordinator.updateRecordCell(message.payload.recordId, message.payload.field, message.payload.value)
+    )
+  );
+  fromPanel('DELETE_RECORDS', (message) =>
+    dataCommand(async () => ({
+      deleted: await coordinator.deleteRecords(message.payload.datasetId, message.payload.recordIds),
+    }))
+  );
+  fromPanel('APPLY_DATASET_EDIT', (message) =>
+    dataCommand(() =>
+      coordinator.applyDatasetEdit(message.payload.datasetId, message.payload.records, message.payload.fields)
+    )
+  );
+  fromPanel('RENAME_DATASET', (message) =>
+    dataCommand(() => coordinator.renameDataset(message.payload.datasetId, message.payload.name))
+  );
+  fromPanel('DELETE_DATASET', (message) =>
+    dataCommand(() => coordinator.deleteDataset(message.payload.datasetId))
+  );
+  fromPanel('CREATE_DATASET', (message) =>
+    dataCommand(async () => {
+      const datasetId = await coordinator.createDatasetWithRecords(
+        message.payload.name,
+        message.payload.url,
+        message.payload.fields,
+        message.payload.records
+      );
+      return { datasetId };
+    })
+  );
+  fromPanel('IMPORT_RECIPE', (message) =>
+    dataCommand(() => coordinator.importRecipe(message.payload.recipe))
+  );
+
   fromPage('RECORD_BATCH', (message, sender) => coordinator.commitBatch(message.payload, sender));
   fromPage('JOB_CHECKPOINT', (message, sender) => coordinator.commitCheckpoint(message.payload, sender));
   fromPage('JOB_FINISHED', (message, sender) => coordinator.completeJob(message.payload, sender));

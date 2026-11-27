@@ -6,6 +6,7 @@
 
 import { PickerOverlay } from './overlay';
 import { isPageHarvestOverlayMutation } from '@/utils/dom';
+import { detectListFromSelection } from '@/core/detection';
 import {
   generateBestSelector,
   generateSelectorCandidates,
@@ -29,12 +30,15 @@ export class ElementPicker {
   private currentHoverElement: Element | null = null;
   private selectedElement: Element | null = null;
   private selectedInfo: SelectedElementInfo | null = null;
+  private isAltHeld = false;
 
   // Observers & Listeners
   private mutationObserver: MutationObserver | null = null;
   private boundOnMouseMove: (e: MouseEvent) => void;
   private boundOnClick: (e: MouseEvent) => void;
   private boundOnKeyDown: (e: KeyboardEvent) => void;
+  private boundOnKeyUp: (e: KeyboardEvent) => void;
+  private boundOnBlur: () => void;
   private boundOnScroll: () => void;
   private boundOnResize: () => void;
 
@@ -46,6 +50,13 @@ export class ElementPicker {
     this.boundOnMouseMove = this.handleMouseMove.bind(this);
     this.boundOnClick = this.handleClick.bind(this);
     this.boundOnKeyDown = this.handleKeyDown.bind(this);
+    this.boundOnKeyUp = this.handleKeyUp.bind(this);
+    this.boundOnBlur = () => {
+      if (this.isAltHeld) {
+        this.isAltHeld = false;
+        this.handleAltStateChanged();
+      }
+    };
     this.boundOnScroll = this.handleViewportChange.bind(this);
     this.boundOnResize = this.handleViewportChange.bind(this);
   }
@@ -70,6 +81,8 @@ export class ElementPicker {
     window.addEventListener('mousemove', this.boundOnMouseMove, { capture: true, passive: true });
     window.addEventListener('click', this.boundOnClick, { capture: true, passive: false });
     window.addEventListener('keydown', this.boundOnKeyDown, { capture: true, passive: false });
+    window.addEventListener('keyup', this.boundOnKeyUp, { capture: true, passive: true });
+    window.addEventListener('blur', this.boundOnBlur);
     window.addEventListener('scroll', this.boundOnScroll, { capture: true, passive: true });
     window.addEventListener('resize', this.boundOnResize, { capture: true, passive: true });
 
@@ -81,17 +94,18 @@ export class ElementPicker {
    * Stops the picker, removes all listeners and completely cleans up the DOM.
    */
   public stop(): void {
-    if (this.mode === 'inactive') return;
-
     this.mode = 'inactive';
     this.currentHoverElement = null;
     this.selectedElement = null;
     this.selectedInfo = null;
+    this.isAltHeld = false;
 
     // 1. Remove event listeners
     window.removeEventListener('mousemove', this.boundOnMouseMove, { capture: true });
     window.removeEventListener('click', this.boundOnClick, { capture: true });
     window.removeEventListener('keydown', this.boundOnKeyDown, { capture: true });
+    window.removeEventListener('keyup', this.boundOnKeyUp, { capture: true });
+    window.removeEventListener('blur', this.boundOnBlur);
     window.removeEventListener('scroll', this.boundOnScroll, { capture: true });
     window.removeEventListener('resize', this.boundOnResize, { capture: true });
 
@@ -101,7 +115,7 @@ export class ElementPicker {
       this.mutationObserver = null;
     }
 
-    // 3. Destroy overlay
+    // 3. Always destroy overlay (even if already inactive)
     this.overlay.destroy();
   }
 
@@ -161,22 +175,26 @@ export class ElementPicker {
    * Confirms the current selection and stops the picker.
    */
   public confirm(): void {
-    if (this.selectedInfo) {
-      if (this.options.onConfirm) {
+    try {
+      if (this.selectedInfo && this.options.onConfirm) {
         this.options.onConfirm(this.selectedInfo);
       }
+    } finally {
+      this.stop();
     }
-    this.stop();
   }
 
   /**
    * Cancels the selection and stops the picker.
    */
   public cancel(): void {
-    if (this.options.onCancel) {
-      this.options.onCancel();
+    try {
+      if (this.options.onCancel) {
+        this.options.onCancel();
+      }
+    } finally {
+      this.stop();
     }
-    this.stop();
   }
 
   /**
@@ -243,6 +261,10 @@ export class ElementPicker {
     e.stopPropagation();
     e.stopImmediatePropagation();
 
+    if (e.altKey) {
+      this.isAltHeld = true;
+    }
+
     this.selectElement(target);
   }
 
@@ -251,6 +273,14 @@ export class ElementPicker {
    */
   private handleKeyDown(e: KeyboardEvent): void {
     if (this.mode === 'inactive') return;
+
+    if (e.key === 'Alt' || e.key === 'Option') {
+      if (!this.isAltHeld) {
+        this.isAltHeld = true;
+        this.handleAltStateChanged();
+      }
+      return;
+    }
 
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -271,6 +301,40 @@ export class ElementPicker {
       e.stopPropagation();
       this.selectParent();
       return;
+    }
+  }
+
+  /**
+   * Handles key release for modifier keys (e.g. Alt/Option).
+   */
+  private handleKeyUp(e: KeyboardEvent): void {
+    if (this.mode === 'inactive') return;
+    if (e.key === 'Alt' || e.key === 'Option') {
+      if (this.isAltHeld) {
+        this.isAltHeld = false;
+        this.handleAltStateChanged();
+      }
+    }
+  }
+
+  private handleAltStateChanged(): void {
+    if (this.mode === 'selected' && this.selectedElement && this.selectedElement.isConnected) {
+      const info = this.inspectElement(this.selectedElement);
+      this.selectedInfo = info;
+      this.overlay.updateSelection(info);
+      if (this.options.onSelect) {
+        this.options.onSelect(info);
+      }
+    }
+  }
+
+  /**
+   * Programmatically set the Alt override state (useful for tests or explicit single-item mode).
+   */
+  public setAltOverride(enabled: boolean): void {
+    if (this.isAltHeld !== enabled) {
+      this.isAltHeld = enabled;
+      this.handleAltStateChanged();
     }
   }
 
@@ -326,9 +390,16 @@ export class ElementPicker {
         // Re-calculate matches count and similar highlights
         if (this.selectedInfo) {
           try {
-            const queryTarget = this.selectedInfo.similarSelector || this.selectedInfo.selector;
-            const matches = document.querySelectorAll(queryTarget);
-            this.selectedInfo.matchCount = matches.length;
+            if (this.isAltHeld) {
+              this.selectedInfo.matchCount = 1;
+              this.selectedInfo.similarSelector = undefined;
+              this.selectedInfo.isSingleOverride = true;
+            } else {
+              const queryTarget = this.selectedInfo.similarSelector || this.selectedInfo.selector;
+              const matches = document.querySelectorAll(queryTarget);
+              this.selectedInfo.matchCount = matches.length;
+              this.selectedInfo.isSingleOverride = false;
+            }
             this.overlay.updateSelection(this.selectedInfo);
           } catch {
             // Ignore query error
@@ -360,18 +431,41 @@ export class ElementPicker {
     const selectorCandidates = generateSelectorCandidates(element);
     const crossFrame = assessTargetElementFrame(element);
 
+    let detectedSelector: string | undefined;
+    let detectedCount = 0;
+    if (!this.isAltHeld) {
+      try {
+        const detected = detectListFromSelection(element);
+        if (detected && detected.itemCount >= 2) {
+          detectedSelector = detected.itemSelector;
+          detectedCount = detected.itemCount;
+        }
+      } catch {
+        detectedSelector = undefined;
+        detectedCount = 0;
+      }
+    }
+
     // Identify similar / repeated pattern selector
     const similarCandidate = selectorCandidates.find(
       (c) => c.matchCount > 1 && (c.strategy === 'semantic-class' || c.strategy === 'semantic-attribute' || c.strategy === 'hierarchy')
     );
-    const similarSelector = similarCandidate ? similarCandidate.selector : undefined;
+    const similarSelector = !this.isAltHeld
+      ? detectedSelector ?? (similarCandidate ? similarCandidate.selector : undefined)
+      : undefined;
 
-    let matchCount = similarCandidate ? similarCandidate.matchCount : 1;
-    if (!similarCandidate) {
-      try {
-        matchCount = document.querySelectorAll(selector).length;
-      } catch {
-        matchCount = 1;
+    let matchCount = 1;
+    if (!this.isAltHeld) {
+      if (detectedCount >= 2) {
+        matchCount = detectedCount;
+      } else if (similarCandidate) {
+        matchCount = similarCandidate.matchCount;
+      } else {
+        try {
+          matchCount = document.querySelectorAll(selector).length;
+        } catch {
+          matchCount = 1;
+        }
       }
     }
 
@@ -388,7 +482,8 @@ export class ElementPicker {
       breadcrumbs,
       selectorCandidates,
       matchCount,
-      crossFrame
+      crossFrame,
+      isSingleOverride: this.isAltHeld
     };
   }
 

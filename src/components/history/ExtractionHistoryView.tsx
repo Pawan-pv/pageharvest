@@ -9,12 +9,13 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
-import { Badge } from '@/components/common/Badge';
 import { Input } from '@/components/common/Input';
 import { Dialog } from '@/components/common/Dialog';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Banner } from '@/components/common/Banner';
+import { SavedFileNotice } from '@/components/common/SavedFileNotice';
 import { Dataset, ExtractedRecord } from '@/types';
+import { relativeTime } from '@/utils/relative-time';
 import {
   recordsToCsv,
   recordsToJson,
@@ -31,6 +32,14 @@ export interface ExtractionHistoryViewProps {
   onNewExtraction: () => void;
 }
 
+function siteOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
 export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
   datasets,
   isLoading = false,
@@ -43,6 +52,8 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // The download last started here, so the list can say where the file went (ADR-042).
+  const [downloadId, setDownloadId] = useState<number | null>(null);
 
   const filtered = datasets.filter((ds) => {
     const q = search.toLowerCase();
@@ -51,10 +62,13 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
 
   const runExport = async (build: () => Promise<DownloadOptions>) => {
     setActionError(null);
+    setDownloadId(null);
     try {
       const result = await triggerDownload(await build());
       if (!result.success) {
         setActionError(`Export failed: ${result.error ?? 'the download did not start.'}`);
+      } else if (typeof result.downloadId === 'number') {
+        setDownloadId(result.downloadId);
       }
     } catch (error: unknown) {
       setActionError(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -138,6 +152,8 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
         </Banner>
       )}
 
+      {downloadId !== null && <SavedFileNotice downloadId={downloadId} onDismiss={() => setDownloadId(null)} />}
+
       {/* Search Input */}
       {datasets.length > 0 && (
         <Input
@@ -189,19 +205,19 @@ export const ExtractionHistoryView: React.FC<ExtractionHistoryViewProps> = ({
                     className="text-2xs text-fg-subtle hover:text-brand-fg truncate block mt-0.5 max-w-[240px]"
                     title={dataset.url}
                   >
-                    {dataset.url}
+                    {siteOf(dataset.url) || dataset.url}
                   </a>
                 </div>
 
-                <Badge variant="brand" size="sm">
+                <span className="shrink-0 rounded-full border border-line/80 bg-surface-muted px-2 py-0.5 text-right text-2xs font-semibold tabular-nums text-fg-muted">
                   {dataset.recordsCount} rows
-                </Badge>
+                </span>
               </div>
 
               <div className="flex items-center justify-between pt-1 border-t border-line-subtle text-2xs text-fg-subtle">
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-3 h-3" />
-                  <span>{new Date(dataset.createdAt).toLocaleDateString()}</span>
+                  <span>{relativeTime(dataset.createdAt)}</span>
                   <span>•</span>
                   <span>{dataset.fields.length} columns</span>
                 </div>

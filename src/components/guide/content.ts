@@ -35,13 +35,15 @@ export interface GuideSection {
   blocks: GuideBlock[];
 }
 
-export const PRACTICE_SITE_URL = 'https://books.toscrape.com/';
+import { PRACTICE_SITE_URL } from './links';
+
+export { PRACTICE_SITE_URL, PRIVACY_POLICY_URL, THIRD_PARTY_NOTICES_PATH } from './links';
 
 export const GUIDE_SECTIONS: GuideSection[] = [
   {
     id: 'getting-started',
     title: 'Getting started',
-    summary: 'Turn a list on any website into a spreadsheet in five steps.',
+    summary: 'Turn a list on a website into a spreadsheet in five steps.',
     keywords: ['start', 'first', 'begin', 'how', 'quick', 'practice', 'tutorial'],
     blocks: [
       { kind: 'text', text: 'PageHarvest copies repeated items from a web page, such as products, search results or articles, into rows and columns you can export.' },
@@ -49,12 +51,13 @@ export const GUIDE_SECTIONS: GuideSection[] = [
         kind: 'steps',
         items: [
           'Open the website with the list you want, then open PageHarvest from the toolbar.',
-          'Press "Find data automatically", or "Pick items myself" and click one item on the page.',
-          'Check the columns, rename them, and leave out the ones you do not need.',
-          'Choose how the site shows more items, or keep "Just this page".',
-          'Press Start extraction, then Export to save a CSV for Excel or Google Sheets.',
+          'Press "Find Data on This Page". PageHarvest says how many items it found and shows the first rows.',
+          'Press "Yes, this is my list", then untick the columns you do not need.',
+          'Say whether the list continues on more pages, then press "Start collecting".',
+          'Press "Download for Excel". The file goes to your Downloads folder.',
         ],
       },
+      { kind: 'text', text: 'Advanced options, a switch in Settings, adds the detailed controls: what each column collects, page limits and waiting times, page numbers in the address, saved setups, cleaning tools and more file types. With it on, some buttons have other names; this guide gives both.' },
       {
         kind: 'link',
         text: 'Open a practice site',
@@ -65,18 +68,18 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   },
   {
     id: 'picking-data',
-    title: 'Picking data',
-    summary: 'Point at one item on the page and PageHarvest finds the others like it.',
+    title: 'Picking an item yourself',
+    summary: 'Click one item on the page and PageHarvest finds the others like it.',
     keywords: ['pick', 'picker', 'click', 'select', 'element', 'highlight', 'manual'],
     blocks: [
-      { kind: 'text', text: 'Use "Pick items myself" when automatic detection chooses the wrong list, or when you want one specific part of the page.' },
+      { kind: 'text', text: 'Use "Pick one item myself" when PageHarvest finds the wrong list, or when you want one particular part of the page. With Advanced options on, the button is "Pick items myself".' },
       {
         kind: 'steps',
         items: [
-          'Press "Pick items myself". The page shows a highlight as you move the mouse.',
+          'Press "Pick one item myself". The page shows a highlight as you move the mouse.',
           'Click one complete item, such as a whole product card rather than only its price.',
-          'PageHarvest finds similar items and shows how many it found, with sample rows.',
-          'Press "Use this list" if it looks right, or "Pick on the page instead" to try again.',
+          'PageHarvest finds the items like it and shows how many there are, with the first rows.',
+          'Press "Yes, this is my list" if it looks right, or "Not the right list?" to see the other lists on the page.',
         ],
       },
       { kind: 'text', text: 'Press Escape on the page to stop picking.' },
@@ -84,23 +87,24 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   },
   {
     id: 'auto-detect',
-    title: 'Auto-detect',
-    summary: 'Let PageHarvest look for repeated items and show you what it found.',
+    title: 'How PageHarvest finds a list',
+    summary: 'It looks for items that repeat, and shows you what it found before anything is saved.',
     keywords: ['automatic', 'detect', 'find', 'list', 'similar', 'items', 'table', 'links', 'confidence', 'candidates', 'best match'],
     blocks: [
-      { kind: 'text', text: '"Find data automatically" looks for groups of items that repeat, such as cards in a grid or rows in a list. When it finds more than one, it lists them best match first, each with how many similar items it found, its columns, a few sample rows and a confidence label.' },
-      { kind: 'text', text: 'Confidence says how sure PageHarvest is that a list is data rather than a menu or adverts. It is a guide, not a guarantee: check the sample rows. A list that looks like navigation needs a second click, "Use this list anyway".' },
-      { kind: 'text', text: 'Nothing is used until you press "Use this list". If the sample rows are menus or adverts instead of your data, pick the items yourself.' },
-      { kind: 'text', text: 'Under "More ways to start", "Extract a table" reads an HTML table, and "Extract all links" collects the links on the page.' },
+      { kind: 'text', text: '"Find Data on This Page" looks for groups of items that repeat, such as cards in a grid or rows in a list, and shows the one that most looks like data, with its first rows. Nothing is saved until you press "Start collecting".' },
+      { kind: 'text', text: 'If it shows a menu or adverts instead of your data, press "Not the right list?" to see every list on the page, or pick one item yourself. A list that looks like a menu is never chosen for you.' },
+      { kind: 'text', text: 'Under "Quick presets", "Get a table" reads a table on the page, and "Get all the links" collects its links.' },
+      { kind: 'text', text: 'With Advanced options on, the button is "Find data automatically", and every list is shown best match first with a confidence label. Confidence says how sure PageHarvest is that a list is data rather than a menu. It is a guide, not a guarantee: check the sample rows.' },
     ],
   },
   {
     id: 'editing-fields',
-    title: 'Editing fields',
-    summary: 'Choose, rename, reorder and change what each column collects.',
+    title: 'Columns',
+    summary: 'Keep, leave out and rename columns. Advanced options adds what each one collects.',
     keywords: ['column', 'field', 'rename', 'reorder', 'type', 'regex', 'pattern', 'attribute', 'required', 'number', 'link', 'image'],
     blocks: [
-      { kind: 'text', text: 'Each column is one piece of information from every item. Untick a column to leave it out, and use the arrows to change the column order in the export.' },
+      { kind: 'text', text: 'Each column is one piece of information from every item. Untick a column to leave it out, and type over a name to change it. Each column shows an example from the page.' },
+      { kind: 'text', text: 'With Advanced options on you can also change the order with the arrows, add columns of your own, and choose what a column collects:' },
       {
         kind: 'list',
         items: [
@@ -112,16 +116,17 @@ export const GUIDE_SECTIONS: GuideSection[] = [
           'Pattern (regex): only the part of the text that matches a pattern. "Part to keep" chooses a bracketed group.',
         ],
       },
-      { kind: 'text', text: 'Required: rows with no value in that column are skipped and counted as excluded. It is off by default, so no row is dropped unless you ask.' },
-      { kind: 'text', text: 'The preview updates as you change columns. It shows each item\'s text as detection read it; each column gets its own value when the extraction runs.' },
+      { kind: 'text', text: 'Required (Advanced options): rows with no value in that column are skipped and counted as excluded. It is off by default, so no row is dropped unless you ask.' },
     ],
   },
   {
     id: 'pagination',
-    title: 'Pagination and infinite scroll',
-    summary: 'Collect more than one page: Next buttons, scrolling feeds, or page numbers in the address.',
+    title: 'More pages',
+    summary: 'Collect more than one page: Next buttons, pages that grow as you scroll, or page numbers in the address.',
     keywords: ['pages', 'next', 'scroll', 'infinite', 'load more', 'url', 'template', 'page number', 'limit', 'delay', 'wait'],
     blocks: [
+      { kind: 'text', text: 'PageHarvest asks one question: does this list continue on more pages? When it can see a Next or "Load more" button it suggests Yes. Choose how many pages to stop after, from 1 to 50. If items appear as you scroll down instead, choose "Yes, more items appear when I scroll down".' },
+      { kind: 'text', text: 'With Advanced options on there are four ways to choose from, and higher limits:' },
       {
         kind: 'list',
         items: [
@@ -136,18 +141,18 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   },
   {
     id: 'running',
-    title: 'Running, pausing and resuming jobs',
-    summary: 'Watch progress, pause, finish early or cancel. Closing the panel does not stop a job.',
+    title: 'While it collects',
+    summary: 'Watch the rows arrive, pause, or stop early and keep what you have. Closing the panel does not stop it.',
     keywords: ['run', 'start', 'pause', 'resume', 'cancel', 'finish', 'stop', 'progress', 'close panel', 'background', 'duplicates', 'excluded'],
     blocks: [
-      { kind: 'text', text: 'While a job runs, the panel shows the page or scroll it is on, rows saved, duplicates skipped and rows excluded. Rows are saved as they arrive.' },
-      { kind: 'text', text: 'You can close the side panel. The job keeps running in the background, and the panel shows it again when you reopen it.' },
+      { kind: 'text', text: 'While PageHarvest collects, the panel shows how many rows are saved and which page or scroll it is on. Rows are saved as they arrive.' },
+      { kind: 'text', text: 'You can close the side panel. PageHarvest keeps working, and the panel shows the progress again when you reopen it.' },
       {
         kind: 'list',
         items: [
-          'Pause holds the job where it is; Resume continues it.',
-          'Finish stops now and shows the rows collected so far.',
-          'Cancel stops the job. Rows already saved stay in Datasets.',
+          'Pause holds it where it is; Continue carries on.',
+          '"Stop here and keep my rows" stops now and shows the rows collected so far.',
+          'With Advanced options on, the same buttons are Pause, Resume and "Finish and view rows", and Cancel stops the job and goes back to the start. Rows already saved stay in My data.',
         ],
       },
       { kind: 'text', text: 'Duplicates skipped: when pages overlap, a row already saved is not saved again. Only rows identical in every column count as duplicates.' },
@@ -155,16 +160,16 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   },
   {
     id: 'recovering',
-    title: 'Recovering interrupted jobs',
-    summary: 'If a tab closes or the browser restarts, resume from where the job stopped.',
+    title: 'If it stops early',
+    summary: 'If a tab closes or the browser restarts, continue from where it stopped.',
     keywords: ['recover', 'interrupted', 'resume', 'discard', 'crash', 'closed', 'restart', 'lost'],
     blocks: [
-      { kind: 'text', text: 'Every row is saved as soon as it is collected. If a job stops before finishing, for example because its tab was closed, a banner says where it stopped and how many rows are safe.' },
+      { kind: 'text', text: 'Every row is saved as soon as it is collected. If collecting stops before it finishes, for example because its tab was closed, a message says so and how many rows are safe.' },
       {
         kind: 'list',
         items: [
-          'Resume continues from the last saved page or scroll.',
-          'Discard ends the job. Its saved rows stay in Datasets, but it can no longer be resumed.',
+          'Continue (Resume, with Advanced options on) carries on from the last saved page or scroll.',
+          '"Stop here and keep my rows" (Discard, with Advanced options on) ends it. The saved rows stay in My data, but it can no longer be continued.',
         ],
       },
       { kind: 'text', text: 'A scrolling job that resumes has to scroll back past the rows it already has, because feeds reload from the top. Those rows are not saved twice.' },
@@ -173,22 +178,24 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   {
     id: 'exporting',
     title: 'Exporting',
-    summary: 'Save as CSV for spreadsheets, or JSON and NDJSON for other tools.',
+    summary: 'Save an Excel or CSV file, or copy the table. Advanced options adds JSON and NDJSON.',
     keywords: ['export', 'download', 'csv', 'json', 'ndjson', 'excel', 'sheets', 'numbers', 'delimiter', 'semicolon', 'formula'],
     blocks: [
+      { kind: 'text', text: '"Download for Excel" saves an Excel file in your Downloads folder and tells you its name. "Show in folder" opens the folder with the file selected. A file is never replaced: if the name is taken, Chrome adds a number.' },
       {
         kind: 'list',
         items: [
-          'CSV: opens in Excel, Numbers and Google Sheets.',
-          'JSON: one file with every row, for developers and other tools.',
-          'NDJSON: one row per line, for large data tools.',
+          'Excel: standard .xlsx format, compatible with standard spreadsheet applications, with numbers kept as numbers.',
+          'CSV: standard comma-separated text file (.csv) compatible with standard spreadsheet applications.',
+          'Copy the table: paste it straight into a spreadsheet.',
+          'JSON and NDJSON (Advanced options): for developers and other tools.',
         ],
       },
       {
         kind: 'qa',
         items: [
-          { question: 'Excel puts everything in one column.', answer: 'Excel in some countries expects a semicolon between values. Export again with the Semicolon delimiter.' },
-          { question: 'Accents or symbols look wrong in Excel.', answer: 'Keep "Mark the file as UTF-8" switched on when you export.' },
+          { question: 'A CSV file puts everything in one column in Excel.', answer: 'Excel in some countries expects a semicolon between values. Use "Download for Excel" instead, or with Advanced options on, export the CSV with the Semicolon delimiter.' },
+          { question: 'Accents or symbols look wrong in a CSV file.', answer: 'Use "Download for Excel" instead, or with Advanced options on, keep "Mark the file as UTF-8" switched on when you export.' },
           { question: 'Long numbers such as IDs show as 1.23E+15, or lose their leading zeros.', answer: 'In Excel, use Data, From Text/CSV, and set that column to Text before loading.' },
           { question: 'Some cells start with an apostrophe.', answer: 'Cells that start like a formula, such as =, + or @, get a \' in front so a spreadsheet will not run them. Numbers are written as they are.' },
         ],
@@ -201,9 +208,9 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     summary: 'Everything PageHarvest collects stays on your computer.',
     keywords: ['privacy', 'local', 'data', 'cloud', 'account', 'upload', 'tracking', 'analytics', 'offline', 'storage', 'delete'],
     blocks: [
-      { kind: 'text', text: 'PageHarvest works inside your browser. Rows, recipes and settings are stored on this computer, and nothing is sent to a server: no account, no upload, no analytics.' },
-      { kind: 'text', text: 'Exports are saved by your browser to your Downloads folder. Deleting a dataset in Datasets removes its rows from this computer.' },
-      { kind: 'text', text: 'PageHarvest only reads pages you open and only when you ask. It does not sign in for you or get past paywalls or CAPTCHAs.' },
+      { kind: 'text', text: 'PageHarvest works inside your browser. Your rows and settings are stored on this computer, and nothing is sent to a server: no account, no upload, no analytics.' },
+      { kind: 'text', text: 'Files are saved by your browser to your Downloads folder. Deleting a saved list in My data removes its rows from this computer, and Settings can delete everything at once.' },
+      { kind: 'text', text: 'PageHarvest reads a page only when you ask it to, and does not change anything on a site. It does not sign in for you or get past paywalls or CAPTCHAs. You are responsible for following the rules of the sites you collect from.' },
     ],
   },
   {
@@ -215,11 +222,11 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       {
         kind: 'qa',
         items: [
-          { question: 'Nothing was detected.', answer: 'Wait until the page has finished loading and try again. If the items still are not found, press "Pick items myself" and click one whole item. Browser pages such as settings cannot be read at all.' },
-          { question: 'Some values are missing.', answer: 'A column may point at the wrong part of the item, or the value may load late. Open the column under Review fields and pick it again, or set a longer wait under Pagination, Advanced. Rows with missing values are kept unless the column is Required.' },
-          { question: 'The site will not scroll, or stops loading.', answer: 'Some sites load more items only with a "Load more" button: choose "Click a Next button" instead. Otherwise set a longer wait between scrolls. If the site still stops, it may be limiting visitors; try again later.' },
-          { question: 'Numbers are kept as text.', answer: 'Change the column to Number under Review fields. Number removes currency symbols and spaces; a value it cannot read as a number is left empty, so check the column after the run.' },
-          { question: 'An error appeared.', answer: 'Each error says whether your data is safe and what to do next. Rows already saved stay in Datasets. "Technical details" has information to share if you report a problem.' },
+          { question: 'No list was found.', answer: 'Wait until the page has finished loading and try again. If the items still are not found, press "Pick one item myself" and click one whole item. Browser pages such as settings cannot be read at all.' },
+          { question: 'Some values are missing.', answer: 'The value may load late, or a column may point at the wrong part of the item. Rows with missing values are always kept. With Advanced options on you can open the column on the Check columns step and correct it, or set a longer wait under More pages, Advanced.' },
+          { question: 'The site will not scroll, or stops loading.', answer: 'Some sites load more items only with a "Load more" button: answer "Yes, it has a Next button or page numbers" instead. If the site still stops, it may be limiting visitors; try again later, or set a longer wait with Advanced options on.' },
+          { question: 'Numbers are kept as text.', answer: 'With Advanced options on, change the column to Number on the Check columns step. Number removes currency symbols and spaces; a value it cannot read as a number is left empty, so check the column after collecting.' },
+          { question: 'An error appeared.', answer: 'Each error says whether your data is safe and what to do next. Rows already saved stay in My data. "Technical details" has information to share if you report a problem.' },
         ],
       },
     ],

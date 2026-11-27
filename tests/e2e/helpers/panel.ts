@@ -1,37 +1,67 @@
 /**
- * Side panel steps shared by the Playwright specs. They follow the redesigned flow
- * (ADR-032): start options, the result card, Review fields, Pagination with its
- * collapsed Advanced section, and the run screen. Specs call these instead of
- * repeating labels, so a copy change is fixed in one place.
+ * Side panel steps shared by the Playwright specs. The List Extractor now opens a
+ * 2-step setup screen (ADR-032, ADR-039): "Click to Pick List"/"Auto-detect on this
+ * page", then a found-list card with "Edit columns", "Re-pick" and the Load More
+ * options. Table and Links still show the detailed result card and column panel.
+ * Specs call these helpers instead of repeating labels, so a copy change is fixed
+ * in one place.
  */
-import type { Page, Worker } from '@playwright/test';
+import { expect, type Page, type Worker } from '@playwright/test';
 import { GUIDE_STORAGE_KEY } from '../../../src/components/guide/preferences';
+import { ADVANCED_STORAGE_KEY } from '../../../src/components/settings/advanced-preference';
+import { CONSENT_STORAGE_KEY } from '../../../src/components/consent/consent';
+
+/** Marks user consent as granted in chrome.storage.local (B2 ConsentGate). Call before opening the panel. */
+export async function markConsentGiven(worker: Worker): Promise<void> {
+  await worker.evaluate(async (key) => {
+    await chrome.storage.local.set({
+      [key]: { accepted: true, version: '1.0', acceptedAt: new Date().toISOString() },
+    });
+  }, CONSENT_STORAGE_KEY);
+}
+
+/** If the ConsentGate dialog is currently presented on the given page, click accept. */
+export async function acceptConsentIfPresent(page: Page): Promise<void> {
+  try {
+    const btn = page.getByRole('button', { name: 'I understand, continue' });
+    if (await btn.isVisible({ timeout: 1500 })) {
+      await btn.click();
+    }
+  } catch {
+    // Already dismissed or not present
+  }
+}
 
 /** Marks the first-run tour as seen, so it does not cover the panel. Call before opening it. */
 export async function markTourSeen(worker: Worker): Promise<void> {
   await worker.evaluate(async (key) => {
     await chrome.storage.local.set({ [key]: { version: 1, onboardingDone: true } });
   }, GUIDE_STORAGE_KEY);
+  await markConsentGiven(worker);
+}
+
+/**
+ * Turns Advanced options on (ADR-039). The specs written before simple mode drive the
+ * detailed controls, so they are the proof that nothing was lost when it is on.
+ */
+export async function enableAdvancedOptions(worker: Worker): Promise<void> {
+  await worker.evaluate(async (key) => {
+    await chrome.storage.local.set({ [key]: { version: 1, advanced: true } });
+  }, ADVANCED_STORAGE_KEY);
 }
 
 export type StartTool = 'auto' | 'pick' | 'table' | 'links';
 
-const START_BUTTON: Record<StartTool, string> = {
-  auto: 'Find data automatically',
-  pick: 'Pick items myself',
+const START_BUTTON: Record<StartTool, string | RegExp> = {
+  auto: 'Find Data on This Page',
+  pick: 'Pick element on page',
   table: 'Extract a table',
   links: 'Extract all links',
 };
 
-/** The start option's button. Table and Links sit under "More ways to start". */
+/** The tool card for a start option. All four sit in the Tool Hub, always visible. */
 export async function startButton(panel: Page, tool: StartTool) {
-  if (tool === 'table' || tool === 'links') {
-    const more = panel.getByText('More ways to start');
-    await more.waitFor({ timeout: 10000 });
-    const details = panel.locator('details', { has: more });
-    if (!(await details.evaluate((element) => (element as HTMLDetailsElement).open))) await more.click();
-  }
-  return panel.getByRole('button', { name: START_BUTTON[tool], exact: true });
+  return panel.getByRole('button', { name: START_BUTTON[tool] });
 }
 
 export async function startWith(panel: Page, tool: StartTool): Promise<void> {
@@ -40,26 +70,44 @@ export async function startWith(panel: Page, tool: StartTool): Promise<void> {
   await button.click();
 }
 
-/** The result card's confirm button. */
-export const useThisList = (panel: Page) => panel.getByRole('button', { name: 'Use this list', exact: true });
+/** Clicks the List Extractor card, then Auto-detect, opening ListSetupView with detected items. */
+export async function startListExtraction(panel: Page): Promise<void> {
+  await startWith(panel, 'auto');
+  const autoDetect = panel.getByRole('button', { name: /Auto-detect on this page/i });
+  await autoDetect.waitFor({ state: 'visible', timeout: 15000 });
+  await autoDetect.click();
+}
 
-/** The heading of the result card. */
-export const resultHeading = (panel: Page) => panel.getByRole('heading', { name: 'Is this the data you want?' });
+/**
+ * The detected-list summary. The List Extractor shows "Found N items · M columns";
+ * Table/Links still show "N similar items found" on the result card. Both name the
+ * count, so either one proves that detection found a list.
+ */
+export const resultHeading = (panel: Page) =>
+  panel
+    .getByText(/Found \d[\d,]* items/)
+    .or(panel.getByText(/^\d[\d,]* similar items? found$/))
+    .first();
 
-/** The Review fields heading. */
-export const reviewFieldsHeading = (panel: Page) => panel.getByText('Choose your columns');
+/** The column controls heading in ListSetupView (inline editor) or the detailed flow. */
+export const reviewFieldsHeading = (panel: Page) =>
+  panel.getByText('Choose your columns').or(panel.getByRole('button', { name: 'Edit columns' })).first();
 
-/** "Start extraction (N columns)", on Review fields or Pagination. */
-export const startExtraction = (panel: Page) => panel.getByRole('button', { name: /Start extraction/ });
+/** "Start Extraction", on the new ListSetupView or the detailed flow. */
+export const startExtraction = (panel: Page) => panel.getByRole('button', { name: /Start Extraction|Start extraction/ });
 
-/** Moves from Review fields to Pagination, if not there already. */
+/** Pagination options are always visible in ListSetupView's second card once a list is found. */
 export async function goToPagination(panel: Page): Promise<void> {
   const next = panel.getByRole('button', { name: 'Next: Pagination' });
   if (await next.isVisible()) await next.click();
-  await panel.getByRole('group', { name: /How does this site show more items/ }).waitFor();
+  await panel
+    .getByText('② Load More Items')
+    .or(panel.getByRole('group', { name: /How does this site show more items/ }))
+    .first()
+    .waitFor({ timeout: 15000 });
 }
 
-/** Moves from Pagination back to Review fields, if not there already. */
+/** Moves from Pagination back to the list setup, if the detailed flow is present. */
 export async function goToFields(panel: Page): Promise<void> {
   const back = panel.getByRole('button', { name: 'Back to fields' });
   if (await back.isVisible()) await back.click();
@@ -68,21 +116,41 @@ export async function goToFields(panel: Page): Promise<void> {
 
 export type PaginationMode = 'none' | 'next_button' | 'infinite_scroll' | 'url_template';
 
+/** The visible option label in ListSetupView, or the radio name in the detailed panel. */
 const MODE_LABEL: Record<PaginationMode, string> = {
-  none: 'Just this page',
-  next_button: 'Click a Next button',
-  infinite_scroll: 'Scroll to load more',
+  none: 'This Page Only',
+  next_button: 'Pagination',
+  infinite_scroll: 'Auto-Scroll',
   url_template: 'Page numbers in the URL',
 };
 
 export async function choosePagination(panel: Page, mode: PaginationMode): Promise<void> {
   await goToPagination(panel);
-  await panel.getByRole('radio', { name: MODE_LABEL[mode] }).check();
+  const label = MODE_LABEL[mode];
+  const named = panel.getByRole('radio', { name: new RegExp(label, 'i') });
+  if (await named.count()) {
+    await named.first().check();
+    return;
+  }
+  // The setup screen's Pagination and Load More radios sit in a div, so they have no
+  // accessible name. Click the real option and prove its radio is now checked.
+  const option = panel.getByText(label, { exact: true }).first();
+  await option.click();
+  await expect(option.locator('xpath=../..').locator('input[type="radio"]')).toBeChecked();
 }
 
 async function openAdvanced(panel: Page): Promise<void> {
+  const toggle = panel.getByRole('button', { name: /Limits & timing/i });
+  if (await toggle.count()) {
+    // The setup screen's toggle has no aria-expanded, so check the inputs themselves:
+    // setLimits is called more than once in a flow and must not close what it just opened.
+    const limitsVisible =
+      (await panel.getByLabel('Max pages').count()) > 0 || (await panel.getByLabel('Max scrolls').count()) > 0;
+    if (!limitsVisible) await toggle.click();
+    return;
+  }
   const advanced = panel.getByRole('button', { name: 'Advanced' });
-  if ((await advanced.getAttribute('aria-expanded')) !== 'true') await advanced.click();
+  if (await advanced.count() && (await advanced.getAttribute('aria-expanded')) !== 'true') await advanced.click();
 }
 
 export interface PaginationLimits {
@@ -94,16 +162,31 @@ export interface PaginationLimits {
   nextButtonSelector?: string;
 }
 
-/** Fills limits under Advanced. Waits are typed in seconds, as the panel shows them. */
+/** Fills limits. In the new flow waits are typed in milliseconds; in the detailed flow, seconds. */
 export async function setLimits(panel: Page, limits: PaginationLimits): Promise<void> {
   await openAdvanced(panel);
-  if (limits.maxPages !== undefined) await panel.getByLabel('Most pages').fill(String(limits.maxPages));
-  if (limits.delayMs !== undefined) {
-    await panel.getByLabel('Wait between pages (seconds)').fill(String(limits.delayMs / 1000));
+  if (limits.maxPages !== undefined) {
+    await panel.getByLabel('Max pages').or(panel.getByLabel('Most pages')).first().fill(String(limits.maxPages));
   }
-  if (limits.maxScrolls !== undefined) await panel.getByLabel('Most scrolls').fill(String(limits.maxScrolls));
+  if (limits.delayMs !== undefined) {
+    // ListSetupView takes milliseconds; the detailed panel takes seconds.
+    const msInput = panel.getByLabel('Delay (min 1,000 ms)');
+    if (await msInput.count()) {
+      await msInput.fill(String(Math.max(1000, limits.delayMs)));
+    } else {
+      await panel.getByLabel('Wait between pages (seconds)').fill(String(limits.delayMs / 1000));
+    }
+  }
+  if (limits.maxScrolls !== undefined) {
+    await panel.getByLabel('Max scrolls').or(panel.getByLabel('Most scrolls')).first().fill(String(limits.maxScrolls));
+  }
   if (limits.scrollDelayMs !== undefined) {
-    await panel.getByLabel('Wait between scrolls (seconds)').fill(String(limits.scrollDelayMs / 1000));
+    const msInput = panel.getByLabel('Delay (min 1,000 ms)');
+    if (await msInput.count()) {
+      await msInput.fill(String(Math.max(1000, limits.scrollDelayMs)));
+    } else {
+      await panel.getByLabel('Wait between scrolls (seconds)').fill(String(limits.scrollDelayMs / 1000));
+    }
   }
   if (limits.maxRecords !== undefined) await panel.getByLabel('Stop after this many rows').fill(String(limits.maxRecords));
   if (limits.nextButtonSelector !== undefined) {
@@ -114,7 +197,8 @@ export async function setLimits(panel: Page, limits: PaginationLimits): Promise<
 /** Reads a limit back, in the unit the contract stores (milliseconds for waits). */
 export async function readLimit(panel: Page, limit: 'maxPages' | 'maxScrolls'): Promise<string> {
   await openAdvanced(panel);
-  return panel.getByLabel(limit === 'maxPages' ? 'Most pages' : 'Most scrolls').inputValue();
+  const name = limit === 'maxPages' ? ['Max pages', 'Most pages'] : ['Max scrolls', 'Most scrolls'];
+  return panel.getByLabel(name[0]).or(panel.getByLabel(name[1])).first().inputValue();
 }
 
 /** The URL template field, after choosing "Page numbers in the URL". */
@@ -123,12 +207,12 @@ export async function setUrlTemplate(panel: Page, template: string): Promise<voi
   await panel.getByLabel('Page address').fill(template);
 }
 
-/** Run screen and recovery copy. */
+/** Run screen and recovery copy (new ListRunningView copy first, legacy copy as fallback). */
 export const RUN = {
-  running: 'Collecting rows…',
-  paused: 'Extraction paused',
-  cancel: 'Cancel job',
-  finish: /Finish and view rows/,
+  running: 'Live Extraction Stage',
+  paused: 'Paused',
+  cancel: 'Stop extraction',
+  finish: /Extraction complete/,
   interrupted: 'Extraction interrupted',
   resume: 'Resume',
 } as const;
@@ -143,9 +227,12 @@ export async function discardInterrupted(panel: Page): Promise<void> {
 /** The export dialog. */
 export const exportDialog = (panel: Page) => panel.getByRole('dialog', { name: 'Export data' });
 
-/** "N similar items found" on the result card. */
+/** "N similar items found" on the legacy result card, or "Found N items" in ListSetupView. */
 export const itemsFound = (panel: Page, count: number) =>
-  panel.getByText(`${count} similar ${count === 1 ? 'item' : 'items'} found`).first();
+  panel
+    .getByText(`${count} similar ${count === 1 ? 'item' : 'items'} found`)
+    .or(panel.getByText(new RegExp(`Found ${count} items`)))
+    .first();
 
 export interface DownloadSnapshot {
   id: number;

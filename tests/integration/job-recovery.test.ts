@@ -286,6 +286,7 @@ describe('Session recovery lifecycle', () => {
 
       expect(result.ok).toBe(false);
       expect((await harness.job(job.jobId))?.status).toBe('RECOVERABLE');
+      expect(harness.closedTabs.size).toBe(1);
     });
   });
 

@@ -1,12 +1,12 @@
 import { chromium, BrowserContext, Page, Worker } from '@playwright/test';
 import { test, expect } from './release-test';
-import { markTourSeen } from './helpers/panel';
+import { markTourSeen, enableAdvancedOptions } from './helpers/panel';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const pathToExtension = path.resolve(__dirname, '../../.output/chrome-mv3');
+const pathToExtension = path.resolve(__dirname, '../../.output/chrome-mv3-test');
 
 test.describe('PageHarvest Browser Extension E2E Suite', () => {
   let context: BrowserContext;
@@ -32,6 +32,7 @@ test.describe('PageHarvest Browser Extension E2E Suite', () => {
     extensionId = serviceWorker.url().split('/')[2];
     // The first-run tour has its own spec; here it would cover the panel.
     await markTourSeen(serviceWorker);
+    await enableAdvancedOptions(serviceWorker);
     console.log(`[E2E] Unpacked Chrome MV3 Extension Loaded with ID: ${extensionId}`);
   });
 
@@ -281,6 +282,8 @@ test.describe('PageHarvest Browser Extension E2E Suite', () => {
       if (typeof tabId !== 'number') {
         throw new Error('The fixture tab was not available to the extension context.');
       }
+      // No static content script (ADR-037): inject first, as the panel does before detection.
+      await chrome.scripting.executeScript({ target: { tabId }, files: ['content-scripts/content.js'] });
       return chrome.tabs.sendMessage(tabId, {
         id: `e2e_detect_${Date.now()}`,
         type: 'DETECT_REPEATED_ELEMENTS',
@@ -313,7 +316,7 @@ test.describe('PageHarvest Browser Extension E2E Suite', () => {
         pagination: {
           type: 'none',
           maxPages: 1,
-          delayMs: 200,
+          delayMs: 1000,
           scrollCount: 1,
           scrollDelayMs: 300,
           startPage: 1,
@@ -359,7 +362,7 @@ test.describe('PageHarvest Browser Extension E2E Suite', () => {
           type: 'url_template',
           urlTemplate: 'http://127.0.0.1:3456/url-page-{page}.html',
           maxPages: 3,
-          delayMs: 200,
+          delayMs: 1000,
           scrollCount: 1,
           scrollDelayMs: 300,
           startPage: 1,

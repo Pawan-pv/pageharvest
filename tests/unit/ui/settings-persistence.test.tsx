@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SettingsView } from '@/components/settings/SettingsView';
+import { ADVANCED_STORAGE_KEY } from '@/components/settings/advanced-preference';
 import { db } from '@/storage/db';
 import { SettingsRepository } from '@/storage/repositories/settings-repository';
 
@@ -17,6 +18,8 @@ async function renderLoaded() {
 describe('Settings persistence through the real repository', () => {
   beforeEach(async () => {
     await db.settings.clear();
+    // The detailed defaults are behind Advanced options (ADR-039).
+    await chrome.storage.local.set({ [ADVANCED_STORAGE_KEY]: { version: 1, advanced: true } });
   });
 
   afterEach(() => {

@@ -47,6 +47,11 @@ export interface JobBatchPayload {
 export interface CommitOutcome {
   inserted: number;
   shouldStop: boolean;
+  /**
+   * The batch had already been stored by an earlier delivery whose reply was lost, so
+   * `inserted` (0) says nothing about whether the page had new rows.
+   */
+  alreadyStored?: boolean;
 }
 
 export interface NavigationJobOptions {
@@ -238,7 +243,7 @@ async function runUrlTemplateJob(options: NavigationJobOptions): Promise<Navigat
 
   if (commit.shouldStop) return { kind: 'finished', stopReason: 'stopped_by_coordinator' };
   if (!hasRows) return { kind: 'finished', stopReason: 'empty_page' };
-  if (commit.inserted === 0) return { kind: 'finished', stopReason: 'no_new_records' };
+  if (commit.inserted === 0 && !commit.alreadyStored) return { kind: 'finished', stopReason: 'no_new_records' };
   if (!nextUrl) return { kind: 'finished', stopReason: 'max_pages_reached' };
 
   await sleepUnlessCancelled(pagination.delayMs, signal);

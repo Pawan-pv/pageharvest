@@ -10,7 +10,7 @@ import { GUIDE_STORAGE_KEY } from '../../src/components/guide/preferences';
  * The only spec that does not pre-mark the tour: a fresh profile must show the welcome tour
  * on first open, remember a finish in chrome.storage.local, and not show it again.
  */
-const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 
 test.describe('First-run tour', () => {
   test.describe.configure({ mode: 'serial' });
@@ -44,6 +44,11 @@ test.describe('First-run tour', () => {
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
 
+    // On a fresh profile, the B2 ConsentGate presents first. Accept it to reveal the main application & tour.
+    const consentBtn = panel.getByRole('button', { name: 'I understand, continue' });
+    await expect(consentBtn).toBeVisible({ timeout: 10000 });
+    await consentBtn.click();
+
     const tour = panel.getByRole('dialog', { name: 'Welcome to PageHarvest' });
     await expect(tour).toBeVisible({ timeout: 10000 });
     await expect(tour).toContainText('Step 1 of 5');
@@ -56,7 +61,7 @@ test.describe('First-run tour', () => {
     await expect(panel.getByRole('dialog', { name: 'Your data stays on your computer' })).toBeVisible();
     await panel.getByRole('button', { name: 'Get started' }).click();
     await expect(panel.getByRole('dialog')).toHaveCount(0);
-    await expect(panel.getByText('Get data from this page')).toBeVisible();
+    await expect(panel.getByText('List Extractor')).toBeVisible();
 
     await expect
       .poll(async () =>
@@ -69,7 +74,7 @@ test.describe('First-run tour', () => {
   test('does not show the tour again, and Help reopens it', async () => {
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
-    await expect(panel.getByText('Get data from this page')).toBeVisible({ timeout: 10000 });
+    await expect(panel.getByText('List Extractor')).toBeVisible({ timeout: 10000 });
     // Give the stored preference time to be read before checking the tour stayed closed.
     await panel.waitForTimeout(500);
     await expect(panel.getByRole('dialog')).toHaveCount(0);

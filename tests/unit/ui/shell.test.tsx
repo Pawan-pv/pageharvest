@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describeProgress, formatRows } from '@/components/dashboard/progress-copy';
 import { describeError, ERROR_COPY } from '@/components/common/errorCopy';
@@ -97,7 +97,7 @@ describe('flow steps', () => {
     ['auto', 'Find data'],
     ['table', 'Find a table'],
     ['links', 'Find links'],
-    ['recipe', 'Load recipe'],
+    ['recipe', 'Load saved setup'],
   ])('names the first step for the %s flow', (kind, label) => {
     const steps = flowSteps(kind);
     expect(steps.map((step) => step.id)).toEqual(['pick', 'fields', 'pagination', 'run', 'export']);
@@ -120,14 +120,14 @@ describe('flow steps', () => {
 describe('Stepper', () => {
   it('marks the current step, says where the user is, and labels finished steps', () => {
     render(<Stepper steps={flowSteps('auto')} currentId="fields" />);
-    const nav = screen.getByRole('navigation', { name: 'Extraction steps' });
-    expect(nav).toHaveTextContent('Step 2 of 5: Review fields');
+    const nav = screen.getByRole('navigation', { name: 'Steps' });
+    expect(nav).toHaveTextContent('Step 2 of 5: Check columns');
 
     const items = within(nav).getAllByRole('listitem');
     expect(items).toHaveLength(5);
     expect(items[1]).toHaveAttribute('aria-current', 'step');
     expect(items[0]).toHaveTextContent('Find data (done)');
-    expect(items[2]).toHaveTextContent('Pagination (optional)');
+    expect(items[2]).toHaveTextContent('More pages (optional)');
     expect(items[0]).not.toHaveAttribute('aria-current');
   });
 });
@@ -169,13 +169,35 @@ describe('RecoveryBanner', () => {
     expect(onResume).toHaveBeenCalledWith('job_1');
   });
 
+  it('offers Allow access and resume when the job stopped for missing site access', async () => {
+    const onResume = vi.fn();
+    const job = makeJob({
+      interruptedReason: 'PageHarvest needs access to this site to continue. Allow access?',
+      errors: [
+        {
+          id: 'e1',
+          category: 'RUNTIME_MESSAGING',
+          code: 'SITE_PERMISSION_REQUIRED',
+          message: 'PageHarvest needs access to this site to continue. Allow access?',
+          severity: 'WARN',
+          timestamp: 1,
+        },
+      ],
+    } as Partial<ExtractionJob>);
+    render(<RecoveryBanner job={job} onResume={onResume} onDiscard={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Resume' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Allow access and resume' }));
+    expect(onResume).toHaveBeenCalledWith('job_1');
+  });
+
   it('asks before discarding, and says the saved rows are kept', async () => {
     const onDiscard = vi.fn();
     render(<RecoveryBanner job={makeJob()} onResume={vi.fn()} onDiscard={onDiscard} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
     const dialog = screen.getByRole('dialog', { name: 'Discard this interrupted job?' });
-    expect(dialog).toHaveTextContent('Its 45 saved rows stay in Datasets');
+    expect(dialog).toHaveTextContent('Its 45 saved rows stay in My data');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Keep it' }));
     expect(onDiscard).not.toHaveBeenCalled();
 
@@ -205,24 +227,24 @@ describe('App shell', () => {
   it('marks the current section in the main navigation', async () => {
     render(<App />);
     const nav = await screen.findByRole('navigation', { name: 'Main' });
-    expect(within(nav).getByRole('button', { name: 'Harvest' })).toHaveAttribute('aria-current', 'page');
-    await userEvent.click(within(nav).getByRole('button', { name: 'Datasets' }));
-    expect(within(nav).getByRole('button', { name: 'Datasets' })).toHaveAttribute('aria-current', 'page');
-    expect(within(nav).getByRole('button', { name: 'Harvest' })).not.toHaveAttribute('aria-current');
+    expect(within(nav).getByRole('button', { name: 'Tools' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(within(nav).getByRole('button', { name: 'Data' }));
+    expect(within(nav).getByRole('button', { name: 'Data' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('button', { name: 'Tools' })).not.toHaveAttribute('aria-current');
   });
 
   it('shows no steps on the dashboard', async () => {
     render(<App />);
-    await screen.findByText('Get data from this page');
-    expect(screen.queryByRole('navigation', { name: 'Extraction steps' })).not.toBeInTheDocument();
+    await screen.findByText('List Extractor');
+    await screen.findByText('PageHarvest');
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Steps' })).not.toBeInTheDocument());
   });
 
   it('shows the Table flow with its own first step and a scanning state, not the picker', async () => {
     render(<App />);
-    await userEvent.click(await screen.findByText('More ways to start'));
-    await userEvent.click(screen.getByRole('button', { name: /Extract a table/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Table|Extract a table/ }));
 
-    const steps = await screen.findByRole('navigation', { name: 'Extraction steps' });
+    const steps = await screen.findByRole('navigation', { name: 'Steps' });
     expect(steps).toHaveTextContent('Step 1 of 5: Find a table');
     expect(await screen.findByText('Looking for tables on this page…')).toBeInTheDocument();
   });

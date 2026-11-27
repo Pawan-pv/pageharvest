@@ -34,13 +34,17 @@ export class DatasetRepository {
    * Replaces a dataset's rows and columns as one transaction. Rows absent from
    * `records` are deleted, so this covers cleaning, renames and bulk deletes.
    * If the transaction fails nothing changes and the promise rejects.
+   *
+   * Refused while the dataset's job is still executing: `records` is the editor's copy,
+   * and rows the job committed after that copy was read would be deleted with it.
    */
   public async applyEdit(
     datasetId: string,
     records: RecordEntity[],
     fields: FieldDefinition[]
   ): Promise<void> {
-    await this.db.transaction('rw', this.db.datasets, this.db.records, async () => {
+    await this.db.transaction('rw', this.db.datasets, this.db.records, this.db.jobs, async () => {
+      await this.db.assertNoJobWritingTo(datasetId, 'edit');
       const keptIds = new Set(records.map((record) => record._id));
       const existingIds = await this.db.records.where('datasetId').equals(datasetId).primaryKeys();
       await this.db.records.bulkDelete(existingIds.filter((id) => !keptIds.has(id)));

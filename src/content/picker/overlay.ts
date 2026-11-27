@@ -188,14 +188,17 @@ export class PickerOverlay {
 
     // 2. Position selection badge
     const badgeTop = rect.top > 32 ? rect.top - 28 : rect.top + rect.height + 6;
-    this.selectionBadge.textContent = `SELECTED: ${tagName} (${matchCount} ${matchCount === 1 ? 'match' : 'matches'})`;
+    const matchLabel = info.isSingleOverride
+      ? 'Single element (Alt)'
+      : `${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`;
+    this.selectionBadge.textContent = `SELECTED: ${tagName} (${matchLabel})`;
     this.selectionBadge.style.top = `${badgeTop}px`;
     this.selectionBadge.style.left = `${Math.max(8, rect.left)}px`;
     this.selectionBadge.classList.remove('ph-hidden');
 
-    // 3. Highlight similar elements if requested
+    // 3. Highlight similar elements if requested (disabled when Alt single override is active)
     const similarSel = info.similarSelector || selector;
-    if (this.options.showSimilar !== false && similarSel) {
+    if (!info.isSingleOverride && this.options.showSimilar !== false && similarSel) {
       this.highlightSimilarElements(similarSel, info.element);
     } else {
       this.clearSimilarHighlights();
@@ -222,7 +225,7 @@ export class PickerOverlay {
       const fragment = document.createDocumentFragment();
 
       matches.forEach((el) => {
-        if (el === currentElement) return;
+        if (el === currentElement || el.contains(currentElement)) return;
         if (this.isPickerElement(el)) return;
 
         const rect = el.getBoundingClientRect();
@@ -296,7 +299,9 @@ export class PickerOverlay {
 
     const matchBadge = document.createElement('span');
     matchBadge.className = 'ph-match-badge';
-    matchBadge.textContent = `${info.matchCount} ${info.matchCount === 1 ? 'match' : 'matches'}`;
+    matchBadge.textContent = info.isSingleOverride
+      ? 'Single element (Alt)'
+      : `${info.matchCount} ${info.matchCount === 1 ? 'match' : 'matches'}`;
     detailsRow.appendChild(matchBadge);
 
     this.toolbar.appendChild(detailsRow);
@@ -413,6 +418,10 @@ export class PickerOverlay {
   public destroy(): void {
     if (this.hostElement && this.hostElement.parentNode) {
       this.hostElement.parentNode.removeChild(this.hostElement);
+    }
+    const residual = typeof document !== 'undefined' ? document.getElementById(OVERLAY_HOST_ID) : null;
+    if (residual && residual !== this.hostElement && residual.parentNode) {
+      residual.parentNode.removeChild(residual);
     }
     this.hostElement = null;
     this.shadowRoot = null;

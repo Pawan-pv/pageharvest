@@ -14,11 +14,13 @@ import { detectTables, tableFields } from '@/core/extraction/table-extractor';
 import { DetectedListResult } from '@/types/detection';
 import {
   autoDetectLists,
+  buildDetectedListFromMatchedElements,
   discoverFieldsInCluster,
   detectListFromSelection,
   suggestionsToFieldDefinitions,
   attachFieldAnchors,
 } from '@/core/detection';
+import { generateSelectorCandidates } from '@/content/picker/selector-engine';
 import {
   CommitOutcome,
   JobBatchPayload,
@@ -27,7 +29,8 @@ import {
   runNavigationJob,
 } from '@/core/navigation/runner';
 import { errorReporter } from '@/core/resilience/error-reporter';
-import type { FieldPreviewResult } from '@/shared/contracts/message';
+import type { FieldPreviewResult, MoreItemsHint } from '@/shared/contracts/message';
+import { findMoreItems } from './more-items';
 import { previewFields } from './preview-fields';
 import { JobIdentity } from '@/shared/contracts/job';
 import { getVisualOverlay } from '@/content/extraction-visual-overlay';
@@ -78,6 +81,24 @@ export interface ContentWorkflowOptions {
   deliveryAttempts?: number;
   deliveryRetryDelayMs?: number;
   engineOverrides?: NavigationJobOptions['engineOverrides'];
+  /** Looks for a Next or Load more control, read-only (ADR-039). */
+  findMoreItems?: (root: Document) => MoreItemsHint;
+  /** The HTTP status this document was served with, when the browser says. */
+  getDocumentStatus?: () => number | undefined;
+}
+
+/** HTTP 429 Too Many Requests: the site asks for fewer requests. */
+const TOO_MANY_REQUESTS = 429;
+
+/**
+ * The status the page was served with, from its navigation timing entry. Chrome 109+
+ * reports it as `responseStatus`; it is undefined for a page restored from cache or when the
+ * browser does not say.
+ */
+function documentResponseStatus(): number | undefined {
+  if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') return undefined;
+  const [entry] = performance.getEntriesByType('navigation') as Array<PerformanceEntry & { responseStatus?: unknown }>;
+  return typeof entry?.responseStatus === 'number' && entry.responseStatus > 0 ? entry.responseStatus : undefined;
 }
 
 function messageId(prefix: string): string {
@@ -134,6 +155,9 @@ export function createContentWorkflowCoordinator(
     ((url: string) => {
       window.location.assign(url);
     });
+
+  const lookForMoreItems = options.findMoreItems ?? findMoreItems;
+  const readDocumentStatus = options.getDocumentStatus ?? documentResponseStatus;
 
   let activeRun: ActiveRun | null = null;
 
@@ -224,7 +248,7 @@ export function createContentWorkflowCoordinator(
       overlay.addRows(ack.inserted);
       overlay.pulseSelector(run.containerSelector, batch.records.length);
     }
-    return { inserted: ack.inserted, shouldStop: ack.shouldStop === true };
+    return { inserted: ack.inserted, shouldStop: ack.shouldStop === true, alreadyStored: ack.status === 'duplicate' };
   };
 
   const commitCheckpoint = async (run: ActiveRun, navigation: JobNavigationState): Promise<void> => {
@@ -239,6 +263,28 @@ export function createContentWorkflowCoordinator(
   };
 
   const executeRun = async (run: ActiveRun, message: ExtractRecordsMessage): Promise<void> => {
+    // A page answered with 429 holds the site's refusal, not the list. Nothing is read from
+    // it, and the job stops where it can continue once the site allows it.
+    if (readDocumentStatus() === TOO_MANY_REQUESTS) {
+      getVisualOverlay().destroy();
+      await options
+        .sendToBackground?.(
+          createContentWorkflowMessage({
+            id: messageId('failed'),
+            type: 'JOB_FAILED' as const,
+            timestamp: Date.now(),
+            payload: {
+              identity: run.identity,
+              message: 'The site answered 429 Too Many Requests: it asked for fewer requests.',
+              category: 'PAGINATION_FAILED' as const,
+              code: 'RATE_LIMITED' as const,
+              recoverable: true,
+            },
+          })
+        )
+        .catch(() => undefined);
+      return;
+    }
     try {
       const outcome = await runNavigationJob({
         recipe: message.payload.recipe,
@@ -326,11 +372,39 @@ export function createContentWorkflowCoordinator(
         candidates = detectLinkRegions(root);
         if (candidates.length === 0) throw new DetectionError('No links were found on this page.');
       } else if (targetSelector) {
-        const target = root.querySelector(targetSelector);
+        let matched: Element[];
+        try {
+          matched = Array.from(root.querySelectorAll(targetSelector));
+        } catch {
+          matched = [];
+        }
+        const target = matched[0];
         if (!target) {
           throw new DetectionError(`The selected element could not be found for selector "${targetSelector}".`);
         }
-        const picked = detectListFromSelection(target);
+        let picked = detectListFromSelection(target);
+        if (!picked && matched.length >= 2) {
+          picked = buildDetectedListFromMatchedElements(matched, targetSelector);
+        }
+        if (!picked) {
+          const similarCandidate = generateSelectorCandidates(target).find(
+            (c) =>
+              c.matchCount >= 2 &&
+              (c.strategy === 'semantic-class' ||
+                c.strategy === 'semantic-attribute' ||
+                c.strategy === 'hierarchy')
+          );
+          if (similarCandidate) {
+            try {
+              const candMatches = Array.from(root.querySelectorAll(similarCandidate.selector));
+              if (candMatches.length >= 2) {
+                picked = buildDetectedListFromMatchedElements(candMatches, similarCandidate.selector);
+              }
+            } catch {
+              // Ignore invalid candidate selector
+            }
+          }
+        }
         candidates = picked ? [listCandidateOf(picked)] : [];
       } else {
         candidates = autoDetectLists(root).map(listCandidateOf);
@@ -341,6 +415,14 @@ export function createContentWorkflowCoordinator(
       }
 
       const [best] = candidates;
+      // A hint for the panel's "more pages" question only. If the page makes the look fail,
+      // the list is still reported, without it.
+      let moreItems: MoreItemsHint | undefined;
+      try {
+        moreItems = lookForMoreItems(root);
+      } catch {
+        moreItems = undefined;
+      }
       return publish({
         id: messageId('repeated'),
         type: 'REPEATED_ELEMENTS_DETECTED',
@@ -352,6 +434,7 @@ export function createContentWorkflowCoordinator(
           sampleSnippets: best.sampleSnippets,
           candidates,
           credible: best.credible,
+          ...(moreItems ? { moreItems } : {}),
         },
       });
     },

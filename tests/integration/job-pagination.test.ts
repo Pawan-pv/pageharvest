@@ -20,8 +20,13 @@ function serveDocuments(harness: ExtensionHarness, documents: Record<string, str
   };
 }
 
-async function waitForEnd(harness: ExtensionHarness, jobId: string, tries = 400) {
-  for (let i = 0; i < tries; i++) {
+/**
+ * Waits by the clock, not by a count of polls: a job waits at least one second between pages
+ * (ADR-046), and a count of polls lasts less on a faster machine (it ran out on CI).
+ */
+async function waitForEnd(harness: ExtensionHarness, jobId: string, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     const job = await harness.job(jobId);
     if (job && ['COMPLETED', 'FAILED', 'CANCELLED', 'RECOVERABLE', 'EXPIRED'].includes(job.status)) {
       return job;
@@ -31,7 +36,8 @@ async function waitForEnd(harness: ExtensionHarness, jobId: string, tries = 400)
   throw new Error('The job did not end.');
 }
 
-describe('Pagination across real document changes', () => {
+// Jobs here wait at least one second between pages, so a test can outlast the 5 s default.
+describe('Pagination across real document changes', { timeout: 20000 }, () => {
   let harness: ExtensionHarness;
 
   beforeEach(() => {
@@ -47,7 +53,7 @@ describe('Pagination across real document changes', () => {
 
   describe('URL template', () => {
     const recipe = (overrides = {}) =>
-      makeRecipe({ type: 'url_template', urlTemplate: TEMPLATE, maxPages: 5, delayMs: 200, ...overrides });
+      makeRecipe({ type: 'url_template', urlTemplate: TEMPLATE, maxPages: 5, delayMs: 1000, ...overrides });
 
     it('visits each page once and stores every row in order', async () => {
       serveDocuments(harness, { [page(2)]: ['Two'], [page(3)]: [] });
@@ -417,7 +423,7 @@ describe('Pagination across real document changes', () => {
         makeRecipe({ type: 'infinite_scroll', scrollCount: 3, maxPages: 1, scrollDelayMs: 300 }),
         page(1)
       );
-      const job = await waitForEnd(harness, identity.jobId, 800);
+      const job = await waitForEnd(harness, identity.jobId);
 
       expect(window.scrollBy).toHaveBeenCalledTimes(3);
       expect(job.stopReason).toBe('max_scrolls_reached');
@@ -436,7 +442,7 @@ describe('Pagination across real document changes', () => {
         makeRecipe({ type: 'infinite_scroll', scrollCount: 2, maxPages: 500, scrollDelayMs: 300 }),
         page(1)
       );
-      await waitForEnd(harness, identity.jobId, 800);
+      await waitForEnd(harness, identity.jobId);
 
       const updates = harness.broadcasts.flatMap((message) =>
         message.type === 'JOB_UPDATED' && message.payload.jobId === identity.jobId ? [message.payload] : []
@@ -519,7 +525,7 @@ describe('Pagination across real document changes', () => {
       renderFeed();
       harness.loadPage(tabId, page(1));
       await harness.announceReady(tabId);
-      const job = await waitForEnd(harness, identity.jobId, 1200);
+      const job = await waitForEnd(harness, identity.jobId);
 
       expect(job.status).toBe('COMPLETED');
       expect(job.stopReason).toBe('max_scrolls_reached');

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type CDPSession, type Page } from '@playwright/test';
 import { expect, test } from './release-test';
-import { choosePagination, setLimits, markTourSeen } from './helpers/panel';
+import { choosePagination, setLimits, markTourSeen, enableAdvancedOptions, startListExtraction } from './helpers/panel';
 
 /**
  * Real-Chromium verification of the Neon Indicator Overlays against the built
@@ -15,7 +15,7 @@ import { choosePagination, setLimits, markTourSeen } from './helpers/panel';
  */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = 'http://127.0.0.1:3456';
-const EXTENSION_PATH = path.resolve(HERE, '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(HERE, '../../.output/chrome-mv3-test');
 const SHOTS_DIR = path.resolve(HERE, '../../test-results');
 
 const PICKER_HOST = 'pageharvest-picker-overlay-host';
@@ -144,7 +144,7 @@ async function sampleHud(session: CDPSession): Promise<HudSample | null> {
     at: Date.now(),
     counter,
     action: textOf(view.one('px-action')),
-    rows: Number(/(\d+) rows/.exec(counter)?.[1] ?? NaN),
+    rows: Number(/(\d+) rows?(?![a-z])/.exec(counter)?.[1] ?? NaN),
     hud,
     laser,
     scanBoxes: view.all('px-scan-box').length,
@@ -234,7 +234,7 @@ async function waitForCompletedJob(panel: Page, known: Set<string>): Promise<Sto
   return found as StoredJob;
 }
 
-const COMPLETE_TEXT = '✓ Harvest Complete!';
+const COMPLETE_TEXT = 'Harvest complete';
 
 interface FadeLog {
   fadeStartedAt: number | null;
@@ -297,6 +297,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     extensionId = worker.url().split('/')[2];
     // The first-run tour has its own spec; here it would cover the panel.
     await markTourSeen(worker);
+    await enableAdvancedOptions(worker);
   });
 
   test.afterAll(async () => {
@@ -318,17 +319,15 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
   }
 
   async function configure(panel: Page): Promise<void> {
-    await expect(panel.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
-    await panel.getByRole('button', { name: 'Find data automatically', exact: true }).click();
-    await panel.getByRole('button', { name: 'Use this list', exact: true }).click({ timeout: 10000 });
-    await expect(panel.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
-    await expect(panel.getByRole('button', { name: /Start extraction/ })).toBeEnabled({ timeout: 10000 });
+    await startListExtraction(panel);
+    await expect(panel.getByText(/Found \d+ items/)).toBeVisible({ timeout: 20000 });
+    await expect(panel.getByRole('button', { name: 'Start Extraction' })).toBeEnabled({ timeout: 10000 });
   }
 
   test('Neon Hover Picker: hover and click paint the neon box, corners, badge and pattern', async () => {
     const { panel, target, session, pageErrors } = await open(`${FIXTURES}/simple-grid.html`);
 
-    await panel.getByRole('button', { name: 'Pick items myself', exact: true }).click();
+    await panel.getByRole('button', { name: 'Pick element on page', exact: true }).click();
     await expect(panel.getByText('Visual Element Picker Active')).toBeVisible();
 
     const price = target.locator('.product-price').first();
@@ -410,7 +409,7 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     expect(textOf(locked.one('ph-selection-badge'))).toContain('3 matches');
     expect(await locked.box(locked.one('ph-toolbar'))).not.toBeNull();
 
-    const expectedSiblings = await target.locator('.product-price').evaluateAll((elements) =>
+    const expectedSiblings = await target.locator('.product-card').evaluateAll((elements) =>
       elements.slice(1).map((element) => {
         const rect = element.getBoundingClientRect();
         return [Math.round(rect.left), Math.round(rect.top)];
@@ -441,8 +440,8 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     const { panel, target, session, pageErrors } = await open(`${FIXTURES}/long-scroll.html`);
     await configure(panel);
     await choosePagination(panel, 'infinite_scroll');
-    await setLimits(panel, { maxScrolls: 3 });
-    await setLimits(panel, { scrollDelayMs: 500 });
+    // Limits & timing is one collapsible card; visiting it twice would close it.
+    await setLimits(panel, { maxScrolls: 3, scrollDelayMs: 500 });
 
     expect(await target.locator(`#${SCAN_HOST}`).count()).toBe(0);
 
@@ -459,7 +458,8 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
       ],
     });
 
-    await panel.getByRole('button', { name: /Start extraction/ }).click();
+    await panel.getByRole('button', { name: 'Start Extraction' }).click();
+    await expect(panel.getByText('Live Extraction Stage')).toBeVisible({ timeout: 15000 });
 
     const scanHost = target.locator(`#${SCAN_HOST}`);
     await expect(scanHost).toBeAttached({ timeout: 15000 });
@@ -499,11 +499,12 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
     expect(new Set(rows.filter((value) => value > 0)).size).toBeGreaterThan(1);
     expect(job.totalExtracted).toBeGreaterThan(0);
     expect(rows.at(-1)).toBe(job.totalExtracted);
-    expect(samples.at(-1)?.counter).toBe(`⚡ Harvesting • ${job.totalExtracted} rows`);
+    // Finished: the counter reports what was saved, not that it is still harvesting.
+    expect(samples.at(-1)?.counter).toBe(`${job.totalExtracted} ${job.totalExtracted === 1 ? 'row' : 'rows'} saved`);
 
     // The action text followed the run.
     const actions = new Set(samples.map((sample) => sample.action));
-    expect(actions.has('Scrolling...')).toBe(true);
+    expect(actions.has('Scrolling for more…')).toBe(true);
     expect(samples.at(-1)?.action).toBe(COMPLETE_TEXT);
 
     // Item pulses really rendered, capped, with ✓ #N badges, and then faded away.
@@ -553,13 +554,13 @@ test.describe('Neon Indicator Overlays in real Chromium', () => {
       const { panel, target, session, pageErrors } = await open(`${FIXTURES}/next-page-pagination.html`);
       await configure(panel);
       await choosePagination(panel, 'next_button');
-      await setLimits(panel, { delayMs: 200 });
+      await setLimits(panel, { delayMs: 1000 });
 
       const recording = recordHud(session, {
         timeoutMs: 60000,
         isFinished: (samples) => samples.some((sample) => sample.action === COMPLETE_TEXT),
       });
-      await panel.getByRole('button', { name: /Start extraction/ }).click();
+      await panel.getByRole('button', { name: 'Start Extraction' }).click();
 
       const { samples, removedAt } = await recording;
       const job = await waitForCompletedJob(panel, finishedJobs);

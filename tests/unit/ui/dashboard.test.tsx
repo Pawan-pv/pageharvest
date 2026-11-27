@@ -1,8 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { WebsiteCard } from '@/components/dashboard/WebsiteCard';
-import { QuickActions } from '@/components/dashboard/QuickActions';
-import { RecentProjectsCard } from '@/components/dashboard/RecentProjectsCard';
+import { ToolHub } from '@/components/dashboard/ToolHub';
 import { MainDashboard } from '@/components/dashboard/MainDashboard';
 import { TabInfo } from '@/services/messaging';
 import { Dataset } from '@/types';
@@ -12,7 +11,6 @@ describe('UI: Main Dashboard & Website Detection', () => {
     id: 101,
     url: 'https://books.toscrape.com/catalogue/category/books_1/index.html',
     title: 'All Products | Books to Scrape',
-    favIconUrl: 'https://books.toscrape.com/favicon.ico',
     isInjectable: true,
   };
 
@@ -25,136 +23,220 @@ describe('UI: Main Dashboard & Website Detection', () => {
 
   it('renders WebsiteCard with hostname, title and Ready badge for injectable web page', () => {
     const onRefresh = vi.fn();
-    render(<WebsiteCard tab={mockInjectableTab} onRefresh={onRefresh} />);
+    render(<WebsiteCard advanced tab={mockInjectableTab} onRefresh={onRefresh} />);
 
     expect(screen.getByText('books.toscrape.com')).toBeInTheDocument();
     expect(screen.getByText(/All Products \| Books to Scrape/)).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
 
     // Refresh button works
-    const refreshBtn = screen.getByRole('button', { name: /refresh active tab/i });
+    const refreshBtn = screen.getByRole('button', { name: 'Check this page again' });
     fireEvent.click(refreshBtn);
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it('renders Restricted badge and warning notice for internal chrome:// pages', () => {
+  it('never loads the site icon: the panel makes no network request of its own', () => {
+    // What Chrome reports for a tab includes the address of the site's icon.
+    const tabWithIcon = { ...mockInjectableTab, favIconUrl: 'https://books.toscrape.com/favicon.ico' };
+    const { container } = render(<WebsiteCard advanced tab={tabWithIcon} onRefresh={vi.fn()} />);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.innerHTML).not.toContain('favicon.ico');
+  });
+
+  it('has no refresh button in simple mode, because the panel follows the tab by itself', () => {
+    render(<WebsiteCard tab={mockInjectableTab} onRefresh={vi.fn()} />);
+    expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check this page again' })).not.toBeInTheDocument();
+  });
+
+  it('tells the user to switch tabs, not to press a button, on a page it cannot read', () => {
+    render(<WebsiteCard tab={mockRestrictedTab} onRefresh={vi.fn()} />);
+    expect(screen.getByText(/Switch to a tab with a website/)).toBeInTheDocument();
+    expect(screen.queryByText(/press Refresh/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the cannot-read badge and warning notice for internal chrome:// pages', () => {
     render(<WebsiteCard tab={mockRestrictedTab} onRefresh={vi.fn()} />);
 
-    expect(screen.getByText('Restricted')).toBeInTheDocument();
+    expect(screen.getByText("Can't read this page")).toBeInTheDocument();
     expect(
       screen.getByText(/PageHarvest cannot read browser pages like this one/i)
     ).toBeInTheDocument();
   });
 
-  it('triggers quick actions on user click', () => {
-    const onSelectElements = vi.fn();
-    const onAutoDetectLists = vi.fn();
-    const onExtractTable = vi.fn();
-    const onExtractLinks = vi.fn();
-
+  it('asks for the toolbar click, not "browser page", when Chrome hides the address', () => {
     render(
-      <QuickActions
-        onSelectElements={onSelectElements}
-        onAutoDetectLists={onAutoDetectLists}
-        onExtractTable={onExtractTable}
-        onExtractLinks={onExtractLinks}
-      />
+      <WebsiteCard tab={{ id: 103, url: '', title: 'This page', isInjectable: false, needsAccess: true }} onRefresh={vi.fn()} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pick items myself' }));
-    expect(onSelectElements).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Access needed')).toBeInTheDocument();
+    expect(screen.getByText(/PageHarvest cannot see this page yet/i)).toBeInTheDocument();
+    // Since ADR-040 this happens only when the user limited site access in Chrome, and it says so.
+    expect(screen.getByText(/limited in Chrome's settings/i)).toBeInTheDocument();
+    expect(screen.getByText(/Click the PageHarvest button in the Chrome toolbar/i)).toBeInTheDocument();
+    expect(screen.queryByText("Can't read this page")).not.toBeInTheDocument();
+    expect(screen.queryByText(/cannot read browser pages like this one/i)).not.toBeInTheDocument();
+  });
+});
 
-    fireEvent.click(screen.getByRole('button', { name: 'Find data automatically' }));
-    expect(onAutoDetectLists).toHaveBeenCalledTimes(1);
+describe('UI: Tool Hub', () => {
+  const renderHub = (props: Partial<React.ComponentProps<typeof ToolHub>> = {}) => {
+    const handlers = {
+      onAutoDetectLists: vi.fn(),
+      onExtractTable: vi.fn(),
+      onExtractLinks: vi.fn(),
+      onOpenPageExtractor: vi.fn(),
+      onOpenSitemapExplorer: vi.fn(),
+      onOpenShopifyExtractor: vi.fn(),
+      onOpenEmailExtractor: vi.fn(),
+      onOpenSocialExtractor: vi.fn(),
+      onOpenPageTextExtractor: vi.fn(),
+      onOpenImageDownloader: vi.fn(),
+      onViewAllHistory: vi.fn(),
+    };
+    render(<ToolHub datasetsCount={0} {...handlers} {...props} />);
+    return handlers;
+  };
 
-    fireEvent.click(screen.getByText('More ways to start'));
+  it('runs all 10 live extractors from their cards', () => {
+    const handlers = renderHub();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find Data on This Page' }));
+    expect(handlers.onAutoDetectLists).toHaveBeenCalledTimes(1);
+
     fireEvent.click(screen.getByRole('button', { name: 'Extract a table' }));
-    expect(onExtractTable).toHaveBeenCalledTimes(1);
+    expect(handlers.onExtractTable).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Extract all links' }));
-    expect(onExtractLinks).toHaveBeenCalledTimes(1);
+    expect(handlers.onExtractLinks).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Page Extractor' }));
+    expect(handlers.onOpenPageExtractor).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sitemap Explorer' }));
+    expect(handlers.onOpenSitemapExplorer).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Shopify Extractor' }));
+    expect(handlers.onOpenShopifyExtractor).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Email Extractor' }));
+    expect(handlers.onOpenEmailExtractor).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Social Link Extractor' }));
+    expect(handlers.onOpenSocialExtractor).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Page Text Extractor' }));
+    expect(handlers.onOpenPageTextExtractor).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Image Downloader' }));
+    expect(handlers.onOpenImageDownloader).toHaveBeenCalledTimes(1);
+
+    expect(screen.getByRole('heading', { name: /Tools/i })).toBeInTheDocument();
+    expect(screen.getByText('List Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Table Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Links Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Page Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Sitemap Explorer')).toBeInTheDocument();
+    expect(screen.getByText('Shopify Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Email Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Social Link Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Page Text Extractor')).toBeInTheDocument();
+    expect(screen.getByText('Image Downloader')).toBeInTheDocument();
+    expect(screen.getByText('10 Tools Live')).toBeInTheDocument();
   });
 
-  it('disables quick actions when disabled prop is true (e.g. restricted tab)', () => {
-    render(
-      <QuickActions
-        disabled={true}
-        onSelectElements={vi.fn()}
-        onAutoDetectLists={vi.fn()}
-        onExtractTable={vi.fn()}
-        onExtractLinks={vi.fn()}
-      />
-    );
+  it('shows the recent-data count and opens the Data view', () => {
+    const handlers = renderHub({ datasetsCount: 3 });
 
-    expect(screen.getByRole('button', { name: 'Pick items myself' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Find data automatically' })).toBeDisabled();
-    expect(screen.getByText(/Open a normal website tab to start/)).toBeInTheDocument();
+    const recent = screen.getByRole('button', { name: /My Recent \(3\)/ });
+    fireEvent.click(recent);
+    expect(handlers.onViewAllHistory).toHaveBeenCalledTimes(1);
   });
 
-  it('renders RecentProjectsCard with dataset list and calls onViewDataset', () => {
-    const mockDatasets: Dataset[] = [
-      {
-        id: 'ds-1',
-        name: 'Amazon Laptops',
-        url: 'https://amazon.com/laptops',
-        recordsCount: 48,
-        fields: [{ id: 'f1', name: 'Title', selector: 'h2', extractor: 'text' }],
-        createdAt: 1700000000000,
-        updatedAt: 1700000000000,
-      },
-    ];
+  it('disables page-bound live extractors when the page cannot be read', () => {
+    renderHub({ disabled: true });
 
-    const onViewDataset = vi.fn();
-    const onViewAll = vi.fn();
-
-    render(
-      <RecentProjectsCard
-        datasets={mockDatasets}
-        onViewDataset={onViewDataset}
-        onViewAllHistory={onViewAll}
-      />
-    );
-
-    expect(screen.getByText('Amazon Laptops')).toBeInTheDocument();
-    expect(screen.getByText('48 rows')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Amazon Laptops'));
-    expect(onViewDataset).toHaveBeenCalledWith(mockDatasets[0]);
-
-    fireEvent.click(screen.getByText(/View all/i));
-    expect(onViewAll).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Find Data on This Page' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Extract a table' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Extract all links' })).toBeDisabled();
   });
 
-  it('renders empty state in RecentProjectsCard when no datasets exist', () => {
-    render(
-      <RecentProjectsCard
-        datasets={[]}
-        onViewDataset={vi.fn()}
-        onViewAllHistory={vi.fn()}
-      />
-    );
+  it.each([
+    'Image Downloader',
+    'Email Extractor',
+    'Social Link Extractor',
+    'Page Text Extractor',
+  ])('renders %s as a live and ready tool card', (name) => {
+    renderHub();
 
-    expect(screen.getByText('No recent extractions')).toBeInTheDocument();
+    const card = screen.getByRole('button', { name });
+    expect(card).toBeEnabled();
   });
+});
 
-  it('renders the complete MainDashboard layout', () => {
+describe('UI: MainDashboard', () => {
+  const mockDatasets: Dataset[] = [
+    {
+      id: 'ds-1',
+      name: 'Amazon Laptops',
+      url: 'https://amazon.com/laptops',
+      recordsCount: 48,
+      fields: [{ id: 'f1', name: 'Title', selector: 'h2', extractor: 'text' }],
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000,
+    },
+  ];
+
+  it('renders the tool hub and the prominent data disclosure, not the old hero', () => {
     render(
       <MainDashboard
-        tab={mockInjectableTab}
-        onRefreshTab={vi.fn()}
-        datasets={[]}
-        onSelectElements={vi.fn()}
+        datasets={mockDatasets}
         onAutoDetectLists={vi.fn()}
         onExtractTable={vi.fn()}
         onExtractLinks={vi.fn()}
-        onViewDataset={vi.fn()}
         onViewAllHistory={vi.fn()}
       />
     );
 
-    expect(screen.getByText('books.toscrape.com')).toBeInTheDocument();
-    expect(screen.getByText('Get data from this page')).toBeInTheDocument();
-    expect(screen.getByText(/Everything PageHarvest collects stays on this computer/)).toBeInTheDocument();
-    expect(screen.getByText('Recent Extractions')).toBeInTheDocument();
+    expect(screen.getByText('List Extractor')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /My Recent \(1\)/ })).toBeInTheDocument();
+    expect(screen.getByText(/Everything it collects stays on this computer/)).toBeInTheDocument();
+    expect(screen.queryByText('Get data from this page')).not.toBeInTheDocument();
+    expect(screen.queryByText('Quick presets')).not.toBeInTheDocument();
+  });
+
+  it('switches every live tool off when the page cannot be read', () => {
+    render(
+      <MainDashboard
+        datasets={[]}
+        disabled
+        onAutoDetectLists={vi.fn()}
+        onExtractTable={vi.fn()}
+        onExtractLinks={vi.fn()}
+        onViewAllHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Find Data on This Page' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Extract a table' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Extract all links' })).toBeDisabled();
+  });
+
+  // The store's prominent-disclosure rule (User Data FAQ 10) wants the panel itself to say
+  // what is read and where it is kept, before the first page is read.
+  it('says what it reads and where it keeps it, before anything is read', () => {
+    render(
+      <MainDashboard
+        datasets={[]}
+        onAutoDetectLists={vi.fn()}
+        onExtractTable={vi.fn()}
+        onExtractLinks={vi.fn()}
+        onViewAllHistory={vi.fn()}
+      />
+    );
+    const note = screen.getByText(/PageHarvest reads only the page you ask it to/);
+    expect(note).toHaveTextContent(
+      'PageHarvest reads only the page you ask it to: its text, links, image addresses and page address. Everything it collects stays on this computer, and nothing is sent anywhere.'
+    );
   });
 });

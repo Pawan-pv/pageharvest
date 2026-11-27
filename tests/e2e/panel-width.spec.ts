@@ -4,14 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page } from '@playwright/test';
 import { expect, test } from './release-test';
-import { goToPagination, markTourSeen, resultHeading, reviewFieldsHeading, startExtraction, startWith, useThisList } from './helpers/panel';
+import { markTourSeen, enableAdvancedOptions, startListExtraction } from './helpers/panel';
 
 /**
  * Chrome's side panel opens at about 360 CSS pixels and can be narrowed to 320. The other specs
  * open the panel as a 1280-pixel tab, so a screen that is too wide for the real panel passes
  * there and is clipped for every user. This spec opens it at 320 and checks each main screen.
  */
-const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const EXTENSION_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 const FIXTURES = 'http://127.0.0.1:3456';
 const PANEL_WIDTH = 320;
 
@@ -82,6 +82,7 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     });
     const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker', { timeout: 15000 }));
     await markTourSeen(worker);
+    await enableAdvancedOptions(worker);
     extensionId = worker.url().split('/')[2];
   });
 
@@ -100,29 +101,28 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     await expect(panel.getByRole('button', { name: 'Help', exact: true })).toBeVisible({ timeout: 10000 });
     await expectFits(panel, 'The start screen');
 
-    await startWith(panel, 'auto');
-    await expect(resultHeading(panel)).toBeVisible({ timeout: 20000 });
+    await startListExtraction(panel);
+    await expect(panel.getByText(/Found 20 items/)).toBeVisible({ timeout: 20000 });
     await expectFits(panel, 'The detected list');
 
-    await useThisList(panel).click();
-    await expect(reviewFieldsHeading(panel)).toBeVisible({ timeout: 10000 });
-    await expectFits(panel, 'Review fields');
+    await panel.getByRole('button', { name: 'Edit columns' }).click();
+    await expectFits(panel, 'Check columns');
 
-    await goToPagination(panel);
-    await panel.getByRole('button', { name: 'Advanced' }).click();
-    await expectFits(panel, 'Pagination');
+    await panel.getByRole('button', { name: 'Start Extraction' }).click();
+    const runningOrDone = panel
+      .getByText('Live Extraction Stage')
+      .or(panel.getByRole('heading', { name: 'Extraction complete' }))
+      .first();
+    await expect(runningOrDone).toBeVisible({ timeout: 20000 });
+    if (await panel.getByText('Live Extraction Stage').isVisible()) {
+      await expectFits(panel, 'Running extraction');
+    }
 
-    await startExtraction(panel).click();
-    await expect(panel.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(panel.getByRole('heading', { name: 'Extraction complete' })).toBeVisible({ timeout: 30000 });
     await expectFits(panel, 'The results');
-
-    await panel.getByRole('button', { name: 'Export', exact: true }).click();
-    await expect(panel.getByRole('dialog', { name: 'Export data' })).toBeVisible();
-    await expectFits(panel, 'The export dialog');
-    await panel.keyboard.press('Escape');
   });
 
-  test('Help, Settings and Datasets fit', async () => {
+  test('Help, Settings and Data fit', async () => {
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
 
@@ -135,8 +135,8 @@ test.describe(`Side panel at ${PANEL_WIDTH}px`, () => {
     await expect(panel.getByRole('button', { name: 'Save Preferences' })).toBeVisible({ timeout: 10000 });
     await expectFits(panel, 'Settings');
 
-    await panel.getByRole('button', { name: 'Datasets', exact: true }).click();
-    await expect(panel.getByRole('button', { name: 'Datasets', exact: true })).toHaveAttribute('aria-current', 'page');
-    await expectFits(panel, 'Datasets');
+    await panel.getByRole('button', { name: 'Data', exact: true }).click();
+    await expect(panel.getByRole('button', { name: 'Data', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expectFits(panel, 'Data');
   });
 });

@@ -1,5 +1,11 @@
 import { RepeatedPatternCandidate, CandidateSample } from '@/types';
-import { filterMeaningfulClasses, escapeCss, isDynamicId } from '@/utils/selector';
+import {
+  filterMeaningfulClasses,
+  escapeCss,
+  isDynamicId,
+  isUniqueId,
+  getDurableAttributeSelector,
+} from '@/utils/selector';
 import { visibleText } from '@/utils/dom';
 
 /**
@@ -30,36 +36,42 @@ export function createCandidateSample(el: Element): CandidateSample {
  * Generates the most concise and accurate CSS selector for a repeated set of elements under a parent.
  */
 export function generateRepeatedSelector(parent: Element, sampleChild: Element): string {
+  const root = parent.ownerDocument ?? document;
   const childTag = sampleChild.tagName.toLowerCase();
   const meaningfulClasses = filterMeaningfulClasses(sampleChild.classList);
 
-  // Fast parent selector without full-document scan
+  // Fast parent selector without anchoring on duplicate IDs
   let parentSelector = '';
-  if (parent.id && !isDynamicId(parent.id)) {
+  if (parent.id && !isDynamicId(parent.id) && isUniqueId(parent.id, root)) {
     parentSelector = `#${escapeCss(parent.id)}`;
   } else {
+    const parentAttr = getDurableAttributeSelector(parent);
     const parentClasses = filterMeaningfulClasses(parent.classList);
-    if (parentClasses.length > 0) {
-      parentSelector = `${parent.tagName.toLowerCase()}.${parentClasses.map(escapeCss).join('.')}`;
-    } else if (parent.tagName.toLowerCase() !== 'body' && parent.tagName.toLowerCase() !== 'html') {
-      parentSelector = parent.tagName.toLowerCase();
+    const parentTag = parent.tagName.toLowerCase();
+    if (parentAttr) {
+      parentSelector = `${parentTag}${parentAttr}`;
+    } else if (parentClasses.length > 0) {
+      parentSelector = `${parentTag}.${parentClasses.map(escapeCss).join('.')}`;
+    } else if (parentTag !== 'body' && parentTag !== 'html') {
+      parentSelector = parentTag;
     }
   }
 
-  // If child has meaningful classes, try class selector
+  // Prefer meaningful classes, then durable attributes, then child tag
+  let childSelector = childTag;
   if (meaningfulClasses.length > 0) {
-    const classCandidate = `${childTag}.${meaningfulClasses.map(escapeCss).join('.')}`;
-    if (parentSelector) {
-      return `${parentSelector} > ${classCandidate}`;
+    childSelector = `${childTag}.${meaningfulClasses.map(escapeCss).join('.')}`;
+  } else {
+    const childAttr = getDurableAttributeSelector(sampleChild);
+    if (childAttr) {
+      childSelector = `${childTag}${childAttr}`;
     }
-    return classCandidate;
   }
 
-  // Fallback to parent > childTag
   if (parentSelector) {
-    return `${parentSelector} > ${childTag}`;
+    return `${parentSelector} > ${childSelector}`;
   }
-  return childTag;
+  return childSelector;
 }
 
 /**

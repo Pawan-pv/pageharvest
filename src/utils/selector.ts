@@ -3,42 +3,134 @@
  */
 
 /**
+ * Escapes an attribute value for double-quoted CSS attribute selectors.
+ */
+function escapeAttrValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
+ * Returns true if `id` is non-empty and uniquely identifies a single element in `root`.
+ * Duplicate IDs on real-world pages (e.g. infinite-scroll chunks reusing id="grid") return false.
+ */
+export function isUniqueId(id: string, root: Document | Element = document): boolean {
+  if (!id || typeof id !== 'string') return false;
+  const trimmed = id.trim();
+  if (!trimmed) return false;
+  try {
+    return root.querySelectorAll(`[id="${escapeAttrValue(trimmed)}"]`).length === 1;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Checks if an ID appears to be dynamically generated (e.g., ember123, :r1:, gen-482)
  */
 export function isDynamicId(id: string): boolean {
   if (!id) return true;
-  if (/^[0-9]/.test(id)) return true;
-  if (id.includes('/') || /[:\\]/.test(id)) return true;
-  if (/^(sc|css|jss)-[a-zA-Z0-9]+$/i.test(id)) return true;
-  if (/react-select-.*input/i.test(id)) return true;
-  if (/uid-[0-9a-zA-Z]+/i.test(id)) return true;
-  if (/ember\d+/i.test(id)) return true;
-  if (/(ember|react|vue|ng|guid|gen|uid|item)-?[0-9a-f]{4,}/i.test(id)) return true;
-  if (/^[a-f0-9]{8,}$/i.test(id)) return true;
+  const trimmed = id.trim();
+  if (!trimmed) return true;
+  if (/^[0-9]/.test(trimmed)) return true;
+  if (/[:/\\#.[\]]/.test(trimmed)) return true;
+  if (/^(sc|css|jss|styled|mui|tw|emotion)-[a-zA-Z0-9_-]+$/i.test(trimmed)) return true;
+  if (/react-select-.*input/i.test(trimmed)) return true;
+  if (/uid-[0-9a-zA-Z]+/i.test(trimmed)) return true;
+  if (/ember\d+/i.test(trimmed)) return true;
+  if (/(ember|react|vue|ng|guid|gen|uid|item|radix|headlessui|chakra|next)-?[0-9a-f]{4,}/i.test(trimmed)) {
+    return true;
+  }
+  if (/^\d+$/.test(trimmed)) return true;
+  if (/^[a-f0-9]{8,}$/i.test(trimmed)) return true;
+  if (trimmed.length >= 10 && /[A-Z]/.test(trimmed) && /[a-z]/.test(trimmed) && /[0-9]/.test(trimmed)) {
+    return true;
+  }
+  return false;
+}
+
+const TRANSIENT_STATE_CLASS_RE =
+  /^(active|hover|focus|focus-within|selected|open|closed|is-.*|has-.*|js-.*|slick-.*|swiper-.*|visible|hidden|disabled|loading|expanded|collapsed)$/i;
+const CSS_IN_JS_CLASS_RE = /^(?:css|sc|jss|styled|mui|tw|emotion)-[a-zA-Z0-9_-]+$/i;
+const CSS_MODULE_HASH_RE = /(?:__[a-zA-Z0-9_-]*_[a-zA-Z0-9]{4,}|_[a-zA-Z0-9]{5,})$/;
+
+/**
+ * Detects utility, presentation-only, framework-hashed, and transient UI state classes.
+ */
+export function isVolatileOrUtilityClass(cls: string): boolean {
+  if (!cls || typeof cls !== 'string') return true;
+  const c = cls.trim();
+  if (c.length === 0) return true;
+
+  if (TRANSIENT_STATE_CLASS_RE.test(c)) return true;
+  if (c.includes(':') || c.includes('[') || c.includes(']')) return true;
+  if (CSS_IN_JS_CLASS_RE.test(c) || CSS_MODULE_HASH_RE.test(c)) return true;
+  // Mixed-case + digit random hashes without semantic separators (e.g. a1B2c3)
+  if (c.length >= 6 && /^[a-z0-9]+$/i.test(c) && /[A-Z]/.test(c) && /[a-z]/.test(c) && /[0-9]/.test(c)) {
+    return true;
+  }
+
+  // Layout & display utility classes
+  if (/^(flex|inline-flex|grid|inline-grid|block|inline-block|inline|contents|hidden)$/i.test(c)) {
+    return true;
+  }
+  if (/^(items|justify|content|self|place)-(start|end|center|between|around|evenly|stretch|baseline)/i.test(c)) {
+    return true;
+  }
+  if (/^(flex-(row|col|row-reverse|col-reverse|wrap|nowrap)|grow|shrink|basis-\w+)$/i.test(c)) {
+    return true;
+  }
+  if (/^(grid-cols-\d+|col-span-\d+|grid-rows-\d+|row-span-\d+|gap(-\w+)?-\d+|space-[xy]-\d+)$/i.test(c)) {
+    return true;
+  }
+
+  // Spacing, sizing, typography, borders, colors, positioning
+  if (/^[-+]?[pm][trblxy]?(-\w+)?-\d+$/i.test(c)) return true;
+  if (/^(w|h|min-w|min-h|max-w|max-h)(-\w+)?-\w+$/i.test(c)) return true;
+  if (/^text-(xs|sm|base|lg|xl|\d+xl|left|center|right|justify)$/i.test(c)) return true;
+  if (/^font-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)$/i.test(c)) return true;
+  if (/^(leading|tracking)-(none|tight|snug|normal|relaxed|loose|wide|wider|widest|\d+)$/i.test(c)) return true;
+  if (/^(rounded|border|shadow|ring|divide)(-\w+)?$/i.test(c)) return true;
+  if (/^(bg|text|border|fill|stroke|ring)-([a-z]+-\d+|white|black|transparent|current)$/i.test(c)) return true;
+  if (/^(relative|absolute|fixed|sticky|static|top-\d+|bottom-\d+|left-\d+|right-\d+|inset-\d+|z-\d+)$/i.test(c)) {
+    return true;
+  }
+  if (/^(overflow|opacity|transition|duration|cursor)(-\w+)?$/i.test(c)) return true;
+
   return false;
 }
 
 /**
- * Filter meaningful classes (avoid framework-generated classes or active states)
+ * Filter meaningful classes (avoid framework-generated classes, Tailwind utilities, or active states)
  */
 export function filterMeaningfulClasses(classList: DOMTokenList | string[]): string[] {
   const classes = Array.isArray(classList) ? classList : Array.from(classList);
-  return classes.filter((cls) => {
-    if (!cls || cls.trim() === '') return false;
-    // Skip active/state classes that change on hover/focus
-    if (/^(active|hover|focus|selected|open|closed|visible|hidden|disabled|loading|expanded)$/i.test(cls)) {
-      return false;
+  return classes.filter((cls) => !isVolatileOrUtilityClass(cls));
+}
+
+const DURABLE_CONTAINER_ATTRS = [
+  'data-testid',
+  'data-test-id',
+  'data-test',
+  'data-qa',
+  'data-cy',
+  'data-component',
+  'data-automation-id',
+  'itemprop',
+  'itemtype',
+  'role',
+] as const;
+
+/**
+ * Returns a stable semantic attribute selector (e.g. `[data-testid="items-grid"]`) when present.
+ */
+export function getDurableAttributeSelector(element: Element): string | null {
+  for (const attr of DURABLE_CONTAINER_ATTRS) {
+    const val = element.getAttribute(attr);
+    if (val && val.trim().length > 0 && val.trim().length < 80 && !isDynamicId(val)) {
+      return `[${attr}="${escapeAttrValue(val.trim())}"]`;
     }
-    // Skip dynamic hash classes e.g. css-12x9a, sc-bdVaJa, jss123
-    if (/^(css|sc|jss|styled)-[a-zA-Z0-9]+$/i.test(cls)) {
-      return false;
-    }
-    // Avoid Tailwind arbitrary values or states like hover:bg-blue-500
-    if (cls.includes(':') || cls.includes('[') || cls.includes(']')) {
-      return false;
-    }
-    return true;
-  });
+  }
+  return null;
 }
 
 /**
@@ -60,7 +152,7 @@ export function generateCssSelector(element: Element): string {
   }
 
   // 1. Unique ID
-  if (element.id && !isDynamicId(element.id)) {
+  if (element.id && !isDynamicId(element.id) && isUniqueId(element.id, document)) {
     const idSelector = `#${escapeCss(element.id)}`;
     try {
       if (document.querySelectorAll(idSelector).length === 1) {
@@ -92,7 +184,7 @@ export function generateCssSelector(element: Element): string {
   while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body && current !== document.documentElement) {
     let selector = current.tagName.toLowerCase();
 
-    if (current.id && !isDynamicId(current.id)) {
+    if (current.id && !isDynamicId(current.id) && isUniqueId(current.id, document)) {
       selector += `#${escapeCss(current.id)}`;
       path.unshift(selector);
       break; // Safe anchor

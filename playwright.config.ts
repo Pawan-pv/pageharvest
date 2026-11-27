@@ -14,6 +14,8 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   outputDir: 'artifacts/release-testing/playwright',
+  // Loads a copy of the build that already holds the fixture site's grant (ADR-037).
+  globalSetup: './tests/e2e/global-setup.ts',
   webServer: {
     command: 'node tests/fixtures/serve.cjs',
     url: 'http://127.0.0.1:3456/simple-grid.html',

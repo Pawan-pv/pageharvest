@@ -1,6 +1,7 @@
 import React from 'react';
 import { Banner } from './Banner';
 import { describeError, type PanelError } from './errorCopy';
+import { useIsAdvanced } from '@/components/settings/useAdvancedMode';
 
 export interface ErrorBannerProps {
   error: PanelError;
@@ -11,7 +12,9 @@ export interface ErrorBannerProps {
 
 /** Every error the panel shows: what happened, whether data is safe, what to do next. */
 export const ErrorBanner: React.FC<ErrorBannerProps> = ({ error, onDismiss, actions, className }) => {
-  const copy = describeError(error);
+  // Simple mode never points at a control that only Advanced options shows (ADR-039).
+  const advanced = useIsAdvanced();
+  const copy = describeError(error, { simple: !advanced });
   return (
     <Banner
       tone={copy.tone}

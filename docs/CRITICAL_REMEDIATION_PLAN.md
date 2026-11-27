@@ -196,7 +196,7 @@ Navigation stability fix staged: `waitForNewElementsOrMutation` in `src/core/nav
 
 **Permissions & Content Script Injection**
 
-The manifest declares no `host_permissions` and no `tabs` permission. Instead, `entrypoints/content.ts` registers a static content script with `matches: ['<all_urls>']` at `runAt: 'document_idle'`. Chrome auto-injects this script into every matching page on each navigation, so multi-page pagination (`next_button`, `url_template`) and `RECOVER_JOB` (which opens a blank tab via `chrome.tabs.create` and navigates it) work without requiring the `tabs` permission. The `tabs` API calls in `src/background/chrome-job-transport.ts` (`openBlankTab`, `navigateTab`) rely on the content script's pre-existing injection rather than on the `tabs` permission.
+The manifest declares broad site access via `host_permissions: ['http://*/*', 'https://*/*']` with `scripting` (ADR-040, superseding ADR-037/ADR-034), with no `tabs` permission and no static `<all_urls>` content script entry. Content scripts are registered and injected dynamically on demand via `chrome.scripting.executeScript` into active target tabs only when the user interacts or when an active job navigates across pages. The background `JobCoordinator` and transport layer coordinate tab creation and navigation (`chrome.tabs.create`, `chrome.tabs.update`) with on-demand script injection, ensuring multi-page pagination (`next_button`, `url_template`) and session recovery operate reliably without static `<all_urls>` injection overhead.
 
 **For the Chrome Web Store**
 

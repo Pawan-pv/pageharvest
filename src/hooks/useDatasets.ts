@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { DatasetRepository } from '@/storage/repositories';
+import { messagingService } from '@/services/messaging';
 import { Dataset, ExtractedRecord } from '@/types';
 
 export function useDatasets() {
@@ -9,9 +10,11 @@ export function useDatasets() {
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
-  const loadDatasets = useCallback(async () => {
+  const loadDatasets = useCallback(async (options?: { silent?: boolean }) => {
     if (!isMountedRef.current) return;
-    setIsLoading(true);
+    if (!options?.silent) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const all = await repository.getAllDatasets();
@@ -22,7 +25,7 @@ export function useDatasets() {
       if (!isMountedRef.current) return;
       setError('Could not load saved datasets from local storage.');
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && !options?.silent) {
         setIsLoading(false);
       }
     }
@@ -39,14 +42,30 @@ export function useDatasets() {
   const deleteDataset = useCallback(
     async (datasetId: string) => {
       try {
-        await repository.deleteDataset(datasetId);
+        // The background is the only writer. A list a job can still write to is refused
+        // there; the error keeps its name and its message says what to do.
+        await messagingService.deleteDataset(datasetId);
         setDatasets((prev) => prev.filter((d) => d.id !== datasetId));
       } catch (err) {
         console.error('Failed to delete dataset:', err);
-        throw new Error('Failed to delete dataset.', { cause: err });
+        throw err;
       }
     },
-    [repository]
+    []
+  );
+
+  const renameDataset = useCallback(
+    async (datasetId: string, name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) throw new Error('A saved list needs a name.');
+      await messagingService.renameDataset(datasetId, trimmed);
+      setDatasets((prev) =>
+        prev.map((dataset) =>
+          dataset.id === datasetId ? { ...dataset, name: trimmed, updatedAt: Date.now() } : dataset
+        )
+      );
+    },
+    []
   );
 
   const getDatasetRecords = useCallback(
@@ -62,6 +81,7 @@ export function useDatasets() {
     error,
     refreshDatasets: loadDatasets,
     deleteDataset,
+    renameDataset,
     getDatasetRecords,
   };
 }

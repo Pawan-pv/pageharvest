@@ -1,7 +1,24 @@
 import React, { useId, useState } from 'react';
 import { ArrowLeft, ExternalLink, PlayCircle, Search } from 'lucide-react';
 import { Button } from '@/components/common/Button';
-import { GUIDE_SECTIONS, searchGuide, type GuideBlock, type GuideSection, type GuideSectionId } from './content';
+import {
+  GUIDE_SECTIONS,
+  PRIVACY_POLICY_URL,
+  THIRD_PARTY_NOTICES_PATH,
+  searchGuide,
+  type GuideBlock,
+  type GuideSection,
+  type GuideSectionId,
+} from './content';
+
+/** The version Chrome installed, read from the manifest; empty where there is no manifest. */
+function extensionVersion(): string {
+  try {
+    return typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '';
+  } catch {
+    return '';
+  }
+}
 
 export interface HelpViewProps {
   onClose: () => void;
@@ -164,6 +181,28 @@ export const HelpView: React.FC<HelpViewProps> = ({ onClose, onRestartTour, init
       )}
 
       {trimmed && shown.map((section) => <SectionArticle key={section.id} section={section} />)}
+
+      <footer className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 border-t border-line text-xs text-fg-subtle">
+        <span>PageHarvest {extensionVersion()}</span>
+        <a
+          href={PRIVACY_POLICY_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center min-h-6 text-brand-fg underline underline-offset-2 hover:text-brand-emphasis"
+        >
+          Privacy policy
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
+        <a
+          href={THIRD_PARTY_NOTICES_PATH}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center min-h-6 text-brand-fg underline underline-offset-2 hover:text-brand-emphasis"
+        >
+          Open-source licences
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
+      </footer>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MIN_PAGE_DELAY_MS } from './pagination';
 
 export const CURRENT_SETTINGS_VERSION = 2;
 
@@ -14,7 +15,7 @@ export const UserSettingsSchema = z.object({
   csvDelimiter: z.enum([',', ';', '\t']).default(','),
   csvIncludeBom: z.boolean().default(true),
   jsonIndent: z.number().int().min(0).max(8).default(2),
-  defaultDelayMs: z.number().int().min(200).max(30000).default(1500),
+  defaultDelayMs: z.number().int().min(MIN_PAGE_DELAY_MS).max(30000).default(1500),
   defaultMaxPages: z.number().int().min(1).max(500).default(20),
   defaultMaxScrolls: z.number().int().min(1).max(200).default(30),
   defaultScrollDelayMs: z.number().int().min(300).max(10000).default(1500),

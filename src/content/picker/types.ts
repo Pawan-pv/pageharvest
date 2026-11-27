@@ -59,6 +59,7 @@ export interface SelectedElementInfo {
   breadcrumbs: ElementBreadcrumb[];
   selectorCandidates: SelectorCandidate[];
   matchCount: number;
+  isSingleOverride?: boolean;
   crossFrame: CrossFrameAssessment;
 }
 

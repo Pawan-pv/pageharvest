@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { FieldPreview } from '@/components/picker/FieldPreview';
 import { ERROR_COPY } from '@/components/common/errorCopy';
 import type { FieldPreviewResult } from '@/shared/contracts/message';
@@ -101,7 +101,8 @@ describe('Live field preview', () => {
     expect(
       screen.getByText("The page layout changed. A run wouldn't find this list yet. Pick the list again to continue.")
     ).toBeInTheDocument();
-    expect(onDriftChange).toHaveBeenLastCalledWith(true);
+    // Reported from an effect, which can run after the badge is drawn.
+    await waitFor(() => expect(onDriftChange).toHaveBeenLastCalledWith(true));
     screen.getByRole('button', { name: 'Pick the list again' }).click();
     expect(onPickListAgain).toHaveBeenCalled();
   });

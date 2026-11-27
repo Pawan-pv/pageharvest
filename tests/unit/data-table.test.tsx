@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DataTable } from '@/components/grid/DataTable';
 import { ExtractedRecord, FieldDefinition } from '@/types';
@@ -38,8 +38,9 @@ describe('DataTable Spreadsheet Workspace Component', () => {
   it('renders loading state when isLoading is true', () => {
     render(<DataTable records={sampleRecords} fields={sampleFields} isLoading={true} />);
 
-    expect(screen.getByText('Loading data workspace...')).toBeInTheDocument();
-    expect(screen.getByText(/Retrieving records from IndexedDB/i)).toBeInTheDocument();
+    expect(screen.getByText('Loading your rows…')).toBeInTheDocument();
+    // The storage technology is not something a user needs to read.
+    expect(screen.queryByText(/IndexedDB/i)).not.toBeInTheDocument();
   });
 
   it('renders error state and handles onRetry callback', () => {
@@ -94,9 +95,6 @@ describe('DataTable Spreadsheet Workspace Component', () => {
     const user = userEvent.setup();
     const onBatchDelete = vi.fn();
 
-    // Mock confirm dialog
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-
     render(
       <DataTable
         records={sampleRecords}
@@ -113,6 +111,9 @@ describe('DataTable Spreadsheet Workspace Component', () => {
 
     const deleteSelectedBtn = screen.getByRole('button', { name: /delete selected/i });
     await user.click(deleteSelectedBtn);
+    // The grid asks first, in a dialog of its own.
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 3 selected rows?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
     expect(onBatchDelete).toHaveBeenCalledWith(['rec_1', 'rec_2', 'rec_3']);
   });

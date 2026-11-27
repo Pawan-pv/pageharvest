@@ -16,23 +16,23 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     icon: <Wheat className="w-5 h-5" />,
   },
   {
-    title: 'Find or pick your data',
-    body: 'Open a website and press "Find data automatically". If it chooses the wrong thing, press "Pick items myself" and click one item on the page.',
+    title: 'Find data on the page',
+    body: 'Open a website that has a list on it and press "Find Data on This Page". PageHarvest shows you what it found. If it is the wrong thing, click one item on the page yourself and it finds the others.',
     icon: <Sparkles className="w-5 h-5" />,
   },
   {
-    title: 'Review the columns',
-    body: 'Each item becomes a row. Keep the columns you want, rename them, and choose what each one collects: text, a link, an image, a number and more.',
+    title: 'Check the columns',
+    body: 'Each item becomes a row, and each piece of information a column. Untick the columns you do not need, and type over a name to change it.',
     icon: <Columns3 className="w-5 h-5" />,
   },
   {
-    title: 'Run it, then export',
-    body: 'PageHarvest can follow Next buttons or scroll for more. You can close the panel while it works. When it is done, export a CSV for Excel or Google Sheets.',
+    title: 'Collect, then download',
+    body: 'If the list continues on more pages, PageHarvest can get those too. You can close the panel while it works. When it is done, download a file for Excel.',
     icon: <Download className="w-5 h-5" />,
   },
   {
     title: 'Your data stays on your computer',
-    body: 'Everything is stored in this browser. Nothing is uploaded, there is no account, and no tracking. You can reopen this tour from Help at any time.',
+    body: 'Everything is stored on this computer. Nothing is uploaded, there is no account, and no tracking. You can see this tour again from Help.',
     icon: <ShieldCheck className="w-5 h-5" />,
   },
 ];

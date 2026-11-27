@@ -128,6 +128,14 @@ export const detectRepeatedElementsMessageSchema = baseMessageSchema.extend({
     .optional(),
 });
 
+/**
+ * Whether the page shows a way to more items (ADR-039): a Next control, a Load more control,
+ * or neither. Display-only: the side panel words one question by it. Detection only looks
+ * for the control, and nothing in a job or in storage reads this.
+ */
+export const MoreItemsHintSchema = z.enum(['next', 'load_more', 'none']);
+export type MoreItemsHint = z.infer<typeof MoreItemsHintSchema>;
+
 export const repeatedElementsDetectedMessageSchema = baseMessageSchema.extend({
   type: z.literal('REPEATED_ELEMENTS_DETECTED'),
   payload: z.object({
@@ -138,6 +146,8 @@ export const repeatedElementsDetectedMessageSchema = baseMessageSchema.extend({
     sampleSnippets: z.array(z.string()),
     candidates: z.array(ListCandidateSchema).optional(),
     credible: z.boolean().optional(),
+    /** Optional, so a message without it still parses. */
+    moreItems: MoreItemsHintSchema.optional(),
   }),
 });
 
@@ -249,6 +259,74 @@ export const discardJobMessageSchema = baseMessageSchema.extend({
 export const reconcileJobsMessageSchema = baseMessageSchema.extend({
   type: z.literal('RECONCILE_JOBS'),
   payload: z.object({}).optional(),
+});
+
+// ---------------------------------------------------------------------------
+// Data commands: side panel -> background. The background is the only writer.
+// ---------------------------------------------------------------------------
+export const clearUserDataMessageSchema = baseMessageSchema.extend({
+  type: z.literal('CLEAR_USER_DATA'),
+  payload: z.object({}).optional(),
+});
+
+export const updateRecordCellMessageSchema = baseMessageSchema.extend({
+  type: z.literal('UPDATE_RECORD_CELL'),
+  payload: z.object({
+    recordId: z.string().min(1),
+    field: z.string().min(1),
+    value: z.union([z.string(), z.number(), z.null()]),
+  }),
+});
+
+export const deleteRecordsMessageSchema = baseMessageSchema.extend({
+  type: z.literal('DELETE_RECORDS'),
+  payload: z.object({
+    datasetId: z.string().min(1),
+    recordIds: z.array(z.string().min(1)).min(1).max(10_000),
+  }),
+});
+
+export const applyDatasetEditMessageSchema = baseMessageSchema.extend({
+  type: z.literal('APPLY_DATASET_EDIT'),
+  payload: z.object({
+    datasetId: z.string().min(1),
+    records: z.array(ExtractionRecordSchema).max(50_000),
+    fields: z.array(ExtractionFieldSchema).max(500),
+  }),
+});
+
+export const renameDatasetMessageSchema = baseMessageSchema.extend({
+  type: z.literal('RENAME_DATASET'),
+  payload: z.object({
+    datasetId: z.string().min(1),
+    name: z.string().trim().min(1).max(200),
+  }),
+});
+
+export const deleteDatasetMessageSchema = baseMessageSchema.extend({
+  type: z.literal('DELETE_DATASET'),
+  payload: z.object({
+    datasetId: z.string().min(1),
+  }),
+});
+
+/** Creates a new dataset with its records transactionally via the background single-writer. */
+export const createDatasetMessageSchema = baseMessageSchema.extend({
+  type: z.literal('CREATE_DATASET'),
+  payload: z.object({
+    name: z.string().trim().min(1).max(200),
+    url: z.string().trim().min(1),
+    fields: z.array(ExtractionFieldSchema).max(500),
+    records: z.array(ExtractionRecordSchema).max(50_000),
+  }),
+});
+
+/** Stores one validated recipe imported from a .pageharvest-recipe.json file. */
+export const importRecipeMessageSchema = baseMessageSchema.extend({
+  type: z.literal('IMPORT_RECIPE'),
+  payload: z.object({
+    recipe: ExtractionSchemaSchema,
+  }),
 });
 
 // ---------------------------------------------------------------------------
@@ -429,6 +507,14 @@ export const BrowserMessageSchema = z.discriminatedUnion('type', [
   recoverJobMessageSchema,
   discardJobMessageSchema,
   reconcileJobsMessageSchema,
+  clearUserDataMessageSchema,
+  updateRecordCellMessageSchema,
+  deleteRecordsMessageSchema,
+  applyDatasetEditMessageSchema,
+  renameDatasetMessageSchema,
+  deleteDatasetMessageSchema,
+  createDatasetMessageSchema,
+  importRecipeMessageSchema,
   extractRecordsMessageSchema,
   controlJobMessageSchema,
   queryJobRunMessageSchema,
@@ -484,6 +570,21 @@ export const JobCommandResultSchema = z.object({
 });
 
 export type JobCommandResult = z.infer<typeof JobCommandResultSchema>;
+
+/** Reply to every data command. A failure never reports success. */
+export const DataCommandResultSchema = z.object({
+  ok: z.boolean(),
+  error: z.string().optional(),
+  /**
+   * Why a command was refused. The panel turns DATASET_IN_USE back into the storage error it
+   * knows, so its wording and its "kept on purpose" banner do not depend on message text.
+   */
+  code: z.enum(['DATASET_IN_USE', 'DATASET_NOT_FOUND', 'UNKNOWN']).optional(),
+  deleted: z.number().int().min(0).optional(),
+  datasetId: z.string().optional(),
+});
+
+export type DataCommandResult = z.infer<typeof DataCommandResultSchema>;
 
 export const JobRunStatusSchema = z.object({
   active: z.boolean(),

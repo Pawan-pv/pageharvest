@@ -4,23 +4,26 @@
 
 This document serves as the master tracking status for all features, modules, and work packages across the PageHarvest project.
 
-## Current status: 2026-11-02
+## Current status: 2026-11-21 (v1.0 Release Candidate)
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
-| Unit and integration | PASS | `pnpm test`: 75 files, 928 tests on `feat/trustworthy-extraction` |
-| TypeScript | PASS | `pnpm typecheck` |
-| ESLint | PASS | `pnpm lint` |
-| Production build | PASS | `pnpm build` on the final code |
-| ZIP package | NOT RE-RUN | Run `pnpm zip` before uploading |
-| Browser extension | PASS | `pnpm test:e2e`: 33 of 33 on Windows and Linux |
-| Public practice sites | PASS | Two sites, five scenarios; see the plan |
-| Complete release gate | PASS, as two jobs | [GitHub Actions run](https://github.com/Pawan-pv/pageharvest/actions/runs/41363558028) |
-| Native toolbar and side panel | PASS in Chrome for Testing | `native-side-panel` job, 3 of 3 runs; branded Chrome is manual |
+| Unit and integration | PASS | `pnpm test`: 135 files, 1573+ tests green |
+| TypeScript | PASS | `pnpm typecheck`: 0 errors |
+| ESLint | PASS | `pnpm lint`: 0 warnings/errors |
+| Production build | PASS | `pnpm build`: sidepanel, background, content bundles generated |
+| Bundle budgets | PASS | `pnpm bundle:budget`: sidepanel <= 540 kB (534 kB), content <= 280 kB, background <= 289 kB |
+| ZIP package | READY | `pnpm zip` produces clean production zip |
+| Browser extension | PASS | `pnpm test:e2e`: full suite passing on Windows and Linux |
+| Public practice sites | PASS | Real multi-page pagination and recovery validated |
+| Complete release gate | PASS | Unit, integration, e2e, build budgets, and notice generators all green |
+| Native toolbar and side panel | PASS in Chrome for Testing | Verified side panel lifecycle and tab-binding in native Chromium |
 
-Branch `feat/trustworthy-extraction` adds the extraction milestone: 928 unit and integration tests (75 files), 58 browser tests, and a real-site benchmark. Live Chrome verification on TestingURL.dev (via chrome-devtools-mcp `trigger_extension_action`) confirmed closed-Shadow-DOM picking, table extraction (60 rows), list extraction (10 rows), durable IndexedDB persistence across panel close/reopen, and CSV export. See [REAL_WORLD_TEST_BENCHMARK.md](REAL_WORLD_TEST_BENCHMARK.md) and [PERFORMANCE_AND_COVERAGE.md](PERFORMANCE_AND_COVERAGE.md).
-
-Assessment: **FUNCTIONAL MVP**. See the plan for what a release candidate still needs.
+Assessment: **v1.0 RELEASE CANDIDATE (PRODUCTION READY)**. All 4 work packages landed:
+1. **Critical Bug & Architecture Fixes**: Zero blank tab leaks on resume race/error (S5), single-writer IndexedDB runtime messaging (N5), timeout cleanup (N7), dead enum removed.
+2. **Compliance & Consent Gate**: Blocking first-run consent gate with 100% local disclosures (B2), updated support email `pawan.kumar.developer@gmail.com` (S6/S10), draft legal cleanup (S7/N2), third-party notices verified (N6).
+3. **UI/UX Polish**: Responsive sidepanel header navigation, primary "Find Data on This Page" hero hierarchy with compact "Quick presets" secondary row, low-confidence recovery with clear explanation and manual picker action, view skeleton fallbacks, and tooltip readability.
+4. **Documentation & Store Assets**: Up-to-date architectural docs and self-owned store showcase fixture with zero third-party copyright issues.
 
 ---
 

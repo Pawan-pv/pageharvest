@@ -1,16 +1,37 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react';
-import { Wheat, Settings as SettingsIcon, HelpCircle } from 'lucide-react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import {
+  Bookmark,
+  Database,
+  HelpCircle,
+  MousePointer2,
+  Settings as SettingsIcon,
+  Wheat,
+  Wrench,
+} from 'lucide-react';
 import { useActiveTab } from '@/hooks/useActiveTab';
 import { useDatasets } from '@/hooks/useDatasets';
-import { useExtractionWorkflow } from '@/hooks/useExtractionWorkflow';
+import { useExtractionWorkflow, type DetectedList, type ExtractionStats } from '@/hooks/useExtractionWorkflow';
+import { isActiveJobStatus } from '@/shared/contracts/job';
+
+function isRunningExtractionStatus(status: ExtractionStats['status']): boolean {
+  return status !== 'IDLE' && isActiveJobStatus(status);
+}
+import type { ListCandidate } from '@/shared/contracts/message';
 import { useOnboarding } from '@/components/guide/useOnboarding';
+import { useConsent } from '@/components/consent/useConsent';
+import { useAdvancedMode } from '@/components/settings/useAdvancedMode';
 import { MainDashboard } from '@/components/dashboard/MainDashboard';
-import { ErrorBanner } from '@/components/common/ErrorBanner';
+import { WebsiteCard } from '@/components/dashboard/WebsiteCard';
 import { Stepper } from '@/components/common/Stepper';
-import { RecoveryBanner } from '@/components/shell/RecoveryBanner';
 import { ScanningState } from '@/components/shell/ScanningState';
-import { flowSteps, stepForView, type FlowKind } from '@/components/shell/flow';
+import { flowSteps, simpleFlowSteps, stepForView, type FlowKind } from '@/components/shell/flow';
+import { Banner } from '@/components/common/Banner';
+import { Button } from '@/components/common/Button';
+import { requestSiteOrigin } from '@/platform/permissions';
+import { openWorkbench } from '@/platform/workbench';
+import { simpleStartingPagination } from '@/components/simple/more-pages';
 import type { ConfigStep } from '@/components/picker/FieldSelectionPanel';
+import type { ExtractionRecipe } from '@/types';
 
 // Each step of the flow is its own chunk, so the panel opens on the dashboard alone (ADR-014).
 const ElementSelectionBanner = lazy(() =>
@@ -34,6 +55,11 @@ const LibraryView = lazy(() =>
     default: module.LibraryView,
   }))
 );
+const RecipesPanel = lazy(() =>
+  import('@/components/library/LibraryView').then((module) => ({
+    default: module.RecipesPanel,
+  }))
+);
 // The guide and the tour are only loaded when they open.
 const HelpView = lazy(() =>
   import('@/components/guide/HelpView').then((module) => ({ default: module.HelpView }))
@@ -41,11 +67,94 @@ const HelpView = lazy(() =>
 const Onboarding = lazy(() =>
   import('@/components/guide/Onboarding').then((module) => ({ default: module.Onboarding }))
 );
+const ConsentGate = lazy(() =>
+  import('@/components/consent/ConsentGate').then((module) => ({ default: module.ConsentGate }))
+);
 const SettingsView = lazy(() =>
   import('@/components/settings/SettingsView').then((module) => ({ default: module.SettingsView }))
 );
+const SimpleMyData = lazy(() =>
+  import('@/components/simple/MyData').then((module) => ({ default: module.SimpleMyData }))
+);
+// Simple mode components (ADR-039)
+const SimplePicking = lazy(() =>
+  import('@/components/simple/FindList').then((module) => ({ default: module.SimplePicking }))
+);
+const SimpleListChooser = lazy(() =>
+  import('@/components/simple/FindList').then((module) => ({ default: module.SimpleListChooser }))
+);
+const SimpleListCheck = lazy(() =>
+  import('@/components/simple/FindList').then((module) => ({ default: module.SimpleListCheck }))
+);
+const SimpleColumns = lazy(() =>
+  import('@/components/simple/Columns').then((module) => ({ default: module.SimpleColumns }))
+);
+const SimpleProgress = lazy(() =>
+  import('@/components/simple/Progress').then((module) => ({ default: module.SimpleProgress }))
+);
+const SimpleDone = lazy(() =>
+  import('@/components/simple/Done').then((module) => ({ default: module.SimpleDone }))
+);
 
-type NavSection = 'harvest' | 'datasets' | 'settings' | 'help';
+// 5-State List Extractor (Emerald Pulse UX)
+const ListSetupView = lazy(() =>
+  import('@/components/list-extractor/ListSetupView').then((module) => ({ default: module.ListSetupView }))
+);
+const PickerFocusView = lazy(() =>
+  import('@/components/list-extractor/PickerFocusView').then((module) => ({ default: module.PickerFocusView }))
+);
+const ListRunningView = lazy(() =>
+  import('@/components/list-extractor/ListRunningView').then((module) => ({ default: module.ListRunningView }))
+);
+const ListCompleteView = lazy(() =>
+  import('@/components/list-extractor/ListCompleteView').then((module) => ({ default: module.ListCompleteView }))
+);
+// Shown only when the user switches tabs with a list found, so it is not in the opening chunk.
+const ListOnAnotherTab = lazy(() =>
+  import('@/components/shell/ListOnAnotherTab').then((module) => ({ default: module.ListOnAnotherTab }))
+);
+// Shown only after an interruption or an error, so neither is in the chunk every open pays for.
+const RecoveryBanner = lazy(() =>
+  import('@/components/shell/RecoveryBanner').then((module) => ({ default: module.RecoveryBanner }))
+);
+const ErrorBanner = lazy(() =>
+  import('@/components/common/ErrorBanner').then((module) => ({ default: module.ErrorBanner }))
+);
+
+const SitemapExplorerView = lazy(() =>
+  import('@/components/tools/SitemapExplorerView').then((module) => ({ default: module.SitemapExplorerView }))
+);
+const PageExtractorView = lazy(() =>
+  import('@/components/tools/PageExtractorView').then((module) => ({ default: module.PageExtractorView }))
+);
+const ShopifyExtractorView = lazy(() =>
+  import('@/components/tools/ShopifyExtractorView').then((module) => ({ default: module.ShopifyExtractorView }))
+);
+const EmailExtractorView = lazy(() =>
+  import('@/components/tools/EmailExtractorView').then((module) => ({ default: module.EmailExtractorView }))
+);
+const SocialExtractorView = lazy(() =>
+  import('@/components/tools/SocialExtractorView').then((module) => ({ default: module.SocialExtractorView }))
+);
+const PageTextExtractorView = lazy(() =>
+  import('@/components/tools/PageTextExtractorView').then((module) => ({ default: module.PageTextExtractorView }))
+);
+const ImageDownloaderView = lazy(() =>
+  import('@/components/tools/ImageDownloaderView').then((module) => ({ default: module.ImageDownloaderView }))
+);
+
+/** The three destinations in the command dock. Help and Settings are icon buttons above it. */
+type NavSection = 'tools' | 'datasets' | 'recipes';
+type ActiveSection = NavSection | 'settings' | 'help';
+
+const ViewSkeleton: React.FC<{ label?: string }> = ({ label = 'Loading…' }) => (
+  <div className="p-4 space-y-3 animate-pulse" role="status" aria-label={label}>
+    <div className="h-4 bg-surface-muted rounded-md w-2/3" />
+    <div className="h-9 bg-surface-muted rounded-md w-full" />
+    <div className="h-20 bg-surface-muted rounded-md w-full" />
+    <span className="sr-only">{label}</span>
+  </div>
+);
 
 export const App: React.FC = () => {
   const { tab, isLoading: isTabLoading, refreshTab } = useActiveTab();
@@ -59,32 +168,162 @@ export const App: React.FC = () => {
   } = useDatasets();
 
   const workflow = useExtractionWorkflow(tab);
+  // Simple mode is the default; Advanced options brings the detailed controls back (ADR-039).
+  const { advanced } = useAdvancedMode();
 
-  const [activeTabNav, setActiveTabNav] = useState<NavSection>('harvest');
+  const [activeTabNav, setActiveTabNav] = useState<NavSection>('tools');
   // How the user started this extraction. It names the stepper's first step; a view reached
   // outside a flow (a saved dataset, a resumed job, the dashboard) shows no stepper.
   const [flow, setFlow] = useState<FlowKind | null>(null);
+  const [activeToolView, setActiveToolView] = useState<
+    'list' | 'page' | 'sitemap' | 'shopify' | 'email' | 'social' | 'page_text' | 'images' | null
+  >(null);
+
   const activeFlow = workflow.view === 'dashboard' ? null : flow;
   // Review fields and Pagination share one panel view; this says which half is showing.
   const [configStep, setConfigStep] = useState<ConfigStep>('fields');
+  // In Advanced mode, clicking "Edit columns" inside ListSetupView opens FieldSelectionPanel.
+  const [isEditingListColumns, setIsEditingListColumns] = useState(false);
+  // Simple mode shows the columns view in two halves: "We found N items", then the columns.
+  const [simpleStage, setSimpleStage] = useState<'check' | 'columns'>('check');
+  // The user asked for the other lists, so the best match is not accepted for them.
+  const [choosingList, setChoosingList] = useState(false);
+  // The list simple mode last accepted by itself, so a failure is not retried in a loop.
+  const [acceptedList, setAcceptedList] = useState<DetectedList | null>(null);
+  // Simple mode ends on a summary; the full table is opened from it.
+  const [showAllRows, setShowAllRows] = useState(false);
+  // The rows on screen were opened from saved data, not collected just now.
+  const [openedSavedData, setOpenedSavedData] = useState(false);
   const viewStep = activeFlow ? stepForView(workflow.view) : null;
-  const currentStep = viewStep === 'fields' && configStep === 'pagination' ? 'pagination' : viewStep;
+  const currentStep = advanced
+    ? viewStep === 'fields' && configStep === 'pagination'
+      ? 'pagination'
+      : viewStep
+    : viewStep === 'fields' && simpleStage === 'check'
+      ? 'pick'
+      : viewStep;
 
   const startFlow = (kind: FlowKind, start: () => void) => {
+    runningJobSourceRef.current = 'legacy';
+    setActiveToolView(null);
+    setIsEditingListColumns(false);
     setFlow(kind);
     setConfigStep('fields');
+    setSimpleStage('check');
+    setChoosingList(false);
+    setShowAllRows(false);
+    setOpenedSavedData(false);
     start();
   };
 
+  // In simple mode a list that looks like data is accepted without a choosing screen: the
+  // next screen shows its first rows and asks "is this it?". A list that looks like a menu,
+  // or one whose columns could not be read, is never accepted for the user.
+  const { view: workflowView, detectedList, confirmListCandidate, updatePagination } = workflow;
+  const acceptsListForUser =
+    !advanced &&
+    workflowView === 'review_list' &&
+    !choosingList &&
+    detectedList !== null &&
+    detectedList.credible !== false &&
+    detectedList.matchCount > 0 &&
+    acceptedList !== detectedList;
+  const lastAutoConfirmedListRef = useRef<DetectedList | null>(null);
+  const runningJobSourceRef = useRef<'list' | 'legacy' | null>(null);
+  useEffect(() => {
+    if (!acceptsListForUser || !detectedList) return;
+    if (activeToolView === 'list') {
+      lastAutoConfirmedListRef.current = detectedList;
+    }
+    setAcceptedList(detectedList);
+    setSimpleStage('check');
+    // Follow the list when the page shows a way to more of it; otherwise just this page.
+    updatePagination(simpleStartingPagination(detectedList.moreItems));
+    void confirmListCandidate(detectedList);
+  }, [acceptsListForUser, activeToolView, detectedList, confirmListCandidate, updatePagination]);
+
+  useEffect(() => {
+    if (activeToolView !== 'list') {
+      lastAutoConfirmedListRef.current = null;
+      setIsEditingListColumns(false);
+    }
+  }, [activeToolView]);
+
+  useEffect(() => {
+    if (workflowView === 'inspecting' || workflowView === 'extracting' || workflowView === 'results') {
+      setIsEditingListColumns(false);
+    }
+  }, [workflowView]);
+
+  useEffect(() => {
+    if (workflowView === 'results' && runningJobSourceRef.current === 'list') {
+      if (activeToolView === null) {
+        runningJobSourceRef.current = null;
+        setActiveToolView('list');
+        setActiveTabNav('tools');
+      } else if (activeToolView === 'list') {
+        runningJobSourceRef.current = null;
+      }
+    } else if (
+      workflowView === 'dashboard' &&
+      workflow.stats.status !== 'COMPLETED' &&
+      !isRunningExtractionStatus(workflow.stats.status)
+    ) {
+      runningJobSourceRef.current = null;
+    }
+    if (workflowView === 'dashboard' && activeToolView === null && activeTabNav !== 'tools') {
+      setActiveTabNav('tools');
+    }
+  }, [activeTabNav, activeToolView, workflow.stats.status, workflowView]);
+
+  useEffect(() => {
+    if (
+      activeToolView === 'list' &&
+      workflowView === 'review_list' &&
+      detectedList &&
+      !acceptsListForUser &&
+      lastAutoConfirmedListRef.current !== detectedList
+    ) {
+      lastAutoConfirmedListRef.current = detectedList;
+      void confirmListCandidate(detectedList);
+    }
+  }, [activeToolView, workflowView, detectedList, acceptsListForUser, confirmListCandidate]);
+
+  const handleUseCandidate = (candidate: ListCandidate) => {
+    const chosen: DetectedList = {
+      ...(workflow.detectedList ?? { sampleSnippets: [] }),
+      containerSelector: candidate.containerSelector,
+      containerAnchor: candidate.containerAnchor,
+      matchCount: candidate.matchCount,
+      sampleSnippets: candidate.sampleSnippets,
+      kind: candidate.kind,
+      dedupeFields: candidate.dedupeFields,
+    };
+    setAcceptedList(chosen);
+    setChoosingList(false);
+    setSimpleStage('check');
+    workflow.updatePagination(simpleStartingPagination(chosen.moreItems));
+    void workflow.confirmListCandidate(chosen);
+  };
+
+  // A saved setup is an Advanced feature; when one is loaded, its detailed screen is shown as it is.
+  const simpleColumnsFlow = !advanced && flow !== 'recipe';
+  const showsSimpleCheck = simpleColumnsFlow && simpleStage === 'check';
+  const showsSimpleColumns = simpleColumnsFlow && simpleStage === 'columns';
+  const showsDetailedColumns = !simpleColumnsFlow;
+
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const consent = useConsent();
   const onboarding = useOnboarding();
 
-  const activeSection: NavSection = isHelpOpen
+  const activeSection: ActiveSection = isHelpOpen
     ? 'help'
-    : workflow.view === 'history'
-      ? 'datasets'
-      : workflow.view === 'settings'
-        ? 'settings'
+    : workflow.view === 'settings'
+      ? 'settings'
+      : workflow.view === 'history'
+        ? activeTabNav === 'tools'
+          ? 'datasets'
+          : activeTabNav
         : activeTabNav;
 
   // Jobs write datasets from the background, so the list is re-read when the view changes.
@@ -94,301 +333,814 @@ export const App: React.FC = () => {
     }
   }, [workflow.view, refreshDatasets]);
 
-  const handleNavChange = (tabName: Exclude<NavSection, 'help'>) => {
+  const handleNavChange = (section: NavSection) => {
+    workflow.cancelDetection();
+    if (workflow.isVisualPicking) {
+      void workflow.cancelVisualPicker();
+    }
     setIsHelpOpen(false);
-    setActiveTabNav(tabName);
-    if (tabName === 'datasets') {
-      workflow.setView('history');
-      refreshDatasets();
-    } else if (tabName === 'settings') {
-      workflow.setView('settings');
-    } else {
-      if (workflow.view === 'history' || workflow.view === 'settings') {
-        workflow.setView('dashboard');
+    setActiveToolView(null);
+    setIsEditingListColumns(false);
+    setActiveTabNav(section);
+    if (section === 'datasets' || section === 'recipes') {
+      if (!isRunningExtractionStatus(workflow.stats.status)) {
+        runningJobSourceRef.current = null;
       }
+      if (workflow.view === 'results') {
+        lastAutoConfirmedListRef.current = null;
+        setFlow(null);
+        setShowAllRows(false);
+        setOpenedSavedData(false);
+        workflow.resetToDashboard();
+      }
+      workflow.setView('history');
+      void refreshDatasets();
+    } else if (workflow.view === 'results') {
+      runningJobSourceRef.current = null;
+      lastAutoConfirmedListRef.current = null;
+      setFlow(null);
+      setShowAllRows(false);
+      setOpenedSavedData(false);
+      workflow.resetToDashboard();
+    } else if (workflow.view === 'extracting') {
+      if (isRunningExtractionStatus(workflow.stats.status)) {
+        workflow.setView('dashboard');
+      } else {
+        runningJobSourceRef.current = null;
+        lastAutoConfirmedListRef.current = null;
+        setFlow(null);
+        workflow.resetToDashboard();
+      }
+    } else if (
+      workflow.view === 'inspecting' ||
+      workflow.view === 'review_list' ||
+      workflow.view === 'config_fields'
+    ) {
+      lastAutoConfirmedListRef.current = null;
+      setFlow(null);
+      workflow.resetToDashboard();
+    } else if (workflow.view === 'history' || workflow.view === 'settings') {
+      workflow.setView('dashboard');
     }
   };
 
+  const handleOpenSettings = () => {
+    workflow.cancelDetection();
+    if (workflow.isVisualPicking) {
+      void workflow.cancelVisualPicker();
+    }
+    if (!isRunningExtractionStatus(workflow.stats.status)) {
+      runningJobSourceRef.current = null;
+    }
+    if (workflow.view === 'results') {
+      lastAutoConfirmedListRef.current = null;
+      setFlow(null);
+      setShowAllRows(false);
+      setOpenedSavedData(false);
+      workflow.resetToDashboard();
+    }
+    setIsHelpOpen(false);
+    setActiveToolView(null);
+    setIsEditingListColumns(false);
+    setActiveTabNav('tools');
+    workflow.setView('settings');
+  };
+
   const handleViewDataset = (dataset: (typeof datasets)[0]) => {
-    setActiveTabNav('harvest');
+    runningJobSourceRef.current = null;
+    setActiveTabNav('tools');
+    setActiveToolView(null);
+    setIsEditingListColumns(false);
     setFlow(null);
+    setShowAllRows(false);
+    setOpenedSavedData(true);
     workflow.viewDatasetInTable(dataset);
   };
 
   const handleNewExtraction = () => {
-    setActiveTabNav('harvest');
+    runningJobSourceRef.current = null;
+    setActiveTabNav('tools');
+    setActiveToolView(null);
+    setIsEditingListColumns(false);
+    setShowAllRows(false);
+    setOpenedSavedData(false);
     workflow.resetToDashboard();
-    refreshDatasets();
+    void refreshDatasets();
+  };
+
+  const handleRunRecipe = (recipe: ExtractionRecipe) => {
+    runningJobSourceRef.current = 'legacy';
+    setActiveTabNav('tools');
+    setActiveToolView(null);
+    setIsEditingListColumns(false);
+    setFlow('recipe');
+    setConfigStep('fields');
+    setSimpleStage('columns');
+    workflow.loadRecipe(recipe);
   };
 
   const handleCancelExtraction = async () => {
     await workflow.cancelExtraction();
-    refreshDatasets();
+    void refreshDatasets();
   };
 
   const handleDiscardRecoverable = async (jobId: string) => {
     await workflow.discardRecoverableJob(jobId);
-    refreshDatasets();
+    void refreshDatasets();
   };
 
-  const handleResumeRecoverable = (jobId: string) => {
+  // Resume asks for the job's site first: chrome.permissions.request must be the first
+  // await of the click (ADR-037), and Chrome answers at once, with no prompt, when the
+  // site is already granted. If the user declines, the background refuses the resume
+  // with SITE_PERMISSION_REQUIRED and the banner offers Allow access again.
+  const handleResumeRecoverable = async (jobId: string) => {
+    runningJobSourceRef.current = null;
     setIsHelpOpen(false);
-    setActiveTabNav('harvest');
+    setActiveTabNav('tools');
+    setActiveToolView(null);
+    setIsEditingListColumns(false);
     setFlow(null);
-    void workflow.recoverJob(jobId);
+    setShowAllRows(false);
+    setOpenedSavedData(false);
+    const job = workflow.recoverableJobs.find((candidate) => candidate.id === jobId);
+    if (job) {
+      await requestSiteOrigin(job.targetUrl);
+    }
+    await workflow.recoverJob(jobId);
   };
 
-  const navButtonClass = (section: NavSection) =>
-    `px-2 max-[359px]:px-1.5 py-1 rounded-md font-medium transition-colors ${
-      activeSection === section ? 'bg-surface text-brand-emphasis shadow-xs' : 'text-fg-muted hover:text-fg'
+  // Allow access for a picking/preview/start SITE error: request first, then
+  // clear the banner so the user can retry the flow on the now-granted site.
+  const handleAllowAccessForOperationError = async () => {
+    const granted = await requestSiteOrigin(tab.url);
+    if (granted) {
+      workflow.clearOperationError();
+    }
+  };
+
+  const navPillClass = (section: NavSection) =>
+    `flex min-h-8 items-center gap-1 rounded-xl px-1.5 text-xs font-semibold transition-colors ${
+      activeSection === section
+        ? 'bg-surface-muted text-fg shadow-xs'
+        : 'text-fg-subtle hover:bg-surface hover:text-fg'
     }`;
 
+  const iconButtonClass = (active: boolean) =>
+    `flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${
+      active
+        ? 'border-tool-emerald/40 bg-tool-emerald/10 text-tool-emerald'
+        : 'border-hairline/10 bg-dock text-fg-muted hover:border-hairline/25 hover:text-fg'
+    }`;
+
+  if (consent.hasConsent === false) {
+    return (
+      <div className="flex flex-col h-screen w-full bg-canvas text-fg font-sans antialiased overflow-hidden">
+        <Suspense fallback={<ViewSkeleton label="Loading…" />}>
+          <ConsentGate onAccept={consent.accept} />
+        </Suspense>
+      </div>
+    );
+  }
+
+  if (consent.hasConsent === null) {
+    return <div className="flex h-screen w-full bg-canvas" />;
+  }
+
   return (
-    <div className="flex flex-col min-h-screen bg-canvas text-fg">
-      {/* Top Header */}
-      {/* The side panel opens at about 360px and can be narrowed to 320px, so the header gives
-          way in that order: the version badge, then the wordmark (still read out), never the nav. */}
-      <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-xs border-b border-line px-3 py-2.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-6 h-6 shrink-0 rounded-md bg-brand text-on-strong flex items-center justify-center shadow-xs">
-            <Wheat aria-hidden="true" className="w-3.5 h-3.5" />
+    <div className="flex h-screen flex-col overflow-hidden bg-canvas font-sans text-fg antialiased">
+      <main className="flex-1 overflow-y-auto px-3 pb-6">
+        {/* Top brand row: scrolls with the page, so it never sits over the active-page strip. */}
+        <div className="flex items-center justify-between gap-2 pb-2 pt-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-tool-emerald to-tool-teal text-on-accent shadow-xs">
+              <Wheat aria-hidden="true" className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-[15px] font-bold tracking-tight text-fg">PageHarvest</h1>
+              <p className="truncate text-2xs text-fg-subtle">Local data extraction, simplified</p>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <h1 className="text-sm font-bold tracking-tight text-fg truncate max-[339px]:sr-only">
-              PageHarvest
-            </h1>
-            <span className="shrink-0 text-2xs font-medium text-fg-subtle bg-surface-muted rounded px-1.5 py-px max-[379px]:hidden">
-              v1.0
-            </span>
+
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsHelpOpen(true)}
+              aria-label="Help"
+              title="Help"
+              aria-current={activeSection === 'help' ? 'page' : undefined}
+              className={iconButtonClass(activeSection === 'help')}
+            >
+              <HelpCircle aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenSettings}
+              aria-label="Settings"
+              title="Settings"
+              aria-current={activeSection === 'settings' ? 'page' : undefined}
+              className={iconButtonClass(activeSection === 'settings')}
+            >
+              <SettingsIcon aria-hidden="true" className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
-        {/* Navigation pill switcher */}
-        <nav aria-label="Main" className="shrink-0 flex items-center p-0.5 rounded-lg bg-surface-muted border border-line/80 text-xs">
-          <button
-            type="button"
-            onClick={() => handleNavChange('harvest')}
-            aria-current={activeSection === 'harvest' ? 'page' : undefined}
-            className={navButtonClass('harvest')}
-          >
-            Harvest
-          </button>
-          <button
-            type="button"
-            onClick={() => handleNavChange('datasets')}
-            aria-current={activeSection === 'datasets' ? 'page' : undefined}
-            className={navButtonClass('datasets')}
-          >
-            Datasets
-          </button>
-          <button
-            type="button"
-            onClick={() => handleNavChange('settings')}
-            aria-current={activeSection === 'settings' ? 'page' : undefined}
-            aria-label="Settings"
-            title="Settings"
-            className={navButtonClass('settings')}
-          >
-            <SettingsIcon aria-hidden="true" className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsHelpOpen(true)}
-            aria-current={activeSection === 'help' ? 'page' : undefined}
-            aria-label="Help"
-            title="Help"
-            className={navButtonClass('help')}
-          >
-            <HelpCircle aria-hidden="true" className="w-3.5 h-3.5" />
-          </button>
-        </nav>
-      </header>
+        {/* Sticky command dock: the picker is always one click away, and navigation never scrolls off. */}
+        <div className="sticky top-2 z-20 mb-2 rounded-2xl border border-hairline/10 bg-dock-solid/95 p-1.5 shadow-lg backdrop-blur-md">
+          <div className="flex items-center justify-between gap-1.5">
+            <button
+              type="button"
+              onClick={() => startFlow('pick', workflow.startVisualPicker)}
+              disabled={!tab.isInjectable}
+              title="Pick element on page"
+              aria-label="Pick element on page"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-tool-emerald/50 bg-tool-emerald/10 text-tool-emerald transition-colors hover:bg-tool-emerald/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <MousePointer2 aria-hidden="true" className="h-4 w-4" />
+            </button>
 
-      {/* Jobs that can really be resumed: stored in RECOVERABLE with a checkpoint. */}
-      {workflow.recoverableJobs.map((job) => (
-        <div key={job.id} className="m-3 mb-0">
-          <RecoveryBanner
-            job={job}
-            onResume={handleResumeRecoverable}
-            onDiscard={(jobId) => void handleDiscardRecoverable(jobId)}
-          />
+            <nav aria-label="Main" className="flex min-w-0 items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => handleNavChange('tools')}
+                aria-current={activeSection === 'tools' ? 'page' : undefined}
+                className={navPillClass('tools')}
+              >
+                <Wrench aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                Tools
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavChange('datasets')}
+                aria-current={activeSection === 'datasets' ? 'page' : undefined}
+                className={navPillClass('datasets')}
+              >
+                <Database aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                Data
+                {datasets.length > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className="rounded-full bg-surface px-1.5 py-0.5 text-2xs font-bold tabular-nums text-fg-subtle"
+                  >
+                    {datasets.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavChange('recipes')}
+                aria-current={activeSection === 'recipes' ? 'page' : undefined}
+                className={navPillClass('recipes')}
+              >
+                <Bookmark aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                Recipes
+              </button>
+            </nav>
+          </div>
         </div>
-      ))}
 
-      {workflow.operationError && workflow.view !== 'extracting' && (
-        <ErrorBanner
-          error={workflow.operationError}
-          className="m-3 mb-0"
-          onDismiss={workflow.clearOperationError}
-        />
-      )}
-
-      {datasetsError && <ErrorBanner error={{ message: datasetsError }} className="m-3 mb-0" />}
-
-      {!isHelpOpen && activeFlow && currentStep && (
-        <Stepper steps={flowSteps(activeFlow)} currentId={currentStep} className="px-4 pt-3" />
-      )}
-
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto flex flex-col">
-        {isHelpOpen ? (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading the guide…</div>}>
-            <HelpView onClose={() => setIsHelpOpen(false)} onRestartTour={onboarding.open} />
-          </Suspense>
-        ) : (
-        <>
-        {/* 1. Main Dashboard */}
-        {workflow.view === 'dashboard' && (
-          <MainDashboard
+        {/* Compact active-page context, directly under the dock. */}
+        <div className="mb-2">
+          <WebsiteCard
             tab={tab}
-            isTabLoading={isTabLoading}
-            onRefreshTab={refreshTab}
-            datasets={datasets}
-            isDatasetsLoading={isDatasetsLoading}
-            onSelectElements={() => startFlow('pick', workflow.startVisualPicker)}
-            onAutoDetectLists={() => startFlow('auto', workflow.autoDetectLists)}
-            onExtractTable={() => startFlow('table', () => workflow.startPresetDetection('table'))}
-            onExtractLinks={() => startFlow('links', () => workflow.startPresetDetection('links'))}
-            onViewDataset={handleViewDataset}
-            onViewAllHistory={() => handleNavChange('datasets')}
+            isLoading={isTabLoading}
+            advanced={advanced}
+            onRefresh={refreshTab}
+          />
+        </div>
+
+        {/* Jobs that can really be resumed: stored in RECOVERABLE with a checkpoint. */}
+        <Suspense fallback={null}>
+          {workflow.recoverableJobs.map((job) => (
+            <div key={job.id} className="mb-2">
+              <RecoveryBanner
+                job={job}
+                simple={!advanced}
+                onResume={(jobId) => void handleResumeRecoverable(jobId)}
+                onDiscard={(jobId) => void handleDiscardRecoverable(jobId)}
+              />
+            </div>
+          ))}
+
+          {workflow.operationError && workflow.view !== 'extracting' && (
+            <ErrorBanner
+              error={workflow.operationError}
+              className="mb-2"
+              onDismiss={workflow.clearOperationError}
+              actions={
+                workflow.operationError.code === 'SITE_PERMISSION_REQUIRED' ? (
+                  <Button size="sm" onClick={() => void handleAllowAccessForOperationError()}>
+                    Allow access
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
+
+          {datasetsError && <ErrorBanner error={{ message: datasetsError }} className="mb-2" />}
+        </Suspense>
+
+        {!isHelpOpen && activeToolView !== 'list' && activeFlow && currentStep && (
+          <Stepper
+            steps={advanced ? flowSteps(activeFlow) : simpleFlowSteps(activeFlow)}
+            currentId={currentStep}
+            className="pb-2"
           />
         )}
 
-        {/* 2. Visual Element Picking State */}
-        {workflow.view === 'inspecting' && activeFlow && activeFlow !== 'pick' && (
-          <ScanningState kind={activeFlow} onCancel={workflow.resetToDashboard} />
-        )}
-        {workflow.view === 'inspecting' && (!activeFlow || activeFlow === 'pick') && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading picker…</div>}>
-            <ElementSelectionBanner
-              inspectedElement={workflow.inspectedElement}
-              onConfirm={() => {
-                if (workflow.detectedList) {
-                  workflow.setView('review_list');
-                } else {
-                  workflow.autoDetectLists();
-                }
-              }}
-              onCancel={workflow.cancelVisualPicker}
-            />
-          </Suspense>
-        )}
+        {/* Main Content Area */}
+        <div>
+          {isHelpOpen ? (
+            <Suspense fallback={<ViewSkeleton label="Loading the guide…" />}>
+              <HelpView onClose={() => setIsHelpOpen(false)} onRestartTour={onboarding.open} />
+            </Suspense>
+          ) : activeToolView === 'page' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Page Extractor…" />}>
+              <PageExtractorView
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
+          ) : activeToolView === 'sitemap' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Sitemap Explorer…" />}>
+              <SitemapExplorerView
+                initialUrl={tab.url}
+                onBack={() => setActiveToolView(null)}
+                onSendUrlsToTool={() => setActiveToolView('page')}
+              />
+            </Suspense>
+          ) : activeToolView === 'shopify' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Shopify Extractor…" />}>
+              <ShopifyExtractorView
+                initialUrl={tab.url}
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
+          ) : activeToolView === 'email' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Email Extractor…" />}>
+              <EmailExtractorView
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
+          ) : activeToolView === 'social' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Social Link Extractor…" />}>
+              <SocialExtractorView
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
+          ) : activeToolView === 'page_text' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Page Text Extractor…" />}>
+              <PageTextExtractorView
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
+          ) : activeToolView === 'images' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading Image Downloader…" />}>
+              <ImageDownloaderView
+                onBack={() => setActiveToolView(null)}
+                onOpenTable={(datasetId) => {
+                  setActiveToolView(null);
+                  void openWorkbench({ datasetId });
+                }}
+              />
+            </Suspense>
+          ) : activeToolView === 'list' ? (
+            <Suspense fallback={<ViewSkeleton label="Loading List Extractor…" />}>
+              {workflow.notice && (
+                <Banner tone="info" className="mb-2" onDismiss={workflow.clearNotice}>
+                  {workflow.notice}
+                </Banner>
+              )}
+              {workflow.view === 'inspecting' && workflow.isVisualPicking ? (
+                <PickerFocusView
+                  inspectedElement={workflow.inspectedElement}
+                  pickTarget={workflow.pickTarget}
+                  onCancel={() => {
+                    void workflow.cancelVisualPicker();
+                    setActiveToolView('list');
+                  }}
+                />
+              ) : workflow.view === 'extracting' ? (
+                <ListRunningView
+                  stats={workflow.stats}
+                  records={workflow.records}
+                  dataset={workflow.currentDataset}
+                  onPause={workflow.pauseExtraction}
+                  onResume={workflow.resumeExtraction}
+                  onStop={workflow.stopExtraction}
+                />
+              ) : workflow.view === 'results' ? (
+                <ListCompleteView
+                  dataset={workflow.currentDataset}
+                  records={workflow.records}
+                  fields={workflow.fields}
+                  runSummary={workflow.runSummary}
+                  onDone={() => {
+                    handleNewExtraction();
+                    setActiveToolView(null);
+                  }}
+                  onSaveRecipe={() =>
+                    workflow.saveCurrentAsRecipe(workflow.currentDataset?.name || 'My List Recipe')
+                  }
+                />
+              ) : workflow.listElsewhere && workflow.listSource ? (
+                <ListOnAnotherTab
+                  source={workflow.listSource}
+                  onGoBack={() => void workflow.goBackToListTab()}
+                  onStartOver={handleNewExtraction}
+                />
+              ) : advanced && isEditingListColumns && workflow.detectedList ? (
+                <FieldSelectionPanel
+                  detectedList={workflow.detectedList}
+                  fields={workflow.fields}
+                  selectedFieldIds={workflow.selectedFieldIds}
+                  pagination={workflow.pagination}
+                  sourceUrl={tab.url}
+                  projects={workflow.projects}
+                  selectedProjectId={workflow.selectedProjectId}
+                  onSelectProject={workflow.setSelectedProjectId}
+                  onSaveRecipe={workflow.saveCurrentAsRecipe}
+                  onToggleField={workflow.toggleFieldSelection}
+                  onUpdateField={workflow.updateField}
+                  onAddField={workflow.addField}
+                  onMoveField={workflow.moveField}
+                  onPreviewFields={workflow.previewFields}
+                  onPickListAgain={() => {
+                    setIsEditingListColumns(false);
+                    setFlow('pick');
+                    void workflow.startVisualPicker();
+                  }}
+                  step={configStep}
+                  onStepChange={setConfigStep}
+                  onRemoveField={workflow.removeField}
+                  onPaginationChange={workflow.updatePagination}
+                  onBack={() => setIsEditingListColumns(false)}
+                  onStartHarvest={() => {
+                    runningJobSourceRef.current = 'list';
+                    setIsEditingListColumns(false);
+                    void workflow.startExtraction();
+                  }}
+                />
+              ) : (
+                <ListSetupView
+                  detectedList={workflow.detectedList}
+                  fields={workflow.fields}
+                  selectedFieldIds={workflow.selectedFieldIds}
+                  pagination={workflow.pagination}
+                  onPickList={() => {
+                    setIsEditingListColumns(false);
+                    setFlow('pick');
+                    void workflow.startVisualPicker();
+                  }}
+                  onAutoDetect={() => {
+                    setIsEditingListColumns(false);
+                    setFlow('auto');
+                    void workflow.autoDetectLists();
+                  }}
+                  onRepick={() => {
+                    setIsEditingListColumns(false);
+                    setFlow('pick');
+                    void workflow.startVisualPicker();
+                  }}
+                  onEditColumns={
+                    advanced
+                      ? () => {
+                          setConfigStep('fields');
+                          setIsEditingListColumns(true);
+                        }
+                      : undefined
+                  }
+                  onToggleField={workflow.toggleFieldSelection}
+                  onRenameField={(id, name) => workflow.updateField(id, { name })}
+                  onPickNextButton={() => void workflow.startNextButtonPicker()}
+                  onPaginationChange={workflow.updatePagination}
+                  onStartExtraction={() => {
+                    runningJobSourceRef.current = 'list';
+                    void workflow.startExtraction();
+                  }}
+                  isDetecting={workflow.isAutoDetecting}
+                />
+              )}
+            </Suspense>
+          ) : (
+            <>
+              {/* 1. Main Dashboard */}
+              {workflow.view === 'dashboard' && workflow.notice && (
+                <Banner tone="info" className="mb-2" onDismiss={workflow.clearNotice}>
+                  {workflow.notice}
+                </Banner>
+              )}
+              {workflow.view === 'dashboard' && (
+                <MainDashboard
+                  datasets={datasets}
+                  disabled={!tab.isInjectable}
+                  onOpenListExtractor={() => {
+                    if (isRunningExtractionStatus(workflow.stats.status)) {
+                      if (runningJobSourceRef.current === 'list') {
+                        setActiveToolView('list');
+                      }
+                      workflow.setView('extracting');
+                    } else {
+                      setActiveToolView('list');
+                      if (workflow.detectedList) {
+                        workflow.setView('config_fields');
+                      }
+                    }
+                  }}
+                  onAutoDetectLists={() => startFlow('auto', workflow.autoDetectLists)}
+                  onExtractTable={() => startFlow('table', () => workflow.startPresetDetection('table'))}
+                  onExtractLinks={() => startFlow('links', () => workflow.startPresetDetection('links'))}
+                  onOpenPageExtractor={() => setActiveToolView('page')}
+                  onOpenSitemapExplorer={() => setActiveToolView('sitemap')}
+                  onOpenShopifyExtractor={() => setActiveToolView('shopify')}
+                  onOpenEmailExtractor={() => setActiveToolView('email')}
+                  onOpenSocialExtractor={() => setActiveToolView('social')}
+                  onOpenPageTextExtractor={() => setActiveToolView('page_text')}
+                  onOpenImageDownloader={() => setActiveToolView('images')}
+                  onViewAllHistory={() => handleNavChange('datasets')}
+                />
+              )}
 
-        {/* 3. Detected List Preview */}
-        {workflow.view === 'review_list' && workflow.detectedList && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading lists…</div>}>
-            <DetectedListPreview
-              detectedList={workflow.detectedList}
-              onSelectCandidate={workflow.selectListCandidate}
-              onConfirm={() => {
-                setConfigStep('fields');
-                void workflow.confirmListCandidate(workflow.detectedList!);
-              }}
-              onPickAgain={() => startFlow('pick', workflow.startVisualPicker)}
-              onCancel={workflow.resetToDashboard}
-            />
-          </Suspense>
-        )}
+              {/* A list found on a tab that is not in front: go back to it, or start again here. */}
+              {workflow.listElsewhere && workflow.listSource && (
+                <Suspense fallback={<ViewSkeleton label="Loading…" />}>
+                  <ListOnAnotherTab
+                    source={workflow.listSource}
+                    onGoBack={() => void workflow.goBackToListTab()}
+                    onStartOver={handleNewExtraction}
+                  />
+                </Suspense>
+              )}
 
-        {/* 4. Field Selection & Pagination Config */}
-        {workflow.view === 'config_fields' && workflow.detectedList && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading fields…</div>}>
-            <FieldSelectionPanel
-              detectedList={workflow.detectedList}
-              fields={workflow.fields}
-              selectedFieldIds={workflow.selectedFieldIds}
-              pagination={workflow.pagination}
-              sourceUrl={tab.url}
-              projects={workflow.projects}
-              selectedProjectId={workflow.selectedProjectId}
-              onSelectProject={workflow.setSelectedProjectId}
-              onSaveRecipe={workflow.saveCurrentAsRecipe}
-              onToggleField={workflow.toggleFieldSelection}
-              onUpdateField={workflow.updateField}
-              onAddField={workflow.addField}
-              onMoveField={workflow.moveField}
-              onPreviewFields={workflow.previewFields}
-              onPickListAgain={() => startFlow('pick', workflow.startVisualPicker)}
-              step={configStep}
-              onStepChange={setConfigStep}
-              onRemoveField={workflow.removeField}
-              onPaginationChange={workflow.updatePagination}
-              onBack={() => workflow.setView('review_list')}
-              onStartHarvest={workflow.startExtraction}
-            />
-          </Suspense>
-        )}
+              {/* 2. Visual Element Picking State */}
+              {workflow.view === 'inspecting' && !workflow.listElsewhere && activeFlow && activeFlow !== 'pick' && (
+                <ScanningState kind={activeFlow} onCancel={workflow.resetToDashboard} />
+              )}
+              {workflow.view === 'inspecting' && !workflow.listElsewhere && (!activeFlow || activeFlow === 'pick') && !advanced && (
+                <Suspense fallback={<ViewSkeleton label="Loading picker…" />}>
+                  <SimplePicking
+                    inspectedElement={workflow.inspectedElement}
+                    onCancel={workflow.cancelVisualPicker}
+                  />
+                </Suspense>
+              )}
+              {workflow.view === 'inspecting' && !workflow.listElsewhere && (!activeFlow || activeFlow === 'pick') && advanced && (
+                <Suspense fallback={<ViewSkeleton label="Loading picker…" />}>
+                  <ElementSelectionBanner
+                    inspectedElement={workflow.inspectedElement}
+                    onConfirm={() => {
+                      if (workflow.detectedList) {
+                        workflow.setView('review_list');
+                      } else {
+                        workflow.autoDetectLists();
+                      }
+                    }}
+                    onCancel={workflow.cancelVisualPicker}
+                  />
+                </Suspense>
+              )}
 
-        {/* 5. Extraction Progress */}
-        {workflow.view === 'extracting' && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading progress…</div>}>
-            <ExtractionProgressView
-              stats={workflow.stats}
-              recordWarningThreshold={workflow.recordWarningThreshold}
-              onPause={workflow.pauseExtraction}
-              onResume={workflow.resumeExtraction}
-              onStop={workflow.stopExtraction}
-              onCancel={() => void handleCancelExtraction()}
-            />
-          </Suspense>
-        )}
+              {/* 3. Detected List Preview */}
+              {workflow.view === 'review_list' && !workflow.listElsewhere && workflow.detectedList && !advanced && acceptsListForUser && (
+                <ScanningState kind={activeFlow ?? 'auto'} onCancel={workflow.resetToDashboard} />
+              )}
+              {workflow.view === 'review_list' && !workflow.listElsewhere && workflow.detectedList && !advanced && !acceptsListForUser && (
+                <Suspense fallback={<ViewSkeleton label="Loading lists…" />}>
+                  <SimpleListChooser
+                    detectedList={workflow.detectedList}
+                    onUse={handleUseCandidate}
+                    onPickMyself={() => startFlow('pick', workflow.startVisualPicker)}
+                    onCancel={workflow.resetToDashboard}
+                  />
+                </Suspense>
+              )}
+              {workflow.view === 'review_list' && !workflow.listElsewhere && workflow.detectedList && advanced && (
+                <Suspense fallback={<ViewSkeleton label="Loading lists…" />}>
+                  <DetectedListPreview
+                    detectedList={workflow.detectedList}
+                    onSelectCandidate={workflow.selectListCandidate}
+                    onConfirm={() => {
+                      setConfigStep('fields');
+                      void workflow.confirmListCandidate(workflow.detectedList!);
+                    }}
+                    onPickAgain={() => startFlow('pick', workflow.startVisualPicker)}
+                    onCancel={workflow.resetToDashboard}
+                  />
+                </Suspense>
+              )}
 
-        {/* 6. Results Data Table */}
-        {workflow.view === 'results' && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading dataset…</div>}>
-            <DataTable
-              dataset={workflow.currentDataset}
-              records={workflow.records}
-              fields={workflow.fields}
-              dataRevision={workflow.recordsRevision}
-              runSummary={workflow.runSummary}
-              onUpdateCell={workflow.updateRecordCell}
-              onDeleteRecord={workflow.deleteRecord}
-              onRecordsChange={workflow.applyDatasetEdit}
-              onNewExtraction={handleNewExtraction}
-            />
-          </Suspense>
-        )}
+              {/* 4. Field Selection & Pagination Config */}
+              {workflow.view === 'config_fields' && !workflow.listElsewhere && workflow.detectedList && showsSimpleCheck && (
+                <Suspense fallback={<ViewSkeleton label="Loading your list…" />}>
+                  <SimpleListCheck
+                    detectedList={workflow.detectedList}
+                    columns={workflow.fields.filter((field) => workflow.selectedFieldIds.has(field.id))}
+                    onPreviewFields={workflow.previewFields}
+                    onConfirm={() => setSimpleStage('columns')}
+                    onChooseAnother={() => {
+                      setChoosingList(true);
+                      workflow.setView('review_list');
+                    }}
+                    onCancel={workflow.resetToDashboard}
+                  />
+                </Suspense>
+              )}
+              {workflow.view === 'config_fields' && !workflow.listElsewhere && workflow.detectedList && showsSimpleColumns && (
+                <Suspense fallback={<ViewSkeleton label="Loading columns…" />}>
+                  <SimpleColumns
+                    detectedList={workflow.detectedList}
+                    fields={workflow.fields}
+                    selectedFieldIds={workflow.selectedFieldIds}
+                    pagination={workflow.pagination}
+                    onToggleField={workflow.toggleFieldSelection}
+                    onRenameField={(id, name) => workflow.updateField(id, { name })}
+                    onPaginationChange={workflow.updatePagination}
+                    onBack={() => setSimpleStage('check')}
+                    onStart={workflow.startExtraction}
+                  />
+                </Suspense>
+              )}
+              {workflow.view === 'config_fields' && !workflow.listElsewhere && workflow.detectedList && showsDetailedColumns && (
+                <Suspense fallback={<ViewSkeleton label="Loading columns…" />}>
+                  <FieldSelectionPanel
+                    detectedList={workflow.detectedList}
+                    fields={workflow.fields}
+                    selectedFieldIds={workflow.selectedFieldIds}
+                    pagination={workflow.pagination}
+                    sourceUrl={tab.url}
+                    projects={workflow.projects}
+                    selectedProjectId={workflow.selectedProjectId}
+                    onSelectProject={workflow.setSelectedProjectId}
+                    onSaveRecipe={workflow.saveCurrentAsRecipe}
+                    onToggleField={workflow.toggleFieldSelection}
+                    onUpdateField={workflow.updateField}
+                    onAddField={workflow.addField}
+                    onMoveField={workflow.moveField}
+                    onPreviewFields={workflow.previewFields}
+                    onPickListAgain={() => startFlow('pick', workflow.startVisualPicker)}
+                    step={configStep}
+                    onStepChange={setConfigStep}
+                    onRemoveField={workflow.removeField}
+                    onPaginationChange={workflow.updatePagination}
+                    onBack={() => workflow.setView('review_list')}
+                    onStartHarvest={workflow.startExtraction}
+                  />
+                </Suspense>
+              )}
 
-        {/* 7. Saved Data Library */}
-        {workflow.view === 'history' && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading history…</div>}>
-            <LibraryView
-              datasets={datasets}
-              isLoading={isDatasetsLoading}
-              onViewDataset={handleViewDataset}
-              onDeleteDataset={deleteDataset}
-              onGetDatasetRecords={getDatasetRecords}
-              onNewExtraction={handleNewExtraction}
-              onRunRecipe={(recipe) => {
-                setActiveTabNav('harvest');
-                setFlow('recipe');
-                setConfigStep('fields');
-                workflow.loadRecipe(recipe);
-              }}
-              onUseSchema={(schema) => {
-                setActiveTabNav('harvest');
-                setFlow('recipe');
-                setConfigStep('fields');
-                workflow.loadSchema(schema);
-              }}
-            />
-          </Suspense>
-        )}
+              {/* 5. Extraction Progress */}
+              {workflow.view === 'extracting' && !advanced && (
+                <Suspense fallback={<ViewSkeleton label="Loading progress…" />}>
+                  <SimpleProgress
+                    stats={workflow.stats}
+                    onPause={workflow.pauseExtraction}
+                    onResume={workflow.resumeExtraction}
+                    onStop={workflow.stopExtraction}
+                    onClose={() => void handleCancelExtraction()}
+                  />
+                </Suspense>
+              )}
+              {workflow.view === 'extracting' && advanced && (
+                <Suspense fallback={<ViewSkeleton label="Loading progress…" />}>
+                  <ExtractionProgressView
+                    stats={workflow.stats}
+                    recordWarningThreshold={workflow.recordWarningThreshold}
+                    onPause={workflow.pauseExtraction}
+                    onResume={workflow.resumeExtraction}
+                    onStop={workflow.stopExtraction}
+                    onCancel={() => void handleCancelExtraction()}
+                  />
+                </Suspense>
+              )}
 
-        {/* 8. Settings */}
-        {workflow.view === 'settings' && (
-          <Suspense fallback={<div className="p-4 text-sm text-fg-subtle">Loading settings…</div>}>
-            <SettingsView
-              onBackToDashboard={() => {
-                setActiveTabNav('harvest');
-                workflow.setView('dashboard');
-              }}
-            />
-          </Suspense>
-        )}
-        </>
-        )}
+              {/* 6. Results Data Table */}
+              {workflow.view === 'results' && !advanced && !showAllRows && (
+                <Suspense fallback={<ViewSkeleton label="Loading your rows…" />}>
+                  <SimpleDone
+                    dataset={workflow.currentDataset}
+                    records={workflow.records}
+                    fields={workflow.fields}
+                    justFinished={!openedSavedData}
+                    runSummary={workflow.runSummary}
+                    onOpenTable={() => setShowAllRows(true)}
+                    onNewExtraction={handleNewExtraction}
+                  />
+                </Suspense>
+              )}
+              {workflow.view === 'results' && (advanced || showAllRows) && (
+                <Suspense fallback={<ViewSkeleton label="Loading your rows…" />}>
+                  <DataTable
+                    simple={!advanced}
+                    onBack={() => setShowAllRows(false)}
+                    dataset={workflow.currentDataset}
+                    records={workflow.records}
+                    fields={workflow.fields}
+                    dataRevision={workflow.recordsRevision}
+                    runSummary={workflow.runSummary}
+                    onUpdateCell={workflow.updateRecordCell}
+                    onDeleteRecord={workflow.deleteRecord}
+                    onRecordsChange={workflow.applyDatasetEdit}
+                    onNewExtraction={handleNewExtraction}
+                    onOpenTool={(tool) => {
+                      if (
+                        tool === 'page' ||
+                        tool === 'sitemap' ||
+                        tool === 'shopify' ||
+                        tool === 'email' ||
+                        tool === 'social' ||
+                        tool === 'page_text' ||
+                        tool === 'images'
+                      ) {
+                        setActiveToolView(tool);
+                      } else {
+                        void openWorkbench({ tool });
+                      }
+                    }}
+                  />
+                </Suspense>
+              )}
+
+              {/* 7. Saved Data Library */}
+              {workflow.view === 'history' && activeTabNav === 'recipes' && (
+                <div className="flex flex-col gap-3 p-4 text-left">
+                  <div>
+                    <h2 className="text-base font-semibold text-fg">Saved Recipes</h2>
+                    <p className="mt-1 text-body text-fg-muted">Run a saved setup again on the page it was made for.</p>
+                  </div>
+                  <Suspense fallback={<ViewSkeleton label="Loading recipes…" />}>
+                    <RecipesPanel onRunRecipe={handleRunRecipe} onNewExtraction={handleNewExtraction} />
+                  </Suspense>
+                </div>
+              )}
+              {workflow.view === 'history' && activeTabNav !== 'recipes' && !advanced && (
+                <Suspense fallback={<ViewSkeleton label="Loading your data…" />}>
+                  <SimpleMyData
+                    datasets={datasets}
+                    isLoading={isDatasetsLoading}
+                    onViewDataset={handleViewDataset}
+                    onDeleteDataset={deleteDataset}
+                    onGetDatasetRecords={getDatasetRecords}
+                    onNewExtraction={handleNewExtraction}
+                  />
+                </Suspense>
+              )}
+              {workflow.view === 'history' && activeTabNav !== 'recipes' && advanced && (
+                <Suspense fallback={<ViewSkeleton label="Loading your data…" />}>
+                  <LibraryView
+                    datasets={datasets}
+                    isLoading={isDatasetsLoading}
+                    onViewDataset={handleViewDataset}
+                    onDeleteDataset={deleteDataset}
+                    onGetDatasetRecords={getDatasetRecords}
+                    onNewExtraction={handleNewExtraction}
+                    onRunRecipe={handleRunRecipe}
+                    onUseSchema={(schema) => {
+                      runningJobSourceRef.current = 'legacy';
+                      setActiveTabNav('tools');
+                      setActiveToolView(null);
+                      setIsEditingListColumns(false);
+                      setFlow('recipe');
+                      setConfigStep('fields');
+                      setSimpleStage('columns');
+                      workflow.loadSchema(schema);
+                    }}
+                  />
+                </Suspense>
+              )}
+
+              {/* 8. Settings */}
+              {workflow.view === 'settings' && (
+                <Suspense fallback={<ViewSkeleton label="Loading settings…" />}>
+                  <SettingsView
+                    onBackToDashboard={() => {
+                      setActiveTabNav('tools');
+                      workflow.setView('dashboard');
+                    }}
+                  />
+                </Suspense>
+              )}
+            </>
+          )}
+        </div>
       </main>
 
       {onboarding.isOpen && (

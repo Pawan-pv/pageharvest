@@ -4,10 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { expect, test } from './release-test';
-import { choosePagination, setLimits, markTourSeen, waitForCompletedDownload } from './helpers/panel';
+import { choosePagination, setLimits, markTourSeen, enableAdvancedOptions, startListExtraction, waitForCompletedDownload } from './helpers/panel';
 
 const fixtureBaseUrl = 'http://127.0.0.1:3456';
-const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3');
+const extensionPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.output/chrome-mv3-test');
 
 type DownloadSnapshot = {
   id: number;
@@ -55,6 +55,8 @@ async function sendToActiveTab(page: Page, message: ContentMessage): Promise<unk
     if (typeof tabId !== 'number') {
       throw new Error('The active fixture tab was not available to the extension context.');
     }
+    // No static content script (ADR-037): inject first, as the panel does before detection.
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content-scripts/content.js'] });
     return chrome.tabs.sendMessage(tabId, request);
   }, message);
 }
@@ -110,6 +112,7 @@ async function getExtensionId(context: BrowserContext): Promise<{ id: string; wo
   const id = worker.url().split('/')[2];
   // The first-run tour has its own spec; here it would cover the panel.
   await markTourSeen(worker);
+  await enableAdvancedOptions(worker);
   if (!id) throw new Error(`Could not determine the unpacked extension ID from ${worker.url()}.`);
   return { id, worker };
 }
@@ -154,27 +157,26 @@ test.describe('PageHarvest release workflows', () => {
     await targetPage.bringToFront();
 
     await expect(sidePanelPage.getByText('127.0.0.1')).toBeVisible();
-    await expect(sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
-    await sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true }).click();
-    await expect(sidePanelPage.getByText('20 similar items found').first()).toBeVisible();
-    await sidePanelPage.getByRole('button', { name: 'Use this list', exact: true }).click();
-    await expect(sidePanelPage.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
+    await expect(sidePanelPage.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
+    await startListExtraction(sidePanelPage);
+    await expect(sidePanelPage.getByText(/Found 20 items/)).toBeVisible({ timeout: 20000 });
+    await expect(sidePanelPage.getByRole('button', { name: 'Start Extraction' })).toBeEnabled();
 
-    const startButton = sidePanelPage.getByRole('button', { name: /Start extraction/ });
-    await expect(startButton).toBeEnabled();
+    const startButton = sidePanelPage.getByRole('button', { name: 'Start Extraction' });
     await startButton.click();
-    await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 30000 });
-    await expect(sidePanelPage.getByText('20 records')).toBeVisible();
+    await expect(sidePanelPage.getByRole('heading', { name: 'Extraction complete' })).toBeVisible({ timeout: 30000 });
+    // The count and label are separate elements; one regex matches their shared parent.
+    await expect(sidePanelPage.getByText(/20\s*items extracted/i)).toBeVisible();
 
     const records = await readRecords(sidePanelPage);
     expect(records).toHaveLength(20);
     expect(records.some((record) => Object.values(record).some((value) => value === 'Item 01 - Alpha Pro Headset'))).toBe(true);
 
-    await sidePanelPage.getByRole('button', { name: 'Datasets' }).click();
+    await sidePanelPage.getByRole('button', { name: 'Data', exact: true }).click();
     await expect(sidePanelPage.getByText('Saved Extractions')).toBeVisible();
     await expect(sidePanelPage.getByText('20 rows')).toBeVisible();
     await sidePanelPage.reload();
-    await sidePanelPage.getByRole('button', { name: 'Datasets' }).click();
+    await sidePanelPage.getByRole('button', { name: 'Data', exact: true }).click();
     await expect(sidePanelPage.getByText('20 rows')).toBeVisible();
     await sidePanelPage.getByText(/20 Product Listing - PageHarvest Fixture/).last().click();
     await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible();
@@ -212,7 +214,7 @@ test.describe('PageHarvest release workflows', () => {
     await targetPage.waitForLoadState('domcontentloaded');
     await targetPage.bringToFront();
 
-    await sidePanelPage.getByRole('button', { name: 'Pick items myself', exact: true }).click();
+    await sidePanelPage.getByRole('button', { name: 'Pick element on page', exact: true }).click();
     await expect(sidePanelPage.getByText('Visual Element Picker Active')).toBeVisible();
     await targetPage.locator('.product-card').first().hover();
     await expect(targetPage.locator('#pageharvest-picker-overlay-host')).toBeAttached();
@@ -273,15 +275,16 @@ test.describe('PageHarvest release workflows', () => {
     await targetPage.waitForLoadState('domcontentloaded');
     await targetPage.bringToFront();
 
-    await expect(sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true })).toBeEnabled({ timeout: 10000 });
-    await sidePanelPage.getByRole('button', { name: 'Find data automatically', exact: true }).click();
-    await sidePanelPage.getByRole('button', { name: 'Use this list', exact: true }).click();
-    await expect(sidePanelPage.getByText('Choose your columns')).toBeVisible({ timeout: 10000 });
+    await expect(sidePanelPage.getByRole('button', { name: 'Find Data on This Page', exact: true })).toBeEnabled({ timeout: 10000 });
+    // The card opens the two-step setup; auto-detect is the first step of it.
+    await startListExtraction(sidePanelPage);
+    await expect(sidePanelPage.getByText(/Found \d+ items/)).toBeVisible({ timeout: 20000 });
+    await expect(sidePanelPage.getByRole('button', { name: 'Start Extraction' })).toBeEnabled();
     await choosePagination(sidePanelPage, 'infinite_scroll');
     await setLimits(sidePanelPage, { maxScrolls: 8 });
     await setLimits(sidePanelPage, { scrollDelayMs: 400 });
-    await sidePanelPage.getByRole('button', { name: /Start extraction/ }).click();
-    await expect(sidePanelPage.getByRole('button', { name: 'Export', exact: true })).toBeVisible({ timeout: 45000 });
+    await sidePanelPage.getByRole('button', { name: 'Start Extraction' }).click();
+    await expect(sidePanelPage.getByRole('button', { name: 'View data & export' })).toBeVisible({ timeout: 45000 });
 
     const records = await readRecords(sidePanelPage);
     const titles = records.flatMap((record) =>

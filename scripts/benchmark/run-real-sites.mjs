@@ -12,11 +12,14 @@ import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
+import { prepareTestExtension } from '../testing/test-extension.mjs';
 import { computeMetrics, summarizeResults } from './metrics.mjs';
 import { selectBenchmarkSites } from './site-selection.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const extensionPath = join(root, '.output/chrome-mv3');
+// The benchmark visits many public sites and runs its own copy of the build, which
+// holds access to all of them from install (ADR-040).
+const extensionPath = join(root, '.output/chrome-mv3-benchmark');
 const outputDirectory = join(root, 'artifacts/benchmark');
 const JOB_TIMEOUT_MS = 150000;
 /** The least a benchmark page is left alone between requests. */
@@ -93,6 +96,8 @@ const MODE_LABEL = {
 };
 /** The first-run tour's flag (src/components/guide/preferences.ts). The benchmark measures extraction, not the tour. */
 const GUIDE_STORAGE_KEY = 'pageharvest.guide';
+// The benchmark drives the detailed start options, which need Advanced options on (ADR-039).
+const ADVANCED_STORAGE_KEY = 'pageharvest.advanced';
 
 /** Selects the option showing a truth record, and reports where the extension ranked it. */
 async function chooseCandidate(panel, truthRecords, fields) {
@@ -322,6 +327,7 @@ const { sites } = JSON.parse(await readFile(join(root, 'tests/benchmark/sites.js
 const only = process.argv.slice(2);
 const selected = selectBenchmarkSites(sites, only);
 
+prepareTestExtension({ hosts: ['http://*/*', 'https://*/*'], target: extensionPath });
 const profile = await mkdtemp(join(os.tmpdir(), 'pageharvest-benchmark-'));
 const context = await chromium.launchPersistentContext(profile, {
   headless: false,
@@ -332,6 +338,10 @@ const extensionId = worker.url().split('/')[2];
 await worker.evaluate(
   (key) => chrome.storage.local.set({ [key]: { version: 1, onboardingDone: true } }),
   GUIDE_STORAGE_KEY
+);
+await worker.evaluate(
+  (key) => chrome.storage.local.set({ [key]: { version: 1, advanced: true } }),
+  ADVANCED_STORAGE_KEY
 );
 
 const results = [];

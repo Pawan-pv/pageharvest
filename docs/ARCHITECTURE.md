@@ -51,20 +51,20 @@ PageHarvest leverages modern WXT entry points configured for Chrome Manifest V3:
 
 1. **Background Service Worker (`entrypoints/background.ts`)**:
    - Registered as `"background": { "service_worker": "..." }`.
-   - Configures `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })`.
+   - Opens the side panel itself when the toolbar button is clicked (`src/background/toolbar-action.ts`: `openPanelOnActionClick: false`, then `action.onClicked` calls `sidePanel.open`). A click handled this way grants `activeTab` for the page, which Chrome's own open-on-click does not (ADR-037).
    - Hosts the `JobCoordinator` (`src/background/job-coordinator.ts`), the only owner of job state and the only writer of extraction data.
    - Holds nothing important in memory. It can be stopped between any two events; each handler reads what it needs from IndexedDB.
    - Watches tab closes and page loads to detect interrupted jobs, and reconciles on browser startup, extension install and side panel open.
 
 2. **Content Script (`entrypoints/content.ts`)**:
-   - Injected into all web pages via `"content_scripts": [{ "matches": ["<all_urls>"], "run_at": "document_idle" }]`.
+   - Injected on demand via `chrome.scripting.executeScript` (runtime registration, ADR-037). No static `<all_urls>` entry.
    - Runs in the isolated JavaScript world. Host page scripts cannot inspect or tamper with extension variables.
    - Hosts the **DOM Inspector**, **Repeated Pattern Detector**, **Data Extractor**, and **Navigation Runner** (`runNavigationJob`).
    - Cannot reach the extension's IndexedDB (a content script's IndexedDB belongs to the page), which is why every record is sent to the background.
 
 3. **Side Panel Application (`entrypoints/sidepanel/index.html` & `main.tsx`)**:
    - Dedicated side panel rendered in Chrome's sidebar dock.
-   - Houses the user workflow: element picker controls, field configuration, pagination controls, progress, TanStack spreadsheet grid, export dialogs, and the library of projects, recipes, schemas and run history.
+   - Houses the user workflow in two modes (ADR-039, ADR-042). **Simple mode**, the default, is four steps written for someone who uses a spreadsheet: find the list, check the columns and say whether it continues on more pages, collect, and download an Excel file (`src/components/simple/`). **Advanced options**, a switch in Settings stored in `chrome.storage.local`, shows the detailed screens instead: element picker controls, field configuration, pagination controls, progress with every count, the TanStack spreadsheet grid with cleaning tools, the export dialog, and the library of projects, recipes, schemas and run history. The switch chooses which screens are shown; both modes drive the same workflow hook, the same contracts and the same background.
    - For extraction it is a view of stored state: it sends commands and reads results from IndexedDB, so it can open and close at any time.
 
 ---
@@ -82,10 +82,10 @@ graph LR
 ```
 
 1. **Closed Shadow DOM**:
-   The visual picker mounts an isolated host element (`div#pageharvest-inspector-host`) directly onto `document.documentElement`. All highlight rectangles, tooltips, and badges are injected into a closed shadow root:
+   The visual picker mounts an isolated host element (`div#pageharvest-picker-overlay-host`) directly onto `document.documentElement`. All highlight rectangles, tooltips, and badges are injected into a closed shadow root:
    ```typescript
    const host = document.createElement('div');
-   host.id = 'pageharvest-inspector-host';
+   host.id = 'pageharvest-picker-overlay-host';
    const shadow = host.attachShadow({ mode: 'closed' });
    // Injected overlay CSS does not touch page styles
    ```
@@ -142,7 +142,7 @@ The generation is replaced when a job ends, is interrupted, or is resumed. Trans
 Commands are accepted only from extension pages, and reports only from a tab's content script (`src/background/register-job-handlers.ts`).
 
 #### Leaving a document
-A navigation destroys the content script, so a job cannot wait across it. Before leaving a page the runner durably records where it is going (`awaitingNavigation`, `expectedUrl`). The next document's content script sends `CONTENT_READY`, and the coordinator validates the URL and sends `EXTRACT_RECORDS` again from the checkpoint. This is how both URL-template and ordinary next-link pagination work.
+A navigation destroys the content script, so a job cannot wait across it. Before leaving a page the runner durably records where it is going (`awaitingNavigation`, `expectedUrl`). When the next document finishes loading (`tabs.onUpdated` "complete"), the coordinator injects the content script into it (ADR-037), validates the URL and sends `EXTRACT_RECORDS` again from the checkpoint. A document that already runs the script is not treated as new, so a second load event never sends the job twice. This is how both URL-template and ordinary next-link pagination work.
 
 ---
 
@@ -202,12 +202,12 @@ Once containers and fields are defined, the extraction pipeline processes each c
 4. **Limits**:
    - `maxPages` limits pages, `scrollCount` limits scrolls, `maxRecords` limits rows. No limit affects another dimension, and progress is reported in the job's own unit (`pages`, `scrolls` or `single`).
    - Three consecutive batches with nothing new end a job, across documents (`EMPTY_STEP_CIRCUIT_BREAKER`).
-   - `delayMs` is 200ms to 30s, default 1500ms. Pause holds at a gate before each step; cancel aborts delays immediately.
+   - `delayMs` is 1s to 30s, default 1500ms (ADR-046). Pause holds at a gate before each step; cancel aborts delays immediately.
 
 ---
 
 ### 3.7 Persistence Layer (Dexie / IndexedDB)
-All data is in `PageHarvestDB` in the extension's origin, reached through the repositories in `src/storage/repositories/`. The schema is at version 3; see [storage-schema.md](architecture/storage-schema.md) for tables and the production caller of each operation.
+All data is in `PageHarvestDB` in the extension's origin, reached through the repositories in `src/storage/repositories/`. The schema is at version 4; see [storage-schema.md](architecture/storage-schema.md) for tables and the production caller of each operation.
 
 ### 3.7.1 Job Lifecycle & Recovery
 `src/core/state/extraction-machine.ts` is the single authority on transitions. The coordinator rebuilds a machine from the stored job for each event and writes the result in the same transaction, so an illegal transition cannot reach storage.
@@ -216,16 +216,19 @@ All data is in `PageHarvestDB` in the extension's origin, reached through the re
 stateDiagram-v2
     [*] --> CREATED
     CREATED --> RUNNING: START_EXTRACTION
+    CREATED --> CANCELLED: CANCEL
+    CREATED --> FAILED: FAIL
     RUNNING --> PAUSED: PAUSE
     PAUSED --> RUNNING: RESUME
     RUNNING --> INTERRUPTED: INTERRUPT
     PAUSED --> INTERRUPTED: INTERRUPT
-    INTERRUPTED --> RECOVERABLE: checkpoint valid
-    INTERRUPTED --> FAILED: no checkpoint
-    RECOVERABLE --> RUNNING: RECOVER
-    RECOVERABLE --> CANCELLED: discard
-    RECOVERABLE --> EXPIRED: past retention
-    RUNNING --> COMPLETED: FINISH
+    INTERRUPTED --> RECOVERABLE: checkpoint valid (MARK_RECOVERABLE)
+    INTERRUPTED --> FAILED: no checkpoint / FAIL
+    INTERRUPTED --> CANCELLED: CANCEL
+    RECOVERABLE --> RUNNING: RECOVER (resume from checkpoint)
+    RECOVERABLE --> CANCELLED: DISCARD / CANCEL
+    RECOVERABLE --> EXPIRED: EXPIRE (past retention)
+    RUNNING --> COMPLETED: FINISH (completed or circuit breaker)
     PAUSED --> COMPLETED: FINISH
     RUNNING --> CANCELLED: CANCEL
     PAUSED --> CANCELLED: CANCEL
@@ -247,7 +250,8 @@ The export subsystem serializes in-memory and persisted records into clean files
 - **CSV**: RFC 4180-compliant formatter with proper escaping of quotes (`"` $\to$ `""`), newlines, and UTF-8 BOM (`\uFEFF`) prepended for seamless Microsoft Excel rendering.
 - **JSON / NDJSON**: Pretty-printed or line-delimited JSON streams.
 - **Formula protection**: Text that could execute as a spreadsheet formula (first visible character `=`, `+`, `-`, `@`, or a leading tab or carriage return) is written with a `' ` prefix. JavaScript numbers and booleans are never altered, and neither is signed numeric text (`-5`, `-12.50`, `+5`, `-$5.00`, `-15%`, `1e5`, `+1 (555) 123-4567`), because it contains nothing that can reference a cell or run a command.
-- **Download Module**: `src/platform/downloads.ts` is the single download path. It reports success only after the browser accepts the download, and the export dialog stays open with the reason if it does not.
+- **XLSX**: `src/core/export/xlsx.ts` writes an Office Open XML workbook as a stored ZIP with no library, in its own chunk that loads only when someone asks for Excel. Text is written as inline strings and numbers as numbers, so nothing in a cell is evaluated as a formula. It is the file simple mode offers first.
+- **Download Module**: `src/platform/downloads.ts` is the single download path. A file goes straight to the Downloads folder (`saveAs: false`), and a name that is taken gets a number instead of replacing the older file (`conflictAction: 'uniquify'`). `triggerDownload` reports success only after the browser accepts the download, and the export dialog stays open with the reason if it does not. Accepted is not yet saved: `waitForSavedFile` follows the download with `chrome.downloads.search` and the panel says "File saved", with the name Chrome really used, only when the state is `complete` (ADR-042). `showInFolder` opens the folder with the file selected.
 
 ---
 
@@ -262,10 +266,15 @@ Errors are typed using `ExtractionErrorCode` in `src/shared/contracts/error.ts`:
 
 ### 3.10 Extension Permission Model
 Manifest V3 operates under a strict principle of least privilege:
-- `activeTab`: Exposes the URL and title of the tab the user opens PageHarvest on.
+- `activeTab`: On a toolbar click, exposes the URL and title of the tab the user opens PageHarvest on, including browser pages it cannot work on, so the panel can say so. It is also what grants the page to a user who has limited the extension's site access to "when you click the extension".
 - `sidePanel`: Grants access to mount the extension inside Chrome's side panel.
-- `storage`: Grants access to `chrome.storage.local` for the first-run tour preference (ADR-032).
-- `downloads`: Allows direct triggering of file exports to the user's local disk.
-- `<all_urls>` (content script match): Enables extraction across target web domains. There are no `host_permissions`, and no `tabs` permission.
+- `storage`: Grants access to `chrome.storage.local` for two preferences: the first-run tour (ADR-032) and Advanced options (ADR-039).
+- `scripting`: Injects the extension's own content script on demand (ADR-037).
+- `downloads`: Saves exports to the Downloads folder, reads back the name a file was saved under, and opens its folder (ADR-042).
+- `host_permissions: ["http://*/*", "https://*/*"]`: Site access held from install, so Chrome never asks per site while the extension is in use (ADR-040). Chrome shows its "read and change all your data on all websites" warning once, at install. No `optional_host_permissions`, no static `<all_urls>` content script, no `tabs` permission.
 
-There is no `scripting` permission, because nothing injects scripts programmatically (ADR-034). `src/platform/permissions.ts` confirms the required permissions before a job starts, and `tests/unit/manifest-assets.test.ts` keeps its list equal to the manifest's. What each permission is for, in the words the Chrome Web Store asks for, is in [STORE_LISTING.md](STORE_LISTING.md).
+`scripting` is required for on-demand injection (ADR-037, supersedes ADR-034): the content script still runs only on a page the user works on. `src/platform/permissions.ts` checks required permissions and per-site `contains` before a job starts, and still requests a site at Start, which Chrome answers at once with no prompt unless the user has taken that site's access away in `chrome://extensions`; `tests/unit/manifest-assets.test.ts` asserts the built manifest (no `content_scripts` entries, no `<all_urls>`, exact `host_permissions`, no `optional_host_permissions`), and that every permission has a row in the privacy policy and the store listing (ADR-041). What each permission is for, in the words the Chrome Web Store asks for, is in [STORE_LISTING.md](STORE_LISTING.md).
+
+While every website is allowed, which is the installed state, Chrome shows the panel the address of every website tab, so a tab whose address is hidden is a browser page and is shown as one that cannot be read. `hasAllSitesAccess` tells the two cases apart: only a user who has limited site access is asked to click the toolbar button (ADR-041).
+
+The panel makes no network request of its own: it loads no remote script, style, font or image (not the site's icon either), and the package carries the licence texts of the open-source code inside it in `THIRD_PARTY_NOTICES.txt` (ADR-041).

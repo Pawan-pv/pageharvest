@@ -43,7 +43,7 @@ export function previewFields(
   }
 
   let usedFallback = false;
-  if (items.length === 0 && payload.containerAnchor) {
+  if (!selectorInvalid && items.length === 0 && payload.containerAnchor) {
     const recovered = recoverContainerItems(root, payload.containerAnchor);
     if (recovered.length > 0) {
       items = recovered;
